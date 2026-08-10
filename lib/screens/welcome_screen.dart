@@ -11,8 +11,9 @@ class WelcomeScreen extends StatelessWidget {
 
   final SessionController sessionController;
 
-  void _logout(BuildContext context) {
-    sessionController.clearSession();
+  Future<void> _logout(BuildContext context) async {
+    await sessionController.signOut();
+    if (!context.mounted) return;
     Navigator.of(context).pushReplacementNamed(AppRoutes.login);
   }
 
