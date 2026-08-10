@@ -9,10 +9,17 @@ class AuthCredentials {
 }
 
 class AuthResult {
-  const AuthResult.success(this.credentials) : isSuccess = true;
+  const AuthResult.success(this.credentials)
+      : isSuccess = true,
+        errorMessage = null;
+
+  const AuthResult.failure(this.errorMessage)
+      : isSuccess = false,
+        credentials = null;
 
   final bool isSuccess;
-  final AuthCredentials credentials;
+  final AuthCredentials? credentials;
+  final String? errorMessage;
 }
 
 abstract class AuthService {
@@ -22,12 +29,14 @@ abstract class AuthService {
   });
 
   Future<AuthResult> skip();
+
+  Future<void> signOut();
 }
 
 /// Temporary implementation used while the real authentication flow is pending.
 ///
-/// Every username/password pair is currently accepted. Replacing this class
-/// with an API, Firebase Auth, OAuth, etc. will not require changing the UI.
+/// Every username/password pair is currently accepted. Skip always creates the
+/// local development session `user/password`.
 class PlaceholderAuthService implements AuthService {
   @override
   Future<AuthResult> signIn({
@@ -45,4 +54,7 @@ class PlaceholderAuthService implements AuthService {
       AuthCredentials(username: 'user', password: 'password'),
     );
   }
+
+  @override
+  Future<void> signOut() async {}
 }
