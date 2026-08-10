@@ -21,6 +21,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _obscurePassword = true;
   bool _isSubmitting = false;
+  String? _errorMessage;
 
   @override
   void dispose() {
@@ -32,16 +33,26 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _login() async {
     if (_isSubmitting) return;
 
-    setState(() => _isSubmitting = true);
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+    });
 
     try {
-      await widget.sessionController.signIn(
+      final result = await widget.sessionController.signIn(
         username: _usernameController.text,
         password: _passwordController.text,
       );
 
       if (!mounted) return;
-      Navigator.of(context).pushReplacementNamed(AppRoutes.welcome);
+
+      if (result.isSuccess) {
+        Navigator.of(context).pushReplacementNamed(AppRoutes.welcome);
+      } else {
+        setState(() {
+          _errorMessage = result.errorMessage ?? 'Unable to sign in.';
+        });
+      }
     } finally {
       if (mounted) {
         setState(() => _isSubmitting = false);
@@ -52,13 +63,19 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _skip() async {
     if (_isSubmitting) return;
 
-    setState(() => _isSubmitting = true);
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+    });
 
     try {
-      await widget.sessionController.skip();
+      final result = await widget.sessionController.skip();
 
       if (!mounted) return;
-      Navigator.of(context).pushReplacementNamed(AppRoutes.welcome);
+
+      if (result.isSuccess) {
+        Navigator.of(context).pushReplacementNamed(AppRoutes.welcome);
+      }
     } finally {
       if (mounted) {
         setState(() => _isSubmitting = false);
@@ -129,7 +146,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Sign in to continue. Authentication is temporarily disabled while we build the account system.',
+                            'Sign in to continue.',
                             style: theme.textTheme.bodyMedium?.copyWith(
                               color: const Color(0xFF6D7280),
                               height: 1.45,
@@ -138,12 +155,13 @@ class _LoginScreenState extends State<LoginScreen> {
                           const SizedBox(height: 30),
                           TextField(
                             controller: _usernameController,
-                            autofillHints: const [AutofillHints.username],
+                            autofillHints: const [AutofillHints.email],
+                            keyboardType: TextInputType.emailAddress,
                             textInputAction: TextInputAction.next,
                             decoration: const InputDecoration(
-                              labelText: 'Username',
-                              hintText: 'Enter your username',
-                              prefixIcon: Icon(Icons.person_outline_rounded),
+                              labelText: 'Email',
+                              hintText: 'name@example.com',
+                              prefixIcon: Icon(Icons.mail_outline_rounded),
                             ),
                           ),
                           const SizedBox(height: 16),
@@ -174,6 +192,23 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ),
                           ),
+                          if (_errorMessage != null) ...[
+                            const SizedBox(height: 14),
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.errorContainer,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                _errorMessage!,
+                                style: TextStyle(
+                                  color: theme.colorScheme.onErrorContainer,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 24),
                           SizedBox(
                             height: 52,
@@ -197,7 +232,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Skip uses the temporary user “user”.',
+                            'Development shortcut: user / password',
                             textAlign: TextAlign.center,
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: const Color(0xFF8A8F9D),
