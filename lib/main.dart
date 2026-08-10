@@ -1,28 +1,22 @@
-// lib/main.dart
 import 'package:flutter/material.dart';
-import 'package:game_wiki/l10n/app_localizations.dart';
-import 'menu_screen.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(const DittoApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class DittoApp extends StatelessWidget {
+  const DittoApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Ogame Wiki',
-      debugShowCheckedModeBanner: false, // Quita la banda roja de "Debug"
-      theme: ThemeData(
-        brightness: Brightness.dark, // Modo oscuro global
-        primarySwatch: Colors.blue,
+      title: 'DITTO',
+      debugShowCheckedModeBanner: false,
+      home: const Scaffold(
+        body: Center(
+          child: Text('Hello World'),
+        ),
       ),
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      locale: const Locale('es'),
-      home: const MenuScreen(), // Aquí definimos que el Menú es la vista base
     );
   }
 }
