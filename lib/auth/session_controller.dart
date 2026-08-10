@@ -14,7 +14,7 @@ class SessionController extends ChangeNotifier {
   bool get isAuthenticated => _credentials != null;
   String get username => _credentials?.username ?? '';
 
-  Future<void> signIn({
+  Future<AuthResult> signIn({
     required String username,
     required String password,
   }) async {
@@ -23,22 +23,27 @@ class SessionController extends ChangeNotifier {
       password: password,
     );
 
-    if (result.isSuccess) {
+    if (result.isSuccess && result.credentials != null) {
       _credentials = result.credentials;
       notifyListeners();
     }
+
+    return result;
   }
 
-  Future<void> skip() async {
+  Future<AuthResult> skip() async {
     final result = await _authService.skip();
 
-    if (result.isSuccess) {
+    if (result.isSuccess && result.credentials != null) {
       _credentials = result.credentials;
       notifyListeners();
     }
+
+    return result;
   }
 
-  void clearSession() {
+  Future<void> signOut() async {
+    await _authService.signOut();
     _credentials = null;
     notifyListeners();
   }
