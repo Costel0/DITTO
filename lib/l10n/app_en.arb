@@ -1,0 +1,32 @@
+{
+  "@@locale": "en",
+  "appTitle": "OGAME WIKI & TOOLS",
+  "menuShipDex": "SHIPS",
+
+  "statStructureShort": "STR",
+  "statShieldShort": "SHD",
+  "statAttackShort": "ATK",
+  "statSpeedShort": "SPD",
+  "statCargoShort": "CC",
+
+
+  "techCombustionLabel": "Combustion",
+  "techImpulseLabel": "Impulse",
+  "techHyperspaceLabel": "Hyperspace",
+  "techModifiersTitle": "COMBAT TECHNOLOGIES",
+  "techDrivesTitle": "DRIVE TECHNOLOGIES",
+  "specificationsTitle": "SPECIFICATIONS",
+  "specStructure": "Structure",
+  "specShields": "Shields",
+  "specDamage": "Attack Power",
+  "specSpeed": "Base Speed",
+  "specCargo": "Cargo Capacity",
+  "rapidFireTitle": "RAPID FIRE",
+  "rfPros": "STRONG AGAINST",
+  "rfCons": "WEAK AGAINST",
+
+
+  "ship_lf": "Light fighter",
+  "ship_hf": "Heavy Fighter"
+
+}

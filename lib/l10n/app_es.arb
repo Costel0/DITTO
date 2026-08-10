@@ -1,0 +1,45 @@
+{
+  "@@locale": "es",
+  "appTitle": "OGAME WIKI & TOOLS",
+  "menuShipDex": "NAVES",
+
+  "statCostAttack": "Coste de 1000 puntos de ataque:",
+  "statCostBulk": "Coste de 1000 puntos de estructura:",
+  "statCostCargo": "Coste de 1000 espacios de carga:",
+  "shipDexMenu": "ASTILLERO",
+
+  "statStructureShort": "EST",
+  "statShieldShort": "ESC",
+  "statAttackShort": "ATQ",
+  "statSpeedShort": "VEL",
+  "statCargoShort": "CC",
+
+
+  "technology_militar": "Militar",
+  "technology_shields": "Defense",
+  "technology_structure": "Blindage",
+  "techCombustionLabel": "Combustión",
+  "techImpulseLabel": "Impulso",
+  "techHyperspaceLabel": "Hiperespacio",
+  "techModifiersTitle": "TECNOLOGÍAS DE COMBATE",
+  "techDrivesTitle": "TECNOLOGÍAS DE PROPULSIÓN",
+  "specificationsTitle": "ESPECIFICACIONES",
+  "specStructure": "Estructura",
+  "specShields": "Escudos",
+  "specDamage": "Poder de Ataque",
+  "specSpeed": "Velocidad",
+  "specCargo": "Capacidad de Carga",
+  "rapidFireTitle": "FUEGO RÁPIDO",
+  "rfPros": "FUEGO A FAVOR",
+  "rfCons": "DÉBIL CONTRA",
+
+
+
+  "ship_lf": "Cazador ligero",
+  "ship_hf": "Cazador pesado",
+  "ship_cruiser": "Crucero",
+  "ship_BC": "Nave de batalla",
+  "ship_BS": "Acorazado",
+  "ship_bombardier": "Bombardero",
+  "ship_destroyer": "Destructor"
+}
