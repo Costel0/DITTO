@@ -1,1 +1,40 @@
-{"hosting":{"public":"build/web","ignore":["firebase.json","**/.*","**/node_modules/**"],"rewrites":[{"source":"**","destination":"/index.html"}]},"flutter":{"platforms":{"android":{"default":{"projectId":"ditto-app-project","appId":"1:14378781761:android:0a5e0306a5894f1d614ac0","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"ditto-app-project","configurations":{"android":"1:14378781761:android:0a5e0306a5894f1d614ac0","ios":"1:14378781761:ios:4b66b250c0840780614ac0","web":"1:14378781761:web:31308987893f0a91614ac0"}}}}}}
+{
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  },
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "ditto-app-project",
+          "appId": "1:14378781761:android:0a5e0306a5894f1d614ac0",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "ditto-app-project",
+          "configurations": {
+            "android": "1:14378781761:android:0a5e0306a5894f1d614ac0",
+            "ios": "1:14378781761:ios:4b66b250c0840780614ac0",
+            "web": "1:14378781761:web:31308987893f0a91614ac0"
+          }
+        }
+      }
+    }
+  }
+}
