@@ -18,8 +18,7 @@ service cloud.firestore {
         && request.resource.data.email == request.auth.token.email
         && request.resource.data.username is string
         && request.resource.data.username.size() >= 3
-        && request.resource.data.username.size() <= 24
-        && request.resource.data.username.matches('^[A-Za-z0-9_]+$');
+        && request.resource.data.username.size() <= 24;
       }
 
       allow read: if isOwner();
