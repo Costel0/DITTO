@@ -5,6 +5,7 @@ import 'auth/firebase_auth_service.dart';
 import 'auth/session_controller.dart';
 import 'firebase_options.dart';
 import 'navigation/app_routes.dart';
+import 'profile/user_profile_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,6 +16,7 @@ Future<void> main() async {
 
   final sessionController = SessionController(
     authService: FirebaseAuthService(),
+    userProfileService: FirestoreUserProfileService(),
   );
 
   runApp(DittoApp(sessionController: sessionController));
