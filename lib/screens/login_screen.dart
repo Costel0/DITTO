@@ -83,6 +83,10 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  void _openRegister() {
+    Navigator.of(context).pushReplacementNamed(AppRoutes.register);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -225,7 +229,12 @@ class _LoginScreenState extends State<LoginScreen> {
                                   : const Text('Continue'),
                             ),
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 10),
+                          TextButton(
+                            onPressed: _isSubmitting ? null : _openRegister,
+                            child: const Text("Don't have an account? Create one"),
+                          ),
+                          const SizedBox(height: 2),
                           TextButton(
                             onPressed: _isSubmitting ? null : _skip,
                             child: const Text('Skip for now'),
