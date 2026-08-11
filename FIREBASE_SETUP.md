@@ -29,7 +29,7 @@ In Firebase Console:
 After the database exists, from the project root run:
 
 ```bash
-firebase deploy --only firestore:rules
+firebase deploy --only firestore
 ```
 
 The deployed rules come from `firestore.rules` and currently allow an authenticated user to read and write only their own `users/{uid}` profile document.
