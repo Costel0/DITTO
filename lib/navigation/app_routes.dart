@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../auth/session_controller.dart';
 import '../screens/login_screen.dart';
+import '../screens/register_screen.dart';
 import '../screens/welcome_screen.dart';
 
 class AppRoutes {
   AppRoutes._();
 
   static const String login = '/';
+  static const String register = '/register';
   static const String welcome = '/welcome';
 
   static Route<dynamic> onGenerateRoute(
@@ -15,9 +17,15 @@ class AppRoutes {
     SessionController sessionController,
   ) {
     switch (settings.name) {
+      case register:
+        return MaterialPageRoute<void>(
+          settings: settings,
+          builder: (_) => RegisterScreen(
+            sessionController: sessionController,
+          ),
+        );
+
       case welcome:
-        // Temporary route guard. When real authentication is added, this is
-        // the natural place to expand access-control/navigation logic.
         if (!sessionController.isAuthenticated) {
           return MaterialPageRoute<void>(
             settings: const RouteSettings(name: login),
