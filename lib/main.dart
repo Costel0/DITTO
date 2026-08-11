@@ -1,12 +1,20 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
-import 'auth/auth_service.dart';
+import 'auth/firebase_auth_service.dart';
 import 'auth/session_controller.dart';
+import 'firebase_options.dart';
 import 'navigation/app_routes.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
   final sessionController = SessionController(
-    authService: PlaceholderAuthService(),
+    authService: FirebaseAuthService(),
   );
 
   runApp(DittoApp(sessionController: sessionController));
