@@ -68,7 +68,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (!mounted) return;
 
       if (result.isSuccess) {
-        Navigator.of(context).pushReplacementNamed(AppRoutes.welcome);
+        final route = widget.sessionController.needsUsername
+            ? AppRoutes.usernameSetup
+            : AppRoutes.welcome;
+        Navigator.of(context).pushReplacementNamed(route);
       } else {
         setState(() {
           _errorMessage = result.errorMessage ?? 'Unable to create account.';
@@ -109,7 +112,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 constraints: const BoxConstraints(maxWidth: 460),
                 child: Card(
                   elevation: 0,
-                  color: Colors.white.withOpacity(0.94),
+                  color: Colors.white.withValues(alpha: 0.94),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(28),
                     side: const BorderSide(color: Color(0xFFE7E9F2)),
