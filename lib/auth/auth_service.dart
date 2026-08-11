@@ -28,18 +28,30 @@ abstract class AuthService {
     required String password,
   });
 
+  Future<AuthResult> register({
+    required String username,
+    required String password,
+  });
+
   Future<AuthResult> skip();
 
   Future<void> signOut();
 }
 
-/// Temporary implementation used while the real authentication flow is pending.
-///
-/// Every username/password pair is currently accepted. Skip always creates the
-/// local development session `user/password`.
+/// Temporary implementation kept for tests and local development helpers.
 class PlaceholderAuthService implements AuthService {
   @override
   Future<AuthResult> signIn({
+    required String username,
+    required String password,
+  }) async {
+    return AuthResult.success(
+      AuthCredentials(username: username, password: password),
+    );
+  }
+
+  @override
+  Future<AuthResult> register({
     required String username,
     required String password,
   }) async {
