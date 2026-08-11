@@ -50,10 +50,13 @@ class FirebaseAuthService implements AuthService {
   Future<void> signOut() => _auth.signOut();
 
   AuthResult _successFromUser(User? user, String fallbackEmail) {
+    final email = user?.email ?? fallbackEmail.trim();
     return AuthResult.success(
       AuthCredentials(
-        username: user?.email ?? fallbackEmail.trim(),
+        username: email,
         password: '',
+        userId: user?.uid,
+        email: email,
       ),
     );
   }
