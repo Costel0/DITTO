@@ -26,7 +26,7 @@
         }
       },
       "dart": {
-        "lib/firebase_options.dart": {
+        "lib/core/firebase/firebase_options.dart": {
           "projectId": "ditto-app-project",
           "configurations": {
             "android": "1:14378781761:android:0a5e0306a5894f1d614ac0",
