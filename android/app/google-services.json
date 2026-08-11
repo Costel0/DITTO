@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "14378781761",
+    "project_id": "ditto-app-project",
+    "storage_bucket": "ditto-app-project.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:14378781761:android:0a5e0306a5894f1d614ac0",
+        "android_client_info": {
+          "package_name": "com.example.ditto"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBhWiRD-2WPw7ABF9ceniA2M_TOq0VaOFk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:14378781761:android:c26e27d2c9d04fa8614ac0",
+        "android_client_info": {
+          "package_name": "com.example.game_wiki"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBhWiRD-2WPw7ABF9ceniA2M_TOq0VaOFk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
