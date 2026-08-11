@@ -1,0 +1,48 @@
+{
+  "@@locale": "es",
+  "appTitle": "DITTO",
+  "loginTitle": "Bienvenido a DITTO",
+  "loginSubtitle": "Inicia sesión para continuar.",
+  "emailLabel": "Correo electrónico",
+  "emailHint": "nombre@ejemplo.com",
+  "passwordLabel": "Contraseña",
+  "passwordHint": "Introduce tu contraseña",
+  "showPassword": "Mostrar contraseña",
+  "hidePassword": "Ocultar contraseña",
+  "continueButton": "Continuar",
+  "createAccountPrompt": "¿No tienes cuenta? Créala",
+  "skipForNow": "Saltar por ahora",
+  "developmentShortcut": "Acceso de desarrollo: user / password",
+  "registerTitle": "Crea tu cuenta",
+  "registerSubtitle": "Configura tu cuenta de DITTO para continuar.",
+  "passwordMinimumHint": "Mínimo 6 caracteres",
+  "confirmPasswordLabel": "Confirmar contraseña",
+  "confirmPasswordHint": "Repite tu contraseña",
+  "createAccountButton": "Crear cuenta",
+  "alreadyHaveAccount": "¿Ya tienes cuenta? Inicia sesión",
+  "usernameSetupTitle": "Elige tu nombre de usuario",
+  "usernameSetupSubtitle": "Así te identificarás dentro de DITTO. Más adelante podrás añadir más información a tu perfil.",
+  "usernameLabel": "Nombre de usuario",
+  "usernameHint": "Tu nombre",
+  "useAnotherAccount": "Usar otra cuenta",
+  "logout": "Cerrar sesión",
+  "emailRequiredError": "Introduce tu correo electrónico.",
+  "passwordLengthError": "La contraseña debe tener al menos 6 caracteres.",
+  "passwordMismatchError": "Las contraseñas no coinciden.",
+  "usernameLengthError": "Usa entre 3 y 24 caracteres.",
+  "usernameSaveError": "No se ha podido guardar el nombre de usuario. Inténtalo de nuevo.",
+  "authEmailAlreadyInUse": "Ya existe una cuenta con este correo electrónico.",
+  "authInvalidEmail": "Introduce un correo electrónico válido.",
+  "authWeakPassword": "Elige una contraseña más segura.",
+  "authInvalidCredentials": "Correo electrónico o contraseña incorrectos.",
+  "authTooManyRequests": "Demasiados intentos. Inténtalo de nuevo más tarde.",
+  "authUnknownError": "La autenticación ha fallado. Inténtalo de nuevo.",
+  "welcomeMessage": "Hola {username}",
+  "@welcomeMessage": {
+    "placeholders": {
+      "username": {
+        "type": "String"
+      }
+    }
+  }
+}
