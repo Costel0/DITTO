@@ -47,7 +47,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
 
       if (result.isSuccess) {
-        Navigator.of(context).pushReplacementNamed(AppRoutes.welcome);
+        Navigator.of(context).pushReplacementNamed(_postAuthRoute());
       } else {
         setState(() {
           _errorMessage = result.errorMessage ?? 'Unable to sign in.';
@@ -83,6 +83,12 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  String _postAuthRoute() {
+    return widget.sessionController.needsUsername
+        ? AppRoutes.usernameSetup
+        : AppRoutes.welcome;
+  }
+
   void _openRegister() {
     Navigator.of(context).pushReplacementNamed(AppRoutes.register);
   }
@@ -111,7 +117,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 constraints: const BoxConstraints(maxWidth: 460),
                 child: Card(
                   elevation: 0,
-                  color: Colors.white.withOpacity(0.94),
+                  color: Colors.white.withValues(alpha: 0.94),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(28),
                     side: const BorderSide(color: Color(0xFFE7E9F2)),
