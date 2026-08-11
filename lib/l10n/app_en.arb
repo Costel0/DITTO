@@ -1,0 +1,48 @@
+{
+  "@@locale": "en",
+  "appTitle": "DITTO",
+  "loginTitle": "Welcome to DITTO",
+  "loginSubtitle": "Sign in to continue.",
+  "emailLabel": "Email",
+  "emailHint": "name@example.com",
+  "passwordLabel": "Password",
+  "passwordHint": "Enter your password",
+  "showPassword": "Show password",
+  "hidePassword": "Hide password",
+  "continueButton": "Continue",
+  "createAccountPrompt": "Don't have an account? Create one",
+  "skipForNow": "Skip for now",
+  "developmentShortcut": "Development shortcut: user / password",
+  "registerTitle": "Create your account",
+  "registerSubtitle": "Set up your DITTO account to continue.",
+  "passwordMinimumHint": "At least 6 characters",
+  "confirmPasswordLabel": "Confirm password",
+  "confirmPasswordHint": "Repeat your password",
+  "createAccountButton": "Create account",
+  "alreadyHaveAccount": "Already have an account? Sign in",
+  "usernameSetupTitle": "Choose your username",
+  "usernameSetupSubtitle": "This is how you will be identified inside DITTO. You can add more profile information later.",
+  "usernameLabel": "Username",
+  "usernameHint": "Your name",
+  "useAnotherAccount": "Use another account",
+  "logout": "Log out",
+  "emailRequiredError": "Enter your email address.",
+  "passwordLengthError": "Password must contain at least 6 characters.",
+  "passwordMismatchError": "Passwords do not match.",
+  "usernameLengthError": "Use between 3 and 24 characters.",
+  "usernameSaveError": "Unable to save the username. Please try again.",
+  "authEmailAlreadyInUse": "An account already exists for this email.",
+  "authInvalidEmail": "Enter a valid email address.",
+  "authWeakPassword": "Choose a stronger password.",
+  "authInvalidCredentials": "Incorrect email or password.",
+  "authTooManyRequests": "Too many attempts. Please try again later.",
+  "authUnknownError": "Authentication failed. Please try again.",
+  "welcomeMessage": "Hello {username}",
+  "@welcomeMessage": {
+    "placeholders": {
+      "username": {
+        "type": "String"
+      }
+    }
+  }
+}
