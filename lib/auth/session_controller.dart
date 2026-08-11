@@ -23,22 +23,27 @@ class SessionController extends ChangeNotifier {
       password: password,
     );
 
-    if (result.isSuccess && result.credentials != null) {
-      _credentials = result.credentials;
-      notifyListeners();
-    }
+    _applySuccessfulAuth(result);
+    return result;
+  }
 
+  Future<AuthResult> register({
+    required String username,
+    required String password,
+  }) async {
+    final result = await _authService.register(
+      username: username,
+      password: password,
+    );
+
+    _applySuccessfulAuth(result);
     return result;
   }
 
   Future<AuthResult> skip() async {
     final result = await _authService.skip();
 
-    if (result.isSuccess && result.credentials != null) {
-      _credentials = result.credentials;
-      notifyListeners();
-    }
-
+    _applySuccessfulAuth(result);
     return result;
   }
 
@@ -46,5 +51,12 @@ class SessionController extends ChangeNotifier {
     await _authService.signOut();
     _credentials = null;
     notifyListeners();
+  }
+
+  void _applySuccessfulAuth(AuthResult result) {
+    if (result.isSuccess && result.credentials != null) {
+      _credentials = result.credentials;
+      notifyListeners();
+    }
   }
 }
