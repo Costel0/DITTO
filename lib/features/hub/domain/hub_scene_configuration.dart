@@ -9,6 +9,16 @@ enum HubCharacterSlot {
   rightCompanion2,
 }
 
+/// Assignment order for Survivors in the player's roster. The first acquired
+/// Survivor remains in the tuned primary position, then companions fill the
+/// vacant left slot and the two right slots.
+const List<HubCharacterSlot> hubRosterSlotOrder = <HubCharacterSlot>[
+  HubCharacterSlot.primary,
+  HubCharacterSlot.leftCompanion,
+  HubCharacterSlot.rightCompanion1,
+  HubCharacterSlot.rightCompanion2,
+];
+
 class HubElementPlacement {
   const HubElementPlacement({
     required this.position,
@@ -45,10 +55,6 @@ class HubSceneConfiguration {
 }
 
 /// Default visual layout for the bunker scene.
-///
-/// The primary slot deliberately preserves the position and dimensions tuned in
-/// the UI before this configuration was extracted. Companion slots are vacant
-/// until the player obtains additional characters.
 const HubSceneConfiguration defaultHubSceneConfiguration =
     HubSceneConfiguration(
   canvasSize: Size(1440, 360),
