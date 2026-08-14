@@ -7,7 +7,7 @@ abstract class UserProfileService {
     required String userId,
     required String email,
     required String username,
-    required String characterId,
+    required String initialDuplicateId,
   });
 
   Future<void> clearInitialProfile({required String userId});
