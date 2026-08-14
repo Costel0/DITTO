@@ -276,7 +276,6 @@ class _HubSectionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final l10n = context.l10n;
 
     return Container(
@@ -404,14 +403,17 @@ class _HubSectionView extends StatelessWidget {
         icon = Icons.home_work_outlined;
         title = l10n.hubShelterTitle;
         description = l10n.hubShelterDescription;
+        break;
       case _HubSection.inventory:
         icon = Icons.backpack_outlined;
         title = l10n.hubInventoryTitle;
         description = l10n.hubInventoryDescription;
+        break;
       case _HubSection.expeditions:
         icon = Icons.explore_outlined;
         title = l10n.hubExpeditionsTitle;
         description = l10n.hubExpeditionsDescription;
+        break;
     }
 
     return AnimatedSwitcher(
