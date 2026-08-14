@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'app/ditto_app.dart';
 import 'core/firebase/firebase_auth_service.dart';
 import 'core/firebase/firebase_options.dart';
+import 'core/firebase/firestore_survivor_service.dart';
 import 'core/firebase/firestore_user_profile_service.dart';
 import 'features/auth/application/session_controller.dart';
 
@@ -17,6 +18,7 @@ Future<void> main() async {
   final sessionController = SessionController(
     authService: FirebaseAuthService(),
     userProfileService: FirestoreUserProfileService(),
+    survivorService: FirestoreSurvivorService(),
   );
 
   runApp(DittoApp(sessionController: sessionController));
