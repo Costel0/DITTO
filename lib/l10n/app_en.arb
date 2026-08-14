@@ -20,17 +20,28 @@
   "confirmPasswordHint": "Repeat your password",
   "createAccountButton": "Create account",
   "alreadyHaveAccount": "Already have an account? Sign in",
-  "usernameSetupTitle": "Choose your username",
-  "usernameSetupSubtitle": "This is how you will be identified inside DITTO. You can add more profile information later.",
+  "usernameSetupTitle": "Choose your survivor identity",
+  "usernameSetupSubtitle": "Set the name and initial character that will represent you in DITTO.",
   "usernameLabel": "Username",
   "usernameHint": "Your name",
+  "initialCharacterLabel": "Initial character",
+  "initialCharacterHint": "Choose a placeholder survivor. The artwork can be replaced later without changing your profile.",
+  "characterOption": "Survivor {number}",
+  "@characterOption": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "characterRequiredError": "Choose an initial character.",
   "useAnotherAccount": "Use another account",
   "logout": "Log out",
   "emailRequiredError": "Enter your email address.",
   "passwordLengthError": "Password must contain at least 6 characters.",
   "passwordMismatchError": "Passwords do not match.",
   "usernameLengthError": "Use between 3 and 24 characters.",
-  "usernameSaveError": "Unable to save the username. Please try again.",
+  "profileSaveError": "Unable to save your survivor profile. Please try again.",
   "authEmailAlreadyInUse": "An account already exists for this email.",
   "authInvalidEmail": "Enter a valid email address.",
   "authWeakPassword": "Choose a stronger password.",

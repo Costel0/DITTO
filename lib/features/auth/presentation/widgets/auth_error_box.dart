@@ -12,8 +12,9 @@ class AuthErrorBox extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: colors.errorContainer,
-        borderRadius: BorderRadius.circular(12),
+        color: colors.errorContainer.withValues(alpha: 0.62),
+        borderRadius: BorderRadius.circular(5),
+        border: Border.all(color: colors.error.withValues(alpha: 0.55)),
       ),
       child: Text(
         message,

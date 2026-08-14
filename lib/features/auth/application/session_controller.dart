@@ -15,13 +15,17 @@ class SessionController extends ChangeNotifier {
 
   AuthCredentials? _credentials;
   String? _profileUsername;
+  String? _profileCharacterId;
 
   AuthCredentials? get credentials => _credentials;
   bool get isAuthenticated => _credentials != null;
-  bool get needsUsername =>
+  bool get needsProfileSetup =>
       isAuthenticated &&
       _credentials?.userId != null &&
-      (_profileUsername == null || _profileUsername!.trim().isEmpty);
+      ((_profileUsername == null || _profileUsername!.trim().isEmpty) ||
+          (_profileCharacterId == null || _profileCharacterId!.trim().isEmpty));
+  String? get profileUsername => _profileUsername;
+  String? get characterId => _profileCharacterId;
   String get username => _profileUsername ?? _credentials?.username ?? '';
   String get email => _credentials?.email ?? _credentials?.username ?? '';
 
@@ -57,7 +61,10 @@ class SessionController extends ChangeNotifier {
     return result;
   }
 
-  Future<bool> saveUsername(String username) async {
+  Future<bool> saveInitialProfile({
+    required String username,
+    required String characterId,
+  }) async {
     final credentials = _credentials;
     final service = _userProfileService;
     final userId = credentials?.userId;
@@ -68,12 +75,15 @@ class SessionController extends ChangeNotifier {
 
     try {
       final cleanUsername = username.trim();
-      await service.saveUsername(
+      final cleanCharacterId = characterId.trim();
+      await service.saveInitialProfile(
         userId: userId,
         email: credentials.email ?? credentials.username,
         username: cleanUsername,
+        characterId: cleanCharacterId,
       );
       _profileUsername = cleanUsername;
+      _profileCharacterId = cleanCharacterId;
       notifyListeners();
       return true;
     } catch (_) {
@@ -85,6 +95,7 @@ class SessionController extends ChangeNotifier {
     await _authService.signOut();
     _credentials = null;
     _profileUsername = null;
+    _profileCharacterId = null;
     notifyListeners();
   }
 
@@ -93,6 +104,7 @@ class SessionController extends ChangeNotifier {
 
     _credentials = result.credentials;
     _profileUsername = null;
+    _profileCharacterId = null;
 
     final userId = _credentials?.userId;
     final profileService = _userProfileService;
@@ -104,6 +116,9 @@ class SessionController extends ChangeNotifier {
         final profile = await profileService.loadProfile(userId: userId);
         if (profile?.hasUsername == true) {
           _profileUsername = profile!.username!.trim();
+        }
+        if (profile?.hasCharacter == true) {
+          _profileCharacterId = profile!.characterId!.trim();
         }
       } catch (_) {
         // Keep the authenticated session. The profile flow can retry later.

@@ -73,7 +73,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (!mounted) return;
 
       if (result.isSuccess) {
-        final route = widget.sessionController.needsUsername
+        final route = widget.sessionController.needsProfileSetup
             ? AppRoutes.usernameSetup
             : AppRoutes.welcome;
         Navigator.of(context).pushReplacementNamed(route);

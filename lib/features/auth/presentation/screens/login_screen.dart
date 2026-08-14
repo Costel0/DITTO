@@ -87,7 +87,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   String _postAuthRoute() {
-    return widget.sessionController.needsUsername
+    return widget.sessionController.needsProfileSetup
         ? AppRoutes.usernameSetup
         : AppRoutes.welcome;
   }
@@ -177,7 +177,7 @@ class _LoginScreenState extends State<LoginScreen> {
               l10n.developmentShortcut,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: const Color(0xFF8A8F9D),
+                    color: const Color(0xFF7F786A),
                   ),
             ),
           ],

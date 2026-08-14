@@ -31,7 +31,7 @@ class AppRoutes {
         if (!sessionController.isAuthenticated) {
           return _loginRoute(sessionController);
         }
-        if (!sessionController.needsUsername) {
+        if (!sessionController.needsProfileSetup) {
           return _welcomeRoute(sessionController);
         }
         return MaterialPageRoute<void>(
@@ -45,7 +45,7 @@ class AppRoutes {
         if (!sessionController.isAuthenticated) {
           return _loginRoute(sessionController);
         }
-        if (sessionController.needsUsername) {
+        if (sessionController.needsProfileSetup) {
           return MaterialPageRoute<void>(
             settings: const RouteSettings(name: usernameSetup),
             builder: (_) => UsernameSetupScreen(

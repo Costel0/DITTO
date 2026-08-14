@@ -20,17 +20,28 @@
   "confirmPasswordHint": "Repite tu contraseña",
   "createAccountButton": "Crear cuenta",
   "alreadyHaveAccount": "¿Ya tienes cuenta? Inicia sesión",
-  "usernameSetupTitle": "Elige tu nombre de usuario",
-  "usernameSetupSubtitle": "Así te identificarás dentro de DITTO. Más adelante podrás añadir más información a tu perfil.",
+  "usernameSetupTitle": "Elige tu identidad de superviviente",
+  "usernameSetupSubtitle": "Configura el nombre y el personaje inicial que te representarán dentro de DITTO.",
   "usernameLabel": "Nombre de usuario",
   "usernameHint": "Tu nombre",
+  "initialCharacterLabel": "Personaje inicial",
+  "initialCharacterHint": "Elige un superviviente placeholder. Más adelante podremos sustituir su imagen sin cambiar tu perfil.",
+  "characterOption": "Superviviente {number}",
+  "@characterOption": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "characterRequiredError": "Elige un personaje inicial.",
   "useAnotherAccount": "Usar otra cuenta",
   "logout": "Cerrar sesión",
   "emailRequiredError": "Introduce tu correo electrónico.",
   "passwordLengthError": "La contraseña debe tener al menos 6 caracteres.",
   "passwordMismatchError": "Las contraseñas no coinciden.",
   "usernameLengthError": "Usa entre 3 y 24 caracteres.",
-  "usernameSaveError": "No se ha podido guardar el nombre de usuario. Inténtalo de nuevo.",
+  "profileSaveError": "No se ha podido guardar tu perfil de superviviente. Inténtalo de nuevo.",
   "authEmailAlreadyInUse": "Ya existe una cuenta con este correo electrónico.",
   "authInvalidEmail": "Introduce un correo electrónico válido.",
   "authWeakPassword": "Elige una contraseña más segura.",

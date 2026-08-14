@@ -11,6 +11,7 @@ service cloud.firestore {
         return request.resource.data.keys().hasOnly([
           'email',
           'username',
+          'characterId',
           'createdAt',
           'updatedAt'
         ])
@@ -18,7 +19,14 @@ service cloud.firestore {
         && request.resource.data.email == request.auth.token.email
         && request.resource.data.username is string
         && request.resource.data.username.size() >= 3
-        && request.resource.data.username.size() <= 24;
+        && request.resource.data.username.size() <= 24
+        && request.resource.data.characterId is string
+        && request.resource.data.characterId in [
+          'survivor_01',
+          'survivor_02',
+          'survivor_03',
+          'survivor_04'
+        ];
       }
 
       allow read: if isOwner();

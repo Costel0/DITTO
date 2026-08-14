@@ -22,23 +22,27 @@ class FirestoreUserProfileService implements UserProfileService {
       userId: userId,
       email: data['email'] as String? ?? '',
       username: data['username'] as String?,
+      characterId: data['characterId'] as String?,
     );
   }
 
   @override
-  Future<void> saveUsername({
+  Future<void> saveInitialProfile({
     required String userId,
     required String email,
     required String username,
+    required String characterId,
   }) async {
     final reference = _users.doc(userId);
     final cleanUsername = username.trim();
+    final cleanCharacterId = characterId.trim();
 
     await _firestore.runTransaction((transaction) async {
       final snapshot = await transaction.get(reference);
       final data = <String, dynamic>{
         'email': email.trim(),
         'username': cleanUsername,
+        'characterId': cleanCharacterId,
         'updatedAt': FieldValue.serverTimestamp(),
       };
 
