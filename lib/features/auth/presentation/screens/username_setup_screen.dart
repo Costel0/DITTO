@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../app/navigation/app_routes.dart';
 import '../../../../core/localization/l10n.dart';
+import '../../../survivors/domain/duplicate_catalog.dart';
 import '../../application/session_controller.dart';
 import '../widgets/auth_card_scaffold.dart';
 import '../widgets/auth_error_box.dart';
@@ -19,21 +20,6 @@ class UsernameSetupScreen extends StatefulWidget {
 }
 
 class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
-  static const _characterIds = <String>[
-    'survivor_01',
-    'survivor_02',
-    'survivor_03',
-    'survivor_04',
-  ];
-
-  // Replace null with each PNG asset path when the final artwork is available.
-  static const _characterImageAssets = <String?>[
-    null,
-    null,
-    null,
-    null,
-  ];
-
   static const _characterIcons = <IconData>[
     Icons.person_rounded,
     Icons.face_rounded,
@@ -41,18 +27,11 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
     Icons.account_circle_rounded,
   ];
 
-  static const _characterStats = <List<int>>[
-    [6, 7, 6, 8],
-    [8, 4, 9, 5],
-    [4, 9, 5, 7],
-    [7, 5, 7, 9],
-  ];
-
   final _usernameController = TextEditingController();
   late final PageController _pageController;
 
-  late int _selectedCharacterIndex;
-  late String _selectedCharacterId;
+  late int _selectedDuplicateIndex;
+  late String _selectedDuplicateId;
   bool _isSubmitting = false;
   String? _errorMessage;
 
@@ -64,11 +43,13 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
       _usernameController.text = existingUsername.trim();
     }
 
-    final existingCharacterId = widget.sessionController.characterId;
-    final existingIndex = _characterIds.indexOf(existingCharacterId ?? '');
-    _selectedCharacterIndex = existingIndex >= 0 ? existingIndex : 0;
-    _selectedCharacterId = _characterIds[_selectedCharacterIndex];
-    _pageController = PageController(initialPage: _selectedCharacterIndex);
+    final existingDuplicateId = widget.sessionController.initialDuplicateId;
+    final existingIndex = predefinedDuplicates.indexWhere(
+      (duplicate) => duplicate.id == existingDuplicateId,
+    );
+    _selectedDuplicateIndex = existingIndex >= 0 ? existingIndex : 0;
+    _selectedDuplicateId = predefinedDuplicates[_selectedDuplicateIndex].id;
+    _pageController = PageController(initialPage: _selectedDuplicateIndex);
   }
 
   @override
@@ -97,7 +78,7 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
     try {
       final saved = await widget.sessionController.saveInitialProfile(
         username: username,
-        characterId: _selectedCharacterId,
+        duplicateId: _selectedDuplicateId,
       );
       if (!mounted) return;
 
@@ -119,17 +100,17 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
     Navigator.of(context).pushReplacementNamed(AppRoutes.login);
   }
 
-  void _selectCharacter(int index) {
+  void _selectDuplicate(int index) {
     setState(() {
-      _selectedCharacterIndex = index;
-      _selectedCharacterId = _characterIds[index];
+      _selectedDuplicateIndex = index;
+      _selectedDuplicateId = predefinedDuplicates[index].id;
       _errorMessage = null;
     });
   }
 
-  void _changeCharacter(int delta) {
-    final target = _selectedCharacterIndex + delta;
-    if (target < 0 || target >= _characterIds.length) return;
+  void _changeDuplicate(int delta) {
+    final target = _selectedDuplicateIndex + delta;
+    if (target < 0 || target >= predefinedDuplicates.length) return;
 
     _pageController.animateToPage(
       target,
@@ -168,6 +149,11 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
       default:
         return '';
     }
+  }
+
+  IconData _placeholderIcon(int index) {
+    if (index < _characterIcons.length) return _characterIcons[index];
+    return Icons.person_rounded;
   }
 
   @override
@@ -220,15 +206,16 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
             height: 620,
             child: PageView.builder(
               controller: _pageController,
-              itemCount: _characterIds.length,
-              onPageChanged: _selectCharacter,
+              itemCount: predefinedDuplicates.length,
+              onPageChanged: _selectDuplicate,
               itemBuilder: (context, index) {
-                final stats = _characterStats[index];
+                final duplicate = predefinedDuplicates[index];
+                final stats = duplicate.baseStats.values;
                 return Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 2),
                   child: _CharacterSheet(
-                    imageAsset: _characterImageAssets[index],
-                    placeholderIcon: _characterIcons[index],
+                    imageAsset: duplicate.idleAssetPath,
+                    placeholderIcon: _placeholderIcon(index),
                     name: _characterName(index),
                     description: _characterDescription(index),
                     stats: [
@@ -259,16 +246,16 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
             children: [
               IconButton.outlined(
                 tooltip: l10n.previousCharacter,
-                onPressed: _selectedCharacterIndex == 0
+                onPressed: _selectedDuplicateIndex == 0
                     ? null
-                    : () => _changeCharacter(-1),
+                    : () => _changeDuplicate(-1),
                 icon: const Icon(Icons.chevron_left_rounded),
               ),
               Expanded(
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(_characterIds.length, (index) {
-                    final selected = index == _selectedCharacterIndex;
+                  children: List.generate(predefinedDuplicates.length, (index) {
+                    final selected = index == _selectedDuplicateIndex;
                     return AnimatedContainer(
                       duration: const Duration(milliseconds: 180),
                       width: selected ? 20 : 7,
@@ -286,9 +273,10 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
               ),
               IconButton.outlined(
                 tooltip: l10n.nextCharacter,
-                onPressed: _selectedCharacterIndex == _characterIds.length - 1
-                    ? null
-                    : () => _changeCharacter(1),
+                onPressed:
+                    _selectedDuplicateIndex == predefinedDuplicates.length - 1
+                        ? null
+                        : () => _changeDuplicate(1),
                 icon: const Icon(Icons.chevron_right_rounded),
               ),
             ],
@@ -331,7 +319,7 @@ class _CharacterSheet extends StatelessWidget {
     required this.stats,
   });
 
-  final String? imageAsset;
+  final String imageAsset;
   final IconData placeholderIcon;
   final String name;
   final String description;
@@ -417,7 +405,7 @@ class _CharacterPortrait extends StatelessWidget {
     required this.placeholderIcon,
   });
 
-  final String? imageAsset;
+  final String imageAsset;
   final IconData placeholderIcon;
 
   @override
@@ -442,15 +430,13 @@ class _CharacterPortrait extends StatelessWidget {
           aspectRatio: 2 / 3,
           child: ClipRRect(
             borderRadius: BorderRadius.circular(4),
-            child: imageAsset == null
-                ? placeholder()
-                : Image.asset(
-                    imageAsset!,
-                    fit: BoxFit.contain,
-                    alignment: Alignment.bottomCenter,
-                    filterQuality: FilterQuality.high,
-                    errorBuilder: (_, __, ___) => placeholder(),
-                  ),
+            child: Image.asset(
+              imageAsset,
+              fit: BoxFit.contain,
+              alignment: Alignment.bottomCenter,
+              filterQuality: FilterQuality.high,
+              errorBuilder: (_, __, ___) => placeholder(),
+            ),
           ),
         ),
       ),
