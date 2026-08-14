@@ -12,6 +12,23 @@ class FirestoreUserProfileService implements UserProfileService {
   CollectionReference<Map<String, dynamic>> get _users =>
       _firestore.collection('users');
 
+  String? _readInitialDuplicateId(Map<String, dynamic> data) {
+    final current = data['initialDuplicateId'] as String?;
+    if (current != null && current.trim().isNotEmpty) {
+      return current.trim();
+    }
+
+    // Temporary compatibility for profiles created before Duplicate IDs existed.
+    final legacyCharacterId = data['characterId'] as String?;
+    if (legacyCharacterId == null || legacyCharacterId.trim().isEmpty) {
+      return null;
+    }
+    final legacy = legacyCharacterId.trim();
+    return legacy.startsWith('survivor_')
+        ? legacy.substring('survivor_'.length)
+        : legacy;
+  }
+
   @override
   Future<UserProfile?> loadProfile({required String userId}) async {
     final snapshot = await _users.doc(userId).get();
@@ -22,7 +39,7 @@ class FirestoreUserProfileService implements UserProfileService {
       userId: userId,
       email: data['email'] as String? ?? '',
       username: data['username'] as String?,
-      characterId: data['characterId'] as String?,
+      initialDuplicateId: _readInitialDuplicateId(data),
     );
   }
 
@@ -31,18 +48,19 @@ class FirestoreUserProfileService implements UserProfileService {
     required String userId,
     required String email,
     required String username,
-    required String characterId,
+    required String initialDuplicateId,
   }) async {
     final reference = _users.doc(userId);
     final cleanUsername = username.trim();
-    final cleanCharacterId = characterId.trim();
+    final cleanDuplicateId = initialDuplicateId.trim();
 
     await _firestore.runTransaction((transaction) async {
       final snapshot = await transaction.get(reference);
       final data = <String, dynamic>{
         'email': email.trim(),
         'username': cleanUsername,
-        'characterId': cleanCharacterId,
+        'initialDuplicateId': cleanDuplicateId,
+        'characterId': FieldValue.delete(),
         'updatedAt': FieldValue.serverTimestamp(),
       };
 
@@ -64,6 +82,7 @@ class FirestoreUserProfileService implements UserProfileService {
 
       transaction.update(reference, <String, dynamic>{
         'username': FieldValue.delete(),
+        'initialDuplicateId': FieldValue.delete(),
         'characterId': FieldValue.delete(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
