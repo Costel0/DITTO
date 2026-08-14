@@ -128,8 +128,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                                       initialFocusX: _hubCanvasWidth / 2,
                                       elements: [
                                         HubSceneElement(
-                                          position: const Offset(590, 20),
-                                          size: const Size(260, 330),
+                                          position: const Offset(390, 90),
+                                          size: const Size(170, 270),
                                           child: _HubCharacterSprite(
                                             assetPath: _characterAssetPath,
                                             fallbackIcon: _characterIcon(
