@@ -9,13 +9,14 @@ enum HubCharacterSlot {
   rightCompanion2,
 }
 
-/// Assignment order for Survivors in the player's roster. The first acquired
-/// Survivor remains in the tuned primary position, then companions fill the
-/// vacant left slot and the two right slots.
+/// Assignment order for Survivors in the player's roster.
+///
+/// The initial Survivor remains in the tuned primary position. New Survivors
+/// then fill the nearest right slot, the left slot, and finally the far right.
 const List<HubCharacterSlot> hubRosterSlotOrder = <HubCharacterSlot>[
   HubCharacterSlot.primary,
-  HubCharacterSlot.leftCompanion,
   HubCharacterSlot.rightCompanion1,
+  HubCharacterSlot.leftCompanion,
   HubCharacterSlot.rightCompanion2,
 ];
 
