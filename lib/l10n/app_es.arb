@@ -25,7 +25,7 @@
   "usernameLabel": "Nombre de usuario",
   "usernameHint": "Tu nombre",
   "initialCharacterLabel": "Personaje inicial",
-  "initialCharacterHint": "Elige un superviviente placeholder. Más adelante podremos sustituir su imagen sin cambiar tu perfil.",
+  "initialCharacterHint": "Elige el superviviente con el que comenzarás.",
   "characterOption": "Superviviente {number}",
   "@characterOption": {
     "placeholders": {
