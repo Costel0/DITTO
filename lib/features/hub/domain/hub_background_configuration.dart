@@ -22,6 +22,20 @@ const List<HubArea> hubAreas = <HubArea>[
   HubArea.entrance,
 ];
 
+/// Width reserved for every hub area inside the 1440 px panorama.
+///
+/// Keeping area widths explicit prevents missing or differently-sized state
+/// images from moving the following areas. All state variants for an area are
+/// rendered inside the same slot.
+const Map<HubArea, double> hubAreaWidths = <HubArea, double>{
+  HubArea.beds: 281,
+  HubArea.lockers: 88,
+  HubArea.restArea: 263,
+  HubArea.workArea: 277,
+  HubArea.kitchen: 328,
+  HubArea.entrance: 203,
+};
+
 /// PNG file names available for each area state.
 ///
 /// Keep file names here instead of scattering them through UI code. The game
@@ -68,11 +82,13 @@ class HubBackgroundState {
 class HubBackgroundSegment {
   const HubBackgroundSegment({
     required this.area,
+    required this.width,
     required this.assetPath,
     required this.defaultAssetPath,
   });
 
   final HubArea area;
+  final double width;
   final String assetPath;
 
   /// Used by the presentation layer if [assetPath] cannot be loaded at runtime.
@@ -100,6 +116,7 @@ HubBackgroundSegment _resolveAreaSegment(
 
   return HubBackgroundSegment(
     area: area,
+    width: hubAreaWidths[area]!,
     assetPath: '$_hubAreaAssetDirectory/$selectedPng',
     defaultAssetPath: '$_hubAreaAssetDirectory/$defaultPng',
   );
