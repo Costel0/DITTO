@@ -4,11 +4,8 @@ import '../../../../app/navigation/app_routes.dart';
 import '../../../../core/localization/l10n.dart';
 import '../../../../core/presentation/survival_background.dart';
 import '../../../auth/application/session_controller.dart';
-import '../widgets/hub_panorama.dart';
-
-const double _hubCanvasWidth = 1440;
-const double _hubCanvasHeight = 360;
-const String _hubBackgroundAsset = 'assets/hub/hub_background.png';
+import '../../../hub/domain/hub_scene_configuration.dart';
+import '../../../hub/presentation/widgets/hub_scrollable_scene.dart';
 
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({
@@ -88,7 +85,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             builder: (context, constraints) {
               return Center(
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: _hubCanvasWidth),
+                  constraints: BoxConstraints(
+                    maxWidth: defaultHubSceneConfiguration.canvasSize.width,
+                  ),
                   child: SizedBox(
                     width: double.infinity,
                     height: constraints.maxHeight,
@@ -118,26 +117,21 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                                     onLogout: () => _logout(context),
                                   ),
                                   SizedBox(
-                                    height: _hubCanvasHeight,
-                                    child: HubPanorama(
-                                      canvasSize: const Size(
-                                        _hubCanvasWidth,
-                                        _hubCanvasHeight,
-                                      ),
-                                      backgroundAssetPath: _hubBackgroundAsset,
-                                      initialFocusX: _hubCanvasWidth / 2,
-                                      elements: [
-                                        HubSceneElement(
-                                          position: const Offset(390, 90),
-                                          size: const Size(170, 270),
-                                          child: _HubCharacterSprite(
-                                            assetPath: _characterAssetPath,
-                                            fallbackIcon: _characterIcon(
-                                              sessionController.characterId,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
+                                    height: defaultHubSceneConfiguration
+                                        .canvasSize.height,
+                                    child: HubScrollableScene(
+                                      characters: <
+                                          HubCharacterSlot,
+                                          HubSceneCharacter
+                                        >{
+                                          HubCharacterSlot.primary:
+                                              HubSceneCharacter(
+                                                assetPath: _characterAssetPath,
+                                                fallbackIcon: _characterIcon(
+                                                  sessionController.characterId,
+                                                ),
+                                              ),
+                                        },
                                     ),
                                   ),
                                   _HubSectionBar(
@@ -271,38 +265,6 @@ class _HubTopBar extends StatelessWidget {
                   label: Text(l10n.logout),
                 ),
             ],
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _HubCharacterSprite extends StatelessWidget {
-  const _HubCharacterSprite({
-    required this.assetPath,
-    required this.fallbackIcon,
-  });
-
-  final String assetPath;
-  final IconData fallbackIcon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: Image.asset(
-        assetPath,
-        fit: BoxFit.contain,
-        alignment: Alignment.bottomCenter,
-        filterQuality: FilterQuality.high,
-        errorBuilder: (context, error, stackTrace) {
-          return Center(
-            child: Icon(
-              fallbackIcon,
-              size: 190,
-              color: const Color(0xFFB7A47E),
-            ),
           );
         },
       ),
