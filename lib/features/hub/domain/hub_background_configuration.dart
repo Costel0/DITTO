@@ -18,12 +18,12 @@ enum HubAreaOrder {
 }
 
 const List<HubArea> hubAreasLeftToRight = <HubArea>[
-  HubArea.entrance,
-  HubArea.kitchen,
-  HubArea.workArea,
-  HubArea.restArea,
-  HubArea.lockers,
   HubArea.beds,
+  HubArea.lockers,
+  HubArea.restArea,
+  HubArea.workArea,
+  HubArea.kitchen,
+  HubArea.entrance,
 ];
 
 /// PNG file names available for each area state.
@@ -34,28 +34,28 @@ const List<HubArea> hubAreasLeftToRight = <HubArea>[
 const Map<HubArea, Map<HubAreaState, String>> hubAreaStatePngNames =
     <HubArea, Map<HubAreaState, String>>{
   HubArea.entrance: <HubAreaState, String>{
-    HubAreaState.defaultState: 'entrance_default.png',
-    HubAreaState.state2: 'entrance_state_2.png',
+    HubAreaState.defaultState: 'background_entrance_default.png',
+    HubAreaState.state2: 'background_entrance_state_2.png',
   },
   HubArea.kitchen: <HubAreaState, String>{
-    HubAreaState.defaultState: 'kitchen_default.png',
-    HubAreaState.state2: 'kitchen_state_2.png',
+    HubAreaState.defaultState: 'background_kitchen_default.png',
+    HubAreaState.state2: 'background_kitchen_state_2.png',
   },
   HubArea.workArea: <HubAreaState, String>{
-    HubAreaState.defaultState: 'work_area_default.png',
-    HubAreaState.state2: 'work_area_state_2.png',
+    HubAreaState.defaultState: 'background_work_area_default.png',
+    HubAreaState.state2: 'background_work_area_state_2.png',
   },
   HubArea.restArea: <HubAreaState, String>{
-    HubAreaState.defaultState: 'rest_area_default.png',
-    HubAreaState.state2: 'rest_area_state_2.png',
+    HubAreaState.defaultState: 'background_rest_area_default.png',
+    HubAreaState.state2: 'background_rest_area_state_2.png',
   },
   HubArea.lockers: <HubAreaState, String>{
-    HubAreaState.defaultState: 'lockers_default.png',
-    HubAreaState.state2: 'lockers_state_2.png',
+    HubAreaState.defaultState: 'background_lockers_default.png',
+    HubAreaState.state2: 'background_lockers_state_2.png',
   },
   HubArea.beds: <HubAreaState, String>{
-    HubAreaState.defaultState: 'beds_default.png',
-    HubAreaState.state2: 'beds_state_2.png',
+    HubAreaState.defaultState: 'background_beds_default.png',
+    HubAreaState.state2: 'background_beds_state_2.png',
   },
 };
 
