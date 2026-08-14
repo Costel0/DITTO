@@ -1,21 +1,28 @@
 import 'package:flutter/foundation.dart';
 
 import '../../profile/domain/user_profile_service.dart';
+import '../../survivors/domain/duplicate_catalog.dart';
+import '../../survivors/domain/survivor.dart';
+import '../../survivors/domain/survivor_service.dart';
 import '../domain/auth_service.dart';
 
 class SessionController extends ChangeNotifier {
   SessionController({
     required AuthService authService,
     UserProfileService? userProfileService,
+    SurvivorService? survivorService,
   })  : _authService = authService,
-        _userProfileService = userProfileService;
+        _userProfileService = userProfileService,
+        _survivorService = survivorService;
 
   final AuthService _authService;
   final UserProfileService? _userProfileService;
+  final SurvivorService? _survivorService;
 
   AuthCredentials? _credentials;
   String? _profileUsername;
-  String? _profileCharacterId;
+  String? _initialDuplicateId;
+  List<Survivor> _survivors = const <Survivor>[];
 
   AuthCredentials? get credentials => _credentials;
   bool get isAuthenticated => _credentials != null;
@@ -23,9 +30,10 @@ class SessionController extends ChangeNotifier {
       isAuthenticated &&
       _credentials?.userId != null &&
       ((_profileUsername == null || _profileUsername!.trim().isEmpty) ||
-          (_profileCharacterId == null || _profileCharacterId!.trim().isEmpty));
+          (_initialDuplicateId == null || _initialDuplicateId!.trim().isEmpty));
   String? get profileUsername => _profileUsername;
-  String? get characterId => _profileCharacterId;
+  String? get initialDuplicateId => _initialDuplicateId;
+  List<Survivor> get survivors => List<Survivor>.unmodifiable(_survivors);
   String get username => _profileUsername ?? _credentials?.username ?? '';
   String get email => _credentials?.email ?? _credentials?.username ?? '';
 
@@ -63,27 +71,44 @@ class SessionController extends ChangeNotifier {
 
   Future<bool> saveInitialProfile({
     required String username,
-    required String characterId,
+    required String duplicateId,
   }) async {
     final credentials = _credentials;
-    final service = _userProfileService;
+    final profileService = _userProfileService;
+    final survivorService = _survivorService;
     final userId = credentials?.userId;
 
-    if (credentials == null || service == null || userId == null) {
+    if (credentials == null ||
+        profileService == null ||
+        survivorService == null ||
+        userId == null) {
       return false;
     }
 
+    final cleanUsername = username.trim();
+    final cleanDuplicateId = duplicateId.trim();
+    if (duplicateById(cleanDuplicateId) == null) return false;
+
     try {
-      final cleanUsername = username.trim();
-      final cleanCharacterId = characterId.trim();
-      await service.saveInitialProfile(
+      final initialSurvivor = Survivor(duplicateId: cleanDuplicateId);
+
+      // The initial document has a deterministic ID, so retrying this flow does
+      // not create duplicate Survivor instances. A future trusted server can
+      // replace this client-side creation without changing the domain model.
+      await survivorService.saveInitialSurvivor(
+        userId: userId,
+        survivor: initialSurvivor,
+      );
+      await profileService.saveInitialProfile(
         userId: userId,
         email: credentials.email ?? credentials.username,
         username: cleanUsername,
-        characterId: cleanCharacterId,
+        initialDuplicateId: cleanDuplicateId,
       );
+
       _profileUsername = cleanUsername;
-      _profileCharacterId = cleanCharacterId;
+      _initialDuplicateId = cleanDuplicateId;
+      _survivors = await survivorService.loadSurvivors(userId: userId);
       notifyListeners();
       return true;
     } catch (_) {
@@ -92,17 +117,20 @@ class SessionController extends ChangeNotifier {
   }
 
   Future<bool> clearInitialProfileForTesting() async {
-    final service = _userProfileService;
+    final profileService = _userProfileService;
+    final survivorService = _survivorService;
     final userId = _credentials?.userId;
 
-    if (service == null || userId == null) {
+    if (profileService == null || survivorService == null || userId == null) {
       return false;
     }
 
     try {
-      await service.clearInitialProfile(userId: userId);
+      await survivorService.clearInitialSurvivor(userId: userId);
+      await profileService.clearInitialProfile(userId: userId);
       _profileUsername = null;
-      _profileCharacterId = null;
+      _initialDuplicateId = null;
+      _survivors = const <Survivor>[];
       notifyListeners();
       return true;
     } catch (_) {
@@ -114,7 +142,8 @@ class SessionController extends ChangeNotifier {
     await _authService.signOut();
     _credentials = null;
     _profileUsername = null;
-    _profileCharacterId = null;
+    _initialDuplicateId = null;
+    _survivors = const <Survivor>[];
     notifyListeners();
   }
 
@@ -123,24 +152,50 @@ class SessionController extends ChangeNotifier {
 
     _credentials = result.credentials;
     _profileUsername = null;
-    _profileCharacterId = null;
+    _initialDuplicateId = null;
+    _survivors = const <Survivor>[];
 
     final userId = _credentials?.userId;
     final profileService = _userProfileService;
+    final survivorService = _survivorService;
 
     if (userId == null) {
       _profileUsername = _credentials?.username;
-    } else if (profileService != null) {
-      try {
-        final profile = await profileService.loadProfile(userId: userId);
-        if (profile?.hasUsername == true) {
-          _profileUsername = profile!.username!.trim();
+    } else {
+      if (profileService != null) {
+        try {
+          final profile = await profileService.loadProfile(userId: userId);
+          if (profile?.hasUsername == true) {
+            _profileUsername = profile!.username!.trim();
+          }
+          if (profile?.hasInitialDuplicate == true) {
+            _initialDuplicateId = profile!.initialDuplicateId!.trim();
+          }
+        } catch (_) {
+          // Keep the authenticated session. The profile flow can retry later.
         }
-        if (profile?.hasCharacter == true) {
-          _profileCharacterId = profile!.characterId!.trim();
+      }
+
+      if (survivorService != null) {
+        try {
+          _survivors = await survivorService.loadSurvivors(userId: userId);
+
+          // One-time compatibility path for profiles created before Survivors
+          // were stored as their own Firestore documents.
+          final duplicateId = _initialDuplicateId;
+          if (_survivors.isEmpty &&
+              duplicateId != null &&
+              duplicateById(duplicateId) != null) {
+            final migrated = Survivor(duplicateId: duplicateId);
+            await survivorService.saveInitialSurvivor(
+              userId: userId,
+              survivor: migrated,
+            );
+            _survivors = <Survivor>[migrated];
+          }
+        } catch (_) {
+          // Profile/authentication remains usable even if roster loading fails.
         }
-      } catch (_) {
-        // Keep the authenticated session. The profile flow can retry later.
       }
     }
 
