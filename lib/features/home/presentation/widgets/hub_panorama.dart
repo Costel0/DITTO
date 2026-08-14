@@ -48,7 +48,7 @@ class HubPanorama extends StatefulWidget {
   final String? backgroundAssetPath;
 
   /// Kept temporarily for source compatibility with the previous API.
-  @Deprecated('Segment images preserve their native aspect ratio.')
+  @Deprecated('Segment images use their configured area slots.')
   final BoxFit backgroundFit;
 
   final bool showCoordinateGrid;
@@ -222,13 +222,21 @@ class _HubBackgroundSegmentImage extends StatelessWidget {
   Widget _image(String assetPath, {required Widget Function() onError}) {
     return Image.asset(
       assetPath,
+      width: segment.width,
       height: canvasHeight,
-      fit: BoxFit.fitHeight,
+      fit: BoxFit.cover,
       alignment: Alignment.center,
       filterQuality: FilterQuality.high,
       gaplessPlayback: true,
       excludeFromSemantics: true,
       errorBuilder: (context, error, stackTrace) => onError(),
+    );
+  }
+
+  Widget _emptySlot() {
+    return SizedBox(
+      width: segment.width,
+      height: canvasHeight,
     );
   }
 
@@ -238,12 +246,12 @@ class _HubBackgroundSegmentImage extends StatelessWidget {
       segment.assetPath,
       onError: () {
         if (segment.assetPath == segment.defaultAssetPath) {
-          return SizedBox(height: canvasHeight);
+          return _emptySlot();
         }
 
         return _image(
           segment.defaultAssetPath,
-          onError: () => SizedBox(height: canvasHeight),
+          onError: _emptySlot,
         );
       },
     );
