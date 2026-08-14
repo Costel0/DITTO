@@ -155,7 +155,7 @@ class SessionController extends ChangeNotifier {
     }
 
     try {
-      await survivorService.clearInitialSurvivor(userId: userId);
+      await survivorService.clearAllSurvivorsForTesting(userId: userId);
       await profileService.clearInitialProfile(userId: userId);
       _profileUsername = null;
       _initialDuplicateId = null;
