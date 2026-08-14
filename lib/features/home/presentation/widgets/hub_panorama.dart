@@ -14,12 +14,28 @@ class HubSceneElement {
   final Widget child;
 }
 
+class HubBackgroundSegment {
+  const HubBackgroundSegment({required this.assetPath});
+
+  final String assetPath;
+}
+
+const List<HubBackgroundSegment> initialHubBackgroundSegments = [
+  HubBackgroundSegment(assetPath: 'assets/hub/hub_initial_01.png'),
+  HubBackgroundSegment(assetPath: 'assets/hub/hub_initial_02.png'),
+  HubBackgroundSegment(assetPath: 'assets/hub/hub_initial_03.png'),
+  HubBackgroundSegment(assetPath: 'assets/hub/hub_initial_04.png'),
+  HubBackgroundSegment(assetPath: 'assets/hub/hub_initial_05.png'),
+  HubBackgroundSegment(assetPath: 'assets/hub/hub_initial_06.png'),
+];
+
 class HubPanorama extends StatefulWidget {
   const HubPanorama({
     super.key,
     required this.elements,
     this.canvasSize = const Size(1440, 420),
     this.initialFocusX,
+    this.backgroundSegments = initialHubBackgroundSegments,
     this.backgroundAssetPath,
     this.backgroundFit = BoxFit.cover,
     this.showCoordinateGrid = true,
@@ -28,8 +44,24 @@ class HubPanorama extends StatefulWidget {
   final List<HubSceneElement> elements;
   final Size canvasSize;
   final double? initialFocusX;
+
+  /// Ordered slices that form the scene background from left to right.
+  ///
+  /// The game state can build a different list at runtime as the hub evolves.
+  /// Each PNG is rendered at the canvas height while preserving its intrinsic
+  /// aspect ratio, so different source widths are supported without hardcoding
+  /// them here. The authored widths should add up to [canvasSize.width].
+  final List<HubBackgroundSegment> backgroundSegments;
+
+  /// Kept temporarily so existing callers remain source-compatible while the
+  /// hub migrates from one background image to a segmented composition.
+  @Deprecated('Use backgroundSegments instead.')
   final String? backgroundAssetPath;
+
+  /// Kept temporarily for source compatibility with the previous API.
+  @Deprecated('Segment images preserve their native aspect ratio.')
   final BoxFit backgroundFit;
+
   final bool showCoordinateGrid;
 
   @override
@@ -99,8 +131,8 @@ class _HubPanoramaState extends State<HubPanorama> {
                       width: widget.canvasSize.width,
                       height: widget.canvasSize.height,
                       child: _HubCanvasBackground(
-                        assetPath: widget.backgroundAssetPath,
-                        fit: widget.backgroundFit,
+                        segments: widget.backgroundSegments,
+                        canvasHeight: widget.canvasSize.height,
                         showCoordinateGrid: widget.showCoordinateGrid,
                       ),
                     ),
@@ -125,13 +157,13 @@ class _HubPanoramaState extends State<HubPanorama> {
 
 class _HubCanvasBackground extends StatelessWidget {
   const _HubCanvasBackground({
-    required this.assetPath,
-    required this.fit,
+    required this.segments,
+    required this.canvasHeight,
     required this.showCoordinateGrid,
   });
 
-  final String? assetPath;
-  final BoxFit fit;
+  final List<HubBackgroundSegment> segments;
+  final double canvasHeight;
   final bool showCoordinateGrid;
 
   @override
@@ -156,15 +188,31 @@ class _HubCanvasBackground extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          if (assetPath != null)
-            Image.asset(
-              assetPath!,
-              fit: fit,
-              alignment: Alignment.center,
-              filterQuality: FilterQuality.high,
-              errorBuilder: (context, error, stackTrace) {
-                return const SizedBox.shrink();
-              },
+          if (segments.isNotEmpty)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: SizedBox(
+                height: canvasHeight,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final segment in segments)
+                      Image.asset(
+                        segment.assetPath,
+                        height: canvasHeight,
+                        fit: BoxFit.fitHeight,
+                        alignment: Alignment.center,
+                        filterQuality: FilterQuality.high,
+                        gaplessPlayback: true,
+                        excludeFromSemantics: true,
+                        errorBuilder: (context, error, stackTrace) {
+                          return SizedBox(height: canvasHeight);
+                        },
+                      ),
+                  ],
+                ),
+              ),
             ),
           if (showCoordinateGrid)
             const IgnorePointer(
