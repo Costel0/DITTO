@@ -26,17 +26,26 @@
   "usernameHint": "Tu nombre",
   "initialCharacterLabel": "Personaje inicial",
   "initialCharacterHint": "Elige el superviviente con el que comenzarás.",
-  "characterOption": "Superviviente {number}",
-  "@characterOption": {
-    "placeholders": {
-      "number": {
-        "type": "int"
-      }
-    }
-  },
+  "characterNavigationHint": "Desliza hacia los lados o usa las flechas para comparar supervivientes.",
+  "previousCharacter": "Personaje anterior",
+  "nextCharacter": "Personaje siguiente",
+  "characterName1": "Mara",
+  "characterName2": "Elias",
+  "characterName3": "Nyra",
+  "characterName4": "Dorian",
+  "characterDescription1": "Exploradora equilibrada y observadora. Sabe encontrar recursos donde otros solo ven ruinas.",
+  "characterDescription2": "Superviviente robusto acostumbrado a resistir condiciones extremas y enfrentamientos prolongados.",
+  "characterDescription3": "Rápida, silenciosa y difícil de atrapar. Prefiere evitar el peligro antes que enfrentarlo de frente.",
+  "characterDescription4": "Veterano oportunista con gran instinto para recuperar materiales útiles y aprovechar cualquier hallazgo.",
+  "statStrength": "Fuerza",
+  "statAgility": "Agilidad",
+  "statEndurance": "Resistencia",
+  "statScavenging": "Saqueo",
   "characterRequiredError": "Elige un personaje inicial.",
   "useAnotherAccount": "Usar otra cuenta",
   "logout": "Cerrar sesión",
+  "resetProfileTestTooltip": "Reiniciar perfil para pruebas",
+  "resetProfileTestError": "No se han podido borrar los datos del perfil.",
   "emailRequiredError": "Introduce tu correo electrónico.",
   "passwordLengthError": "La contraseña debe tener al menos 6 caracteres.",
   "passwordMismatchError": "Las contraseñas no coinciden.",

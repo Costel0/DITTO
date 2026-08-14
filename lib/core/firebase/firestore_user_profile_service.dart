@@ -53,4 +53,20 @@ class FirestoreUserProfileService implements UserProfileService {
       transaction.set(reference, data, SetOptions(merge: true));
     });
   }
+
+  @override
+  Future<void> clearInitialProfile({required String userId}) async {
+    final reference = _users.doc(userId);
+
+    await _firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(reference);
+      if (!snapshot.exists) return;
+
+      transaction.update(reference, <String, dynamic>{
+        'username': FieldValue.delete(),
+        'characterId': FieldValue.delete(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    });
+  }
 }

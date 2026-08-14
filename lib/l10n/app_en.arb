@@ -26,17 +26,26 @@
   "usernameHint": "Your name",
   "initialCharacterLabel": "Initial character",
   "initialCharacterHint": "Choose the survivor you will start with.",
-  "characterOption": "Survivor {number}",
-  "@characterOption": {
-    "placeholders": {
-      "number": {
-        "type": "int"
-      }
-    }
-  },
+  "characterNavigationHint": "Swipe sideways or use the arrows to compare survivors.",
+  "previousCharacter": "Previous character",
+  "nextCharacter": "Next character",
+  "characterName1": "Mara",
+  "characterName2": "Elias",
+  "characterName3": "Nyra",
+  "characterName4": "Dorian",
+  "characterDescription1": "A balanced and observant scout. She knows how to find supplies where others see only ruins.",
+  "characterDescription2": "A hardened survivor used to enduring extreme conditions and prolonged confrontations.",
+  "characterDescription3": "Fast, quiet, and difficult to catch. She prefers avoiding danger instead of meeting it head-on.",
+  "characterDescription4": "An opportunistic veteran with a sharp instinct for recovering useful materials from almost anything.",
+  "statStrength": "Strength",
+  "statAgility": "Agility",
+  "statEndurance": "Endurance",
+  "statScavenging": "Scavenging",
   "characterRequiredError": "Choose an initial character.",
   "useAnotherAccount": "Use another account",
   "logout": "Log out",
+  "resetProfileTestTooltip": "Reset profile for testing",
+  "resetProfileTestError": "Unable to clear the profile data.",
   "emailRequiredError": "Enter your email address.",
   "passwordLengthError": "Password must contain at least 6 characters.",
   "passwordMismatchError": "Passwords do not match.",

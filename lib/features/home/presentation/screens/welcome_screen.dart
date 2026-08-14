@@ -5,7 +5,7 @@ import '../../../../core/localization/l10n.dart';
 import '../../../../core/presentation/survival_background.dart';
 import '../../../auth/application/session_controller.dart';
 
-class WelcomeScreen extends StatelessWidget {
+class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({
     super.key,
     required this.sessionController,
@@ -13,10 +13,37 @@ class WelcomeScreen extends StatelessWidget {
 
   final SessionController sessionController;
 
+  @override
+  State<WelcomeScreen> createState() => _WelcomeScreenState();
+}
+
+class _WelcomeScreenState extends State<WelcomeScreen> {
+  bool _isResettingProfile = false;
+
+  SessionController get sessionController => widget.sessionController;
+
   Future<void> _logout(BuildContext context) async {
     await sessionController.signOut();
     if (!context.mounted) return;
     Navigator.of(context).pushReplacementNamed(AppRoutes.login);
+  }
+
+  Future<void> _resetProfileForTesting() async {
+    if (_isResettingProfile) return;
+
+    setState(() => _isResettingProfile = true);
+    final cleared = await sessionController.clearInitialProfileForTesting();
+    if (!mounted) return;
+
+    if (cleared) {
+      Navigator.of(context).pushReplacementNamed(AppRoutes.usernameSetup);
+      return;
+    }
+
+    setState(() => _isResettingProfile = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(context.l10n.resetProfileTestError)),
+    );
   }
 
   IconData _characterIcon(String? characterId) {
@@ -108,6 +135,26 @@ class WelcomeScreen extends StatelessWidget {
                   onPressed: () => _logout(context),
                   icon: const Icon(Icons.logout_rounded),
                   label: Text(l10n.logout),
+                ),
+              ),
+              Positioned(
+                left: 8,
+                bottom: 8,
+                child: IconButton(
+                  tooltip: l10n.resetProfileTestTooltip,
+                  visualDensity: VisualDensity.compact,
+                  onPressed: _isResettingProfile ? null : _resetProfileForTesting,
+                  icon: _isResettingProfile
+                      ? const SizedBox(
+                          width: 17,
+                          height: 17,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(
+                          Icons.restart_alt_rounded,
+                          size: 20,
+                          color: Color(0xFF817866),
+                        ),
                 ),
               ),
             ],

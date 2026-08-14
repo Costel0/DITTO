@@ -33,9 +33,18 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
     Icons.account_circle_rounded,
   ];
 
-  final _usernameController = TextEditingController();
+  static const _characterStats = <List<int>>[
+    [6, 7, 6, 8],
+    [8, 4, 9, 5],
+    [4, 9, 5, 7],
+    [7, 5, 7, 9],
+  ];
 
-  String? _selectedCharacterId;
+  final _usernameController = TextEditingController();
+  late final PageController _pageController;
+
+  late int _selectedCharacterIndex;
+  late String _selectedCharacterId;
   bool _isSubmitting = false;
   String? _errorMessage;
 
@@ -46,12 +55,18 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
     if (existingUsername != null && existingUsername.trim().isNotEmpty) {
       _usernameController.text = existingUsername.trim();
     }
-    _selectedCharacterId = widget.sessionController.characterId;
+
+    final existingCharacterId = widget.sessionController.characterId;
+    final existingIndex = _characterIds.indexOf(existingCharacterId ?? '');
+    _selectedCharacterIndex = existingIndex >= 0 ? existingIndex : 0;
+    _selectedCharacterId = _characterIds[_selectedCharacterIndex];
+    _pageController = PageController(initialPage: _selectedCharacterIndex);
   }
 
   @override
   void dispose() {
     _usernameController.dispose();
+    _pageController.dispose();
     super.dispose();
   }
 
@@ -66,12 +81,6 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
       return;
     }
 
-    final characterId = _selectedCharacterId;
-    if (characterId == null) {
-      setState(() => _errorMessage = l10n.characterRequiredError);
-      return;
-    }
-
     setState(() {
       _isSubmitting = true;
       _errorMessage = null;
@@ -80,7 +89,7 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
     try {
       final saved = await widget.sessionController.saveInitialProfile(
         username: username,
-        characterId: characterId,
+        characterId: _selectedCharacterId,
       );
       if (!mounted) return;
 
@@ -100,6 +109,57 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
     await widget.sessionController.signOut();
     if (!mounted) return;
     Navigator.of(context).pushReplacementNamed(AppRoutes.login);
+  }
+
+  void _selectCharacter(int index) {
+    setState(() {
+      _selectedCharacterIndex = index;
+      _selectedCharacterId = _characterIds[index];
+      _errorMessage = null;
+    });
+  }
+
+  void _changeCharacter(int delta) {
+    final target = _selectedCharacterIndex + delta;
+    if (target < 0 || target >= _characterIds.length) return;
+
+    _pageController.animateToPage(
+      target,
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  String _characterName(int index) {
+    final l10n = context.l10n;
+    switch (index) {
+      case 0:
+        return l10n.characterName1;
+      case 1:
+        return l10n.characterName2;
+      case 2:
+        return l10n.characterName3;
+      case 3:
+        return l10n.characterName4;
+      default:
+        return '';
+    }
+  }
+
+  String _characterDescription(int index) {
+    final l10n = context.l10n;
+    switch (index) {
+      case 0:
+        return l10n.characterDescription1;
+      case 1:
+        return l10n.characterDescription2;
+      case 2:
+        return l10n.characterDescription3;
+      case 3:
+        return l10n.characterDescription4;
+      default:
+        return '';
+    }
   }
 
   @override
@@ -142,40 +202,87 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
           ),
           const SizedBox(height: 6),
           Text(
-            l10n.initialCharacterHint,
+            l10n.characterNavigationHint,
             style: theme.textTheme.bodySmall?.copyWith(
               color: const Color(0xFF928A7A),
             ),
           ),
           const SizedBox(height: 12),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _characterIds.length,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: 1.05,
+          SizedBox(
+            height: 620,
+            child: PageView.builder(
+              controller: _pageController,
+              itemCount: _characterIds.length,
+              onPageChanged: _selectCharacter,
+              itemBuilder: (context, index) {
+                final stats = _characterStats[index];
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  child: _CharacterSheet(
+                    icon: _characterIcons[index],
+                    name: _characterName(index),
+                    description: _characterDescription(index),
+                    stats: [
+                      _CharacterStat(
+                        label: l10n.statStrength,
+                        value: stats[0],
+                      ),
+                      _CharacterStat(
+                        label: l10n.statAgility,
+                        value: stats[1],
+                      ),
+                      _CharacterStat(
+                        label: l10n.statEndurance,
+                        value: stats[2],
+                      ),
+                      _CharacterStat(
+                        label: l10n.statScavenging,
+                        value: stats[3],
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
-            itemBuilder: (context, index) {
-              final characterId = _characterIds[index];
-              final selected = characterId == _selectedCharacterId;
-
-              return _CharacterPlaceholder(
-                icon: _characterIcons[index],
-                label: l10n.characterOption(index + 1),
-                selected: selected,
-                onTap: _isSubmitting
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              IconButton.outlined(
+                tooltip: l10n.previousCharacter,
+                onPressed: _selectedCharacterIndex == 0
                     ? null
-                    : () {
-                        setState(() {
-                          _selectedCharacterId = characterId;
-                          _errorMessage = null;
-                        });
-                      },
-              );
-            },
+                    : () => _changeCharacter(-1),
+                icon: const Icon(Icons.chevron_left_rounded),
+              ),
+              Expanded(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(_characterIds.length, (index) {
+                    final selected = index == _selectedCharacterIndex;
+                    return AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      width: selected ? 20 : 7,
+                      height: 7,
+                      margin: const EdgeInsets.symmetric(horizontal: 3),
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? theme.colorScheme.primary
+                            : const Color(0xFF5A5245),
+                        borderRadius: BorderRadius.circular(99),
+                      ),
+                    );
+                  }),
+                ),
+              ),
+              IconButton.outlined(
+                tooltip: l10n.nextCharacter,
+                onPressed: _selectedCharacterIndex == _characterIds.length - 1
+                    ? null
+                    : () => _changeCharacter(1),
+                icon: const Icon(Icons.chevron_right_rounded),
+              ),
+            ],
           ),
           if (_errorMessage != null) ...[
             const SizedBox(height: 14),
@@ -206,91 +313,156 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
   }
 }
 
-class _CharacterPlaceholder extends StatelessWidget {
-  const _CharacterPlaceholder({
+class _CharacterSheet extends StatelessWidget {
+  const _CharacterSheet({
     required this.icon,
-    required this.label,
-    required this.selected,
-    required this.onTap,
+    required this.name,
+    required this.description,
+    required this.stats,
   });
 
   final IconData icon;
-  final String label;
-  final bool selected;
-  final VoidCallback? onTap;
+  final String name;
+  final String description;
+  final List<_CharacterStat> stats;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(6),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          decoration: BoxDecoration(
-            color: selected
-                ? const Color(0xFF332C20)
-                : const Color(0xFF171713),
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(
-              color: selected
-                  ? theme.colorScheme.primary
-                  : const Color(0xFF4A4338),
-              width: selected ? 1.7 : 1,
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFF171713),
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(color: const Color(0xFF5A4D38)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            flex: 5,
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF222019),
+                borderRadius: BorderRadius.circular(5),
+                border: Border.all(color: const Color(0xFF4C4437)),
+              ),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  const Positioned(
+                    top: 12,
+                    left: 12,
+                    child: Icon(
+                      Icons.image_outlined,
+                      size: 18,
+                      color: Color(0xFF655E52),
+                    ),
+                  ),
+                  Center(
+                    child: Icon(
+                      icon,
+                      size: 132,
+                      color: const Color(0xFFB7A47E),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Expanded(
-                        child: Center(
-                          child: Icon(
-                            icon,
-                            size: 66,
-                            color: selected
-                                ? const Color(0xFFD2B98A)
-                                : const Color(0xFF817866),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          color: selected
-                              ? const Color(0xFFE7D9BC)
-                              : const Color(0xFFA39A89),
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              if (selected)
-                const Positioned(
-                  top: 8,
-                  right: 8,
-                  child: Icon(
-                    Icons.check_circle_rounded,
-                    size: 19,
-                    color: Color(0xFFD2A35D),
-                  ),
-                ),
-            ],
+          const SizedBox(height: 18),
+          Text(
+            name,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.headlineSmall?.copyWith(
+              color: const Color(0xFFE8D8B7),
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.3,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            description,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: const Color(0xFFA9A08F),
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: 20),
+          ...stats.map(
+            (stat) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _StatBar(stat: stat),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CharacterStat {
+  const _CharacterStat({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final int value;
+}
+
+class _StatBar extends StatelessWidget {
+  const _StatBar({required this.stat});
+
+  final _CharacterStat stat;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Row(
+      children: [
+        SizedBox(
+          width: 88,
+          child: Text(
+            stat.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: const Color(0xFFC5BAA4),
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
-      ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(99),
+            child: LinearProgressIndicator(
+              value: stat.value / 10,
+              minHeight: 9,
+              backgroundColor: const Color(0xFF353128),
+              valueColor: AlwaysStoppedAnimation<Color>(
+                theme.colorScheme.primary,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        SizedBox(
+          width: 34,
+          child: Text(
+            '${stat.value}/10',
+            textAlign: TextAlign.right,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: const Color(0xFFD8C8A8),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

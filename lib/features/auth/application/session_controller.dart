@@ -91,6 +91,25 @@ class SessionController extends ChangeNotifier {
     }
   }
 
+  Future<bool> clearInitialProfileForTesting() async {
+    final service = _userProfileService;
+    final userId = _credentials?.userId;
+
+    if (service == null || userId == null) {
+      return false;
+    }
+
+    try {
+      await service.clearInitialProfile(userId: userId);
+      _profileUsername = null;
+      _profileCharacterId = null;
+      notifyListeners();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> signOut() async {
     await _authService.signOut();
     _credentials = null;

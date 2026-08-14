@@ -7,6 +7,28 @@ service cloud.firestore {
         return request.auth != null && request.auth.uid == userId;
       }
 
+      function hasValidProfileFields() {
+        return !request.resource.data.keys().hasAny([
+          'username',
+          'characterId'
+        ]) || (
+          request.resource.data.keys().hasAll([
+            'username',
+            'characterId'
+          ])
+          && request.resource.data.username is string
+          && request.resource.data.username.size() >= 3
+          && request.resource.data.username.size() <= 24
+          && request.resource.data.characterId is string
+          && request.resource.data.characterId in [
+            'survivor_01',
+            'survivor_02',
+            'survivor_03',
+            'survivor_04'
+          ]
+        );
+      }
+
       function hasValidProfileShape() {
         return request.resource.data.keys().hasOnly([
           'email',
@@ -17,16 +39,7 @@ service cloud.firestore {
         ])
         && request.resource.data.email is string
         && request.resource.data.email == request.auth.token.email
-        && request.resource.data.username is string
-        && request.resource.data.username.size() >= 3
-        && request.resource.data.username.size() <= 24
-        && request.resource.data.characterId is string
-        && request.resource.data.characterId in [
-          'survivor_01',
-          'survivor_02',
-          'survivor_03',
-          'survivor_04'
-        ];
+        && hasValidProfileFields();
       }
 
       allow read: if isOwner();
