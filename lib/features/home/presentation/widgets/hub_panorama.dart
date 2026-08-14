@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import 'package:ditto/features/hub/domain/hub_background_configuration.dart';
+
 class HubSceneElement {
   const HubSceneElement({
     required this.position,
@@ -14,28 +16,14 @@ class HubSceneElement {
   final Widget child;
 }
 
-class HubBackgroundSegment {
-  const HubBackgroundSegment({required this.assetPath});
-
-  final String assetPath;
-}
-
-const List<HubBackgroundSegment> initialHubBackgroundSegments = [
-  HubBackgroundSegment(assetPath: 'assets/hub/hub_initial_01.png'),
-  HubBackgroundSegment(assetPath: 'assets/hub/hub_initial_02.png'),
-  HubBackgroundSegment(assetPath: 'assets/hub/hub_initial_03.png'),
-  HubBackgroundSegment(assetPath: 'assets/hub/hub_initial_04.png'),
-  HubBackgroundSegment(assetPath: 'assets/hub/hub_initial_05.png'),
-  HubBackgroundSegment(assetPath: 'assets/hub/hub_initial_06.png'),
-];
-
 class HubPanorama extends StatefulWidget {
   const HubPanorama({
     super.key,
     required this.elements,
     this.canvasSize = const Size(1440, 420),
     this.initialFocusX,
-    this.backgroundSegments = initialHubBackgroundSegments,
+    this.backgroundState = const HubBackgroundState(),
+    this.backgroundSegments,
     this.backgroundAssetPath,
     this.backgroundFit = BoxFit.cover,
     this.showCoordinateGrid = true,
@@ -45,17 +33,18 @@ class HubPanorama extends StatefulWidget {
   final Size canvasSize;
   final double? initialFocusX;
 
-  /// Ordered slices that form the scene background from left to right.
-  ///
-  /// The game state can build a different list at runtime as the hub evolves.
-  /// Each PNG is rendered at the canvas height while preserving its intrinsic
-  /// aspect ratio, so different source widths are supported without hardcoding
-  /// them here. The authored widths should add up to [canvasSize.width].
-  final List<HubBackgroundSegment> backgroundSegments;
+  /// Current game-driven state for the six hub areas. When no explicit
+  /// [backgroundSegments] are supplied, this is resolved into the panorama
+  /// composition automatically.
+  final HubBackgroundState backgroundState;
+
+  /// Optional low-level override. Normal game code should prefer
+  /// [backgroundState] and let the hub background resolver build the segments.
+  final List<HubBackgroundSegment>? backgroundSegments;
 
   /// Kept temporarily so existing callers remain source-compatible while the
-  /// hub migrates from one background image to a segmented composition.
-  @Deprecated('Use backgroundSegments instead.')
+  /// hub migrates from one background image to an area-based composition.
+  @Deprecated('Use backgroundState instead.')
   final String? backgroundAssetPath;
 
   /// Kept temporarily for source compatibility with the previous API.
@@ -100,6 +89,9 @@ class _HubPanoramaState extends State<HubPanorama> {
 
   @override
   Widget build(BuildContext context) {
+    final backgroundSegments = widget.backgroundSegments ??
+        resolveHubBackgroundSegments(widget.backgroundState);
+
     return ClipRect(
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -131,7 +123,7 @@ class _HubPanoramaState extends State<HubPanorama> {
                       width: widget.canvasSize.width,
                       height: widget.canvasSize.height,
                       child: _HubCanvasBackground(
-                        segments: widget.backgroundSegments,
+                        segments: backgroundSegments,
                         canvasHeight: widget.canvasSize.height,
                         showCoordinateGrid: widget.showCoordinateGrid,
                       ),
@@ -198,17 +190,9 @@ class _HubCanvasBackground extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     for (final segment in segments)
-                      Image.asset(
-                        segment.assetPath,
-                        height: canvasHeight,
-                        fit: BoxFit.fitHeight,
-                        alignment: Alignment.center,
-                        filterQuality: FilterQuality.high,
-                        gaplessPlayback: true,
-                        excludeFromSemantics: true,
-                        errorBuilder: (context, error, stackTrace) {
-                          return SizedBox(height: canvasHeight);
-                        },
+                      _HubBackgroundSegmentImage(
+                        segment: segment,
+                        canvasHeight: canvasHeight,
                       ),
                   ],
                 ),
@@ -222,6 +206,46 @@ class _HubCanvasBackground extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+class _HubBackgroundSegmentImage extends StatelessWidget {
+  const _HubBackgroundSegmentImage({
+    required this.segment,
+    required this.canvasHeight,
+  });
+
+  final HubBackgroundSegment segment;
+  final double canvasHeight;
+
+  Widget _image(String assetPath, {required Widget Function() onError}) {
+    return Image.asset(
+      assetPath,
+      height: canvasHeight,
+      fit: BoxFit.fitHeight,
+      alignment: Alignment.center,
+      filterQuality: FilterQuality.high,
+      gaplessPlayback: true,
+      excludeFromSemantics: true,
+      errorBuilder: (context, error, stackTrace) => onError(),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _image(
+      segment.assetPath,
+      onError: () {
+        if (segment.assetPath == segment.defaultAssetPath) {
+          return SizedBox(height: canvasHeight);
+        }
+
+        return _image(
+          segment.defaultAssetPath,
+          onError: () => SizedBox(height: canvasHeight),
+        );
+      },
     );
   }
 }
