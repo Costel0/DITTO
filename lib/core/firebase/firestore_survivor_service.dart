@@ -42,6 +42,18 @@ class FirestoreSurvivorService implements SurvivorService {
   }
 
   @override
+  Future<void> addSurvivor({
+    required String userId,
+    required Survivor survivor,
+  }) async {
+    await _survivors(userId).add(<String, dynamic>{
+      ...survivor.toMap(),
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  @override
   Future<void> clearInitialSurvivor({required String userId}) async {
     await _survivors(userId).doc('initial').delete();
   }
