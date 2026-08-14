@@ -5,6 +5,7 @@ import '../../../../core/localization/l10n.dart';
 import '../../../../core/presentation/survival_background.dart';
 import '../../../auth/application/session_controller.dart';
 import '../../../hub/domain/hub_scene_configuration.dart';
+import '../../../hub/presentation/widgets/hub_debug_controls.dart';
 import '../../../hub/presentation/widgets/hub_scrollable_scene.dart';
 
 class WelcomeScreen extends StatefulWidget {
@@ -26,7 +27,6 @@ enum _HubSection {
 }
 
 class _WelcomeScreenState extends State<WelcomeScreen> {
-  bool _isResettingProfile = false;
   _HubSection _selectedSection = _HubSection.shelter;
 
   SessionController get sessionController => widget.sessionController;
@@ -54,9 +54,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   }
 
   Future<void> _resetProfileForTesting() async {
-    if (_isResettingProfile) return;
-
-    setState(() => _isResettingProfile = true);
     final cleared = await sessionController.clearInitialProfileForTesting();
     if (!mounted) return;
 
@@ -65,7 +62,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       return;
     }
 
-    setState(() => _isResettingProfile = false);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(context.l10n.resetProfileTestError)),
     );
@@ -171,25 +167,10 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                             Positioned(
                               left: 8,
                               bottom: 8,
-                              child: IconButton(
-                                tooltip: l10n.resetProfileTestTooltip,
-                                visualDensity: VisualDensity.compact,
-                                onPressed: _isResettingProfile
-                                    ? null
-                                    : _resetProfileForTesting,
-                                icon: _isResettingProfile
-                                    ? const SizedBox(
-                                        width: 17,
-                                        height: 17,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    : const Icon(
-                                        Icons.restart_alt_rounded,
-                                        size: 20,
-                                        color: Color(0xFF817866),
-                                      ),
+                              child: HubDebugControls(
+                                sessionController: sessionController,
+                                onResetProfile: _resetProfileForTesting,
+                                resetTooltip: l10n.resetProfileTestTooltip,
                               ),
                             ),
                           ],
