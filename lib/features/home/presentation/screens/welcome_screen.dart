@@ -4,6 +4,7 @@ import '../../../../app/navigation/app_routes.dart';
 import '../../../../core/localization/l10n.dart';
 import '../../../../core/presentation/survival_background.dart';
 import '../../../auth/application/session_controller.dart';
+import '../widgets/hub_panorama.dart';
 
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({
@@ -17,8 +18,15 @@ class WelcomeScreen extends StatefulWidget {
   State<WelcomeScreen> createState() => _WelcomeScreenState();
 }
 
+enum _HubSection {
+  shelter,
+  inventory,
+  expeditions,
+}
+
 class _WelcomeScreenState extends State<WelcomeScreen> {
   bool _isResettingProfile = false;
+  _HubSection _selectedSection = _HubSection.shelter;
 
   SessionController get sessionController => widget.sessionController;
 
@@ -60,9 +68,13 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     }
   }
 
+  String get _characterAssetPath {
+    final characterId = sessionController.characterId ?? 'survivor_01';
+    return 'assets/characters/$characterId.png';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final l10n = context.l10n;
 
     return Scaffold(
@@ -70,71 +82,43 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         child: SafeArea(
           child: Stack(
             children: [
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 440),
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 30,
-                        vertical: 34,
-                      ),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surface.withValues(alpha: 0.95),
-                        borderRadius: BorderRadius.circular(7),
-                        border: Border.all(color: const Color(0xFF5A4D38)),
-                        boxShadow: const [
-                          BoxShadow(
-                            color: Color(0x66000000),
-                            blurRadius: 28,
-                            offset: Offset(0, 16),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 96,
-                            height: 110,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF171713),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(
-                                color: const Color(0xFF67583F),
+              Positioned.fill(
+                child: Column(
+                  children: [
+                    _HubTopBar(
+                      username: sessionController.username,
+                      onSettings: () {},
+                      onLogout: () => _logout(context),
+                    ),
+                    SizedBox(
+                      height: 360,
+                      child: HubPanorama(
+                        canvasSize: const Size(1440, 360),
+                        initialFocusX: 720,
+                        elements: [
+                          HubSceneElement(
+                            position: const Offset(590, 20),
+                            size: const Size(260, 330),
+                            child: _HubCharacterSprite(
+                              assetPath: _characterAssetPath,
+                              fallbackIcon: _characterIcon(
+                                sessionController.characterId,
                               ),
-                            ),
-                            child: Icon(
-                              _characterIcon(sessionController.characterId),
-                              color: const Color(0xFFC6B185),
-                              size: 64,
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          Text(
-                            l10n.welcomeMessage(sessionController.username),
-                            textAlign: TextAlign.center,
-                            style: theme.textTheme.headlineLarge?.copyWith(
-                              color: const Color(0xFFF0E5CF),
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -0.8,
                             ),
                           ),
                         ],
                       ),
                     ),
-                  ),
-                ),
-              ),
-              Positioned(
-                top: 12,
-                right: 12,
-                child: TextButton.icon(
-                  onPressed: () => _logout(context),
-                  icon: const Icon(Icons.logout_rounded),
-                  label: Text(l10n.logout),
+                    _HubSectionBar(
+                      selectedSection: _selectedSection,
+                      onSelected: (section) {
+                        setState(() => _selectedSection = section);
+                      },
+                    ),
+                    Expanded(
+                      child: _HubSectionView(section: _selectedSection),
+                    ),
+                  ],
                 ),
               ),
               Positioned(
@@ -143,7 +127,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 child: IconButton(
                   tooltip: l10n.resetProfileTestTooltip,
                   visualDensity: VisualDensity.compact,
-                  onPressed: _isResettingProfile ? null : _resetProfileForTesting,
+                  onPressed:
+                      _isResettingProfile ? null : _resetProfileForTesting,
                   icon: _isResettingProfile
                       ? const SizedBox(
                           width: 17,
@@ -155,6 +140,352 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                           size: 20,
                           color: Color(0xFF817866),
                         ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HubTopBar extends StatelessWidget {
+  const _HubTopBar({
+    required this.username,
+    required this.onSettings,
+    required this.onLogout,
+  });
+
+  final String username;
+  final VoidCallback onSettings;
+  final VoidCallback onLogout;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = context.l10n;
+
+    return Container(
+      height: 60,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface.withValues(alpha: 0.96),
+        border: const Border(
+          bottom: BorderSide(color: Color(0xFF554A3A)),
+        ),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 560;
+
+          return Row(
+            children: [
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.hubTitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: const Color(0xFFE7D8BB),
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.1,
+                      ),
+                    ),
+                    if (!compact)
+                      Text(
+                        username,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: const Color(0xFF8F8677),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              IconButton(
+                tooltip: l10n.settingsTooltip,
+                onPressed: onSettings,
+                icon: const Icon(Icons.settings_outlined),
+              ),
+              if (compact)
+                IconButton(
+                  tooltip: l10n.logout,
+                  onPressed: onLogout,
+                  icon: const Icon(Icons.logout_rounded),
+                )
+              else
+                TextButton.icon(
+                  onPressed: onLogout,
+                  icon: const Icon(Icons.logout_rounded),
+                  label: Text(l10n.logout),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _HubCharacterSprite extends StatelessWidget {
+  const _HubCharacterSprite({
+    required this.assetPath,
+    required this.fallbackIcon,
+  });
+
+  final String assetPath;
+  final IconData fallbackIcon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Image.asset(
+        assetPath,
+        fit: BoxFit.contain,
+        alignment: Alignment.bottomCenter,
+        filterQuality: FilterQuality.high,
+        errorBuilder: (context, error, stackTrace) {
+          return Center(
+            child: Icon(
+              fallbackIcon,
+              size: 190,
+              color: const Color(0xFFB7A47E),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _HubSectionBar extends StatelessWidget {
+  const _HubSectionBar({
+    required this.selectedSection,
+    required this.onSelected,
+  });
+
+  final _HubSection selectedSection;
+  final ValueChanged<_HubSection> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = context.l10n;
+
+    return Container(
+      height: 64,
+      decoration: BoxDecoration(
+        color: const Color(0xFF171713),
+        border: Border.symmetric(
+          horizontal: BorderSide(
+            color: const Color(0xFF574B3A).withValues(alpha: 0.9),
+          ),
+        ),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _HubSectionButton(
+              icon: Icons.home_work_outlined,
+              label: l10n.hubTabShelter,
+              selected: selectedSection == _HubSection.shelter,
+              onTap: () => onSelected(_HubSection.shelter),
+            ),
+            _HubSectionButton(
+              icon: Icons.backpack_outlined,
+              label: l10n.hubTabInventory,
+              selected: selectedSection == _HubSection.inventory,
+              onTap: () => onSelected(_HubSection.inventory),
+            ),
+            _HubSectionButton(
+              icon: Icons.explore_outlined,
+              label: l10n.hubTabExpeditions,
+              selected: selectedSection == _HubSection.expeditions,
+              onTap: () => onSelected(_HubSection.expeditions),
+            ),
+            SizedBox(width: MediaQuery.paddingOf(context).right + 8),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HubSectionButton extends StatelessWidget {
+  const _HubSectionButton({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 170),
+          height: 64,
+          constraints: const BoxConstraints(minWidth: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 22),
+          decoration: BoxDecoration(
+            color: selected
+                ? const Color(0xFF2D281F)
+                : Colors.transparent,
+            border: Border(
+              bottom: BorderSide(
+                color: selected
+                    ? theme.colorScheme.primary
+                    : Colors.transparent,
+                width: 3,
+              ),
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 20,
+                color: selected
+                    ? const Color(0xFFD7BD89)
+                    : const Color(0xFF8C8477),
+              ),
+              const SizedBox(width: 9),
+              Text(
+                label,
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: selected
+                      ? const Color(0xFFE3D4B7)
+                      : const Color(0xFF9D9485),
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HubSectionView extends StatelessWidget {
+  const _HubSectionView({required this.section});
+
+  final _HubSection section;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+
+    late final IconData icon;
+    late final String title;
+    late final String description;
+
+    switch (section) {
+      case _HubSection.shelter:
+        icon = Icons.home_work_outlined;
+        title = l10n.hubShelterTitle;
+        description = l10n.hubShelterDescription;
+      case _HubSection.inventory:
+        icon = Icons.backpack_outlined;
+        title = l10n.hubInventoryTitle;
+        description = l10n.hubInventoryDescription;
+      case _HubSection.expeditions:
+        icon = Icons.explore_outlined;
+        title = l10n.hubExpeditionsTitle;
+        description = l10n.hubExpeditionsDescription;
+    }
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 180),
+      child: _HubSectionContent(
+        key: ValueKey(section),
+        icon: icon,
+        title: title,
+        description: description,
+      ),
+    );
+  }
+}
+
+class _HubSectionContent extends StatelessWidget {
+  const _HubSectionContent({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.description,
+  });
+
+  final IconData icon;
+  final String title;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      width: double.infinity,
+      color: const Color(0xE611110E),
+      padding: const EdgeInsets.fromLTRB(24, 22, 24, 36),
+      child: SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 920),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF262219),
+                  borderRadius: BorderRadius.circular(5),
+                  border: Border.all(color: const Color(0xFF554936)),
+                ),
+                child: Icon(
+                  icon,
+                  color: const Color(0xFFC6AA74),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        color: const Color(0xFFE6D8BD),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      description,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: const Color(0xFFA49B8B),
+                        height: 1.5,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
