@@ -60,11 +60,12 @@ class FirestoreUserProfileService implements UserProfileService {
         'email': email.trim(),
         'username': cleanUsername,
         'initialDuplicateId': cleanDuplicateId,
-        'characterId': FieldValue.delete(),
         'updatedAt': FieldValue.serverTimestamp(),
       };
 
-      if (!snapshot.exists) {
+      if (snapshot.exists) {
+        data['characterId'] = FieldValue.delete();
+      } else {
         data['createdAt'] = FieldValue.serverTimestamp();
       }
 
