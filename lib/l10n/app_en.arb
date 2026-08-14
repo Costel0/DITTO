@@ -25,7 +25,7 @@
   "usernameLabel": "Username",
   "usernameHint": "Your name",
   "initialCharacterLabel": "Initial character",
-  "initialCharacterHint": "Choose a placeholder survivor. The artwork can be replaced later without changing your profile.",
+  "initialCharacterHint": "Choose the survivor you will start with.",
   "characterOption": "Survivor {number}",
   "@characterOption": {
     "placeholders": {
