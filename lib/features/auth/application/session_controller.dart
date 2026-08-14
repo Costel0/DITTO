@@ -116,6 +116,35 @@ class SessionController extends ChangeNotifier {
     }
   }
 
+  /// Temporary client-side helper used only by development controls.
+  ///
+  /// Production acquisition will eventually be server-authoritative. Keeping
+  /// this method explicit makes the temporary trust boundary easy to remove.
+  Future<bool> addSurvivorForTesting(String duplicateId) async {
+    final survivorService = _survivorService;
+    final userId = _credentials?.userId;
+    final cleanDuplicateId = duplicateId.trim();
+
+    if (survivorService == null ||
+        userId == null ||
+        duplicateById(cleanDuplicateId) == null ||
+        _survivors.any((survivor) => survivor.duplicateId == cleanDuplicateId)) {
+      return false;
+    }
+
+    try {
+      await survivorService.addSurvivor(
+        userId: userId,
+        survivor: Survivor(duplicateId: cleanDuplicateId),
+      );
+      _survivors = await survivorService.loadSurvivors(userId: userId);
+      notifyListeners();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<bool> clearInitialProfileForTesting() async {
     final profileService = _userProfileService;
     final survivorService = _survivorService;
