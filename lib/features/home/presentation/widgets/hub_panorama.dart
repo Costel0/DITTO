@@ -20,11 +20,17 @@ class HubPanorama extends StatefulWidget {
     required this.elements,
     this.canvasSize = const Size(1440, 420),
     this.initialFocusX,
+    this.backgroundAssetPath,
+    this.backgroundFit = BoxFit.cover,
+    this.showCoordinateGrid = true,
   });
 
   final List<HubSceneElement> elements;
   final Size canvasSize;
   final double? initialFocusX;
+  final String? backgroundAssetPath;
+  final BoxFit backgroundFit;
+  final bool showCoordinateGrid;
 
   @override
   State<HubPanorama> createState() => _HubPanoramaState();
@@ -92,27 +98,10 @@ class _HubPanoramaState extends State<HubPanorama> {
                       top: 0,
                       width: widget.canvasSize.width,
                       height: widget.canvasSize.height,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Color(0xFF28251D),
-                              Color(0xFF191813),
-                              Color(0xFF11110E),
-                            ],
-                          ),
-                          border: Border.symmetric(
-                            horizontal: BorderSide(
-                              color: const Color(0xFF5A4D38)
-                                  .withValues(alpha: 0.8),
-                            ),
-                          ),
-                        ),
-                        child: const CustomPaint(
-                          painter: _HubCoordinateGridPainter(),
-                        ),
+                      child: _HubCanvasBackground(
+                        assetPath: widget.backgroundAssetPath,
+                        fit: widget.backgroundFit,
+                        showCoordinateGrid: widget.showCoordinateGrid,
                       ),
                     ),
                     for (final element in widget.elements)
@@ -129,6 +118,61 @@ class _HubPanoramaState extends State<HubPanorama> {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _HubCanvasBackground extends StatelessWidget {
+  const _HubCanvasBackground({
+    required this.assetPath,
+    required this.fit,
+    required this.showCoordinateGrid,
+  });
+
+  final String? assetPath;
+  final BoxFit fit;
+  final bool showCoordinateGrid;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0xFF28251D),
+            Color(0xFF191813),
+            Color(0xFF11110E),
+          ],
+        ),
+        border: Border.symmetric(
+          horizontal: BorderSide(
+            color: const Color(0xFF5A4D38).withValues(alpha: 0.8),
+          ),
+        ),
+      ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (assetPath != null)
+            Image.asset(
+              assetPath!,
+              fit: fit,
+              alignment: Alignment.center,
+              filterQuality: FilterQuality.high,
+              errorBuilder: (context, error, stackTrace) {
+                return const SizedBox.shrink();
+              },
+            ),
+          if (showCoordinateGrid)
+            const IgnorePointer(
+              child: CustomPaint(
+                painter: _HubCoordinateGridPainter(),
+              ),
+            ),
+        ],
       ),
     );
   }
