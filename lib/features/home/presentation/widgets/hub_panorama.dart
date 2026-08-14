@@ -50,10 +50,12 @@ class _HubPanoramaState extends State<HubPanorama> {
       if (!mounted || !_scrollController.hasClients) return;
 
       final focusX = widget.initialFocusX ?? widget.canvasSize.width / 2;
-      final target = (focusX - viewportWidth / 2).clamp(
-        0.0,
-        _scrollController.position.maxScrollExtent,
-      );
+      final target = (focusX - viewportWidth / 2)
+          .clamp(
+            0.0,
+            _scrollController.position.maxScrollExtent,
+          )
+          .toDouble();
       _scrollController.jumpTo(target);
     });
   }
@@ -103,7 +105,8 @@ class _HubPanoramaState extends State<HubPanorama> {
                           ),
                           border: Border.symmetric(
                             horizontal: BorderSide(
-                              color: const Color(0xFF5A4D38).withValues(alpha: 0.8),
+                              color: const Color(0xFF5A4D38)
+                                  .withValues(alpha: 0.8),
                             ),
                           ),
                         ),
