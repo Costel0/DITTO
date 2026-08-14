@@ -131,13 +131,53 @@ class _HubScrollableSceneState extends State<HubScrollableScene> {
       top: placement.position.dy,
       width: placement.size.width,
       height: placement.size.height,
-      child: _HubCharacterSprite(
-        assetPath: character.assetPath,
-        fallbackIcon: character.fallbackIcon,
-        brightness: configuration.characterBrightness,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          const Positioned(
+            left: 18,
+            right: 18,
+            bottom: 0,
+            height: 30,
+            child: IgnorePointer(
+              child: CustomPaint(
+                painter: _HubCharacterGroundShadowPainter(),
+              ),
+            ),
+          ),
+          Positioned.fill(
+            child: _HubCharacterSprite(
+              assetPath: character.assetPath,
+              fallbackIcon: character.fallbackIcon,
+              brightness: configuration.characterBrightness,
+            ),
+          ),
+        ],
       ),
     );
   }
+}
+
+class _HubCharacterGroundShadowPainter extends CustomPainter {
+  const _HubCharacterGroundShadowPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0x24000000)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
+
+    final shadow = Rect.fromLTWH(
+      size.width * 0.08,
+      size.height * 0.34,
+      size.width * 0.84,
+      size.height * 0.46,
+    );
+    canvas.drawOval(shadow, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _HubCharacterSprite extends StatelessWidget {
