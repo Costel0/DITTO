@@ -26,6 +26,14 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
     'survivor_04',
   ];
 
+  // Replace null with each PNG asset path when the final artwork is available.
+  static const _characterImageAssets = <String?>[
+    null,
+    null,
+    null,
+    null,
+  ];
+
   static const _characterIcons = <IconData>[
     Icons.person_rounded,
     Icons.face_rounded,
@@ -219,7 +227,8 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
                 return Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 2),
                   child: _CharacterSheet(
-                    icon: _characterIcons[index],
+                    imageAsset: _characterImageAssets[index],
+                    placeholderIcon: _characterIcons[index],
                     name: _characterName(index),
                     description: _characterDescription(index),
                     stats: [
@@ -315,13 +324,15 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
 
 class _CharacterSheet extends StatelessWidget {
   const _CharacterSheet({
-    required this.icon,
+    required this.imageAsset,
+    required this.placeholderIcon,
     required this.name,
     required this.description,
     required this.stats,
   });
 
-  final IconData icon;
+  final String? imageAsset;
+  final IconData placeholderIcon;
   final String name;
   final String description;
   final List<_CharacterStat> stats;
@@ -360,12 +371,9 @@ class _CharacterSheet extends StatelessWidget {
                       color: Color(0xFF655E52),
                     ),
                   ),
-                  Center(
-                    child: Icon(
-                      icon,
-                      size: 132,
-                      color: const Color(0xFFB7A47E),
-                    ),
+                  _CharacterPortrait(
+                    imageAsset: imageAsset,
+                    placeholderIcon: placeholderIcon,
                   ),
                 ],
               ),
@@ -398,6 +406,53 @@ class _CharacterSheet extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _CharacterPortrait extends StatelessWidget {
+  const _CharacterPortrait({
+    required this.imageAsset,
+    required this.placeholderIcon,
+  });
+
+  final String? imageAsset;
+  final IconData placeholderIcon;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget placeholder() {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+        child: FittedBox(
+          fit: BoxFit.contain,
+          child: Icon(
+            placeholderIcon,
+            color: const Color(0xFFB7A47E),
+          ),
+        ),
+      );
+    }
+
+    return Center(
+      child: FractionallySizedBox(
+        heightFactor: 0.94,
+        child: AspectRatio(
+          aspectRatio: 2 / 3,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: imageAsset == null
+                ? placeholder()
+                : Image.asset(
+                    imageAsset!,
+                    fit: BoxFit.contain,
+                    alignment: Alignment.bottomCenter,
+                    filterQuality: FilterQuality.high,
+                    errorBuilder: (_, __, ___) => placeholder(),
+                  ),
+          ),
+        ),
       ),
     );
   }

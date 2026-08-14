@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../app/navigation/app_routes.dart';
 import '../../../../core/localization/l10n.dart';
+import '../../../../core/security/local_login_credentials_store.dart';
 import '../../application/session_controller.dart';
 import '../auth_failure_localization.dart';
 import '../widgets/auth_card_scaffold.dart';
@@ -22,10 +23,29 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _credentialsStore = LocalLoginCredentialsStore();
 
   bool _obscurePassword = true;
   bool _isSubmitting = false;
   String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _restoreLastCredentials();
+  }
+
+  Future<void> _restoreLastCredentials() async {
+    final credentials = await _credentialsStore.load();
+    if (!mounted || credentials == null) return;
+
+    if (_emailController.text.isEmpty) {
+      _emailController.text = credentials.email;
+    }
+    if (_passwordController.text.isEmpty) {
+      _passwordController.text = credentials.password;
+    }
+  }
 
   @override
   void dispose() {
@@ -51,6 +71,11 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
 
       if (result.isSuccess) {
+        await _credentialsStore.save(
+          email: _emailController.text,
+          password: _passwordController.text,
+        );
+        if (!mounted) return;
         Navigator.of(context).pushReplacementNamed(_postAuthRoute());
       } else {
         setState(() {

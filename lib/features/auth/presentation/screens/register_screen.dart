@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../app/navigation/app_routes.dart';
 import '../../../../core/localization/l10n.dart';
+import '../../../../core/security/local_login_credentials_store.dart';
 import '../../application/session_controller.dart';
 import '../auth_failure_localization.dart';
 import '../widgets/auth_card_scaffold.dart';
@@ -23,6 +24,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final _credentialsStore = LocalLoginCredentialsStore();
 
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
@@ -73,6 +75,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (!mounted) return;
 
       if (result.isSuccess) {
+        await _credentialsStore.save(
+          email: email,
+          password: password,
+        );
+        if (!mounted) return;
+
         final route = widget.sessionController.needsProfileSetup
             ? AppRoutes.usernameSetup
             : AppRoutes.welcome;
