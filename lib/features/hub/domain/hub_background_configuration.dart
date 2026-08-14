@@ -12,12 +12,8 @@ enum HubAreaState {
   state2,
 }
 
-enum HubAreaOrder {
-  leftToRight,
-  rightToLeft,
-}
-
-const List<HubArea> hubAreasLeftToRight = <HubArea>[
+/// Fixed visual order of the hub background from left to right.
+const List<HubArea> hubAreas = <HubArea>[
   HubArea.beds,
   HubArea.lockers,
   HubArea.restArea,
@@ -62,16 +58,11 @@ const Map<HubArea, Map<HubAreaState, String>> hubAreaStatePngNames =
 class HubBackgroundState {
   const HubBackgroundState({
     this.areaStates = const <HubArea, HubAreaState>{},
-    this.order = HubAreaOrder.leftToRight,
   });
 
   /// Current state of each area. Missing entries intentionally resolve to the
   /// area's default state.
   final Map<HubArea, HubAreaState> areaStates;
-
-  /// Normal order is entrance -> kitchen -> work -> rest -> lockers -> beds.
-  /// Reverse order mirrors that sequence.
-  final HubAreaOrder order;
 }
 
 class HubBackgroundSegment {
@@ -93,12 +84,9 @@ const String _hubAreaAssetDirectory = 'assets/hub';
 List<HubBackgroundSegment> resolveHubBackgroundSegments(
   HubBackgroundState state,
 ) {
-  final areas = state.order == HubAreaOrder.leftToRight
-      ? hubAreasLeftToRight
-      : hubAreasLeftToRight.reversed;
-
   return <HubBackgroundSegment>[
-    for (final area in areas) _resolveAreaSegment(area, state.areaStates[area]),
+    for (final area in hubAreas)
+      _resolveAreaSegment(area, state.areaStates[area]),
   ];
 }
 
