@@ -31,6 +31,22 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
   SessionController get sessionController => widget.sessionController;
 
+  @override
+  void initState() {
+    super.initState();
+    sessionController.addListener(_onSessionChanged);
+  }
+
+  @override
+  void dispose() {
+    sessionController.removeListener(_onSessionChanged);
+    super.dispose();
+  }
+
+  void _onSessionChanged() {
+    if (mounted) setState(() {});
+  }
+
   Future<void> _logout(BuildContext context) async {
     await sessionController.signOut();
     if (!context.mounted) return;
@@ -55,23 +71,36 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     );
   }
 
-  IconData _characterIcon(String? characterId) {
-    switch (characterId) {
-      case 'survivor_02':
+  IconData _characterIcon(String duplicateId) {
+    switch (duplicateId) {
+      case '02':
         return Icons.face_rounded;
-      case 'survivor_03':
+      case '03':
         return Icons.accessibility_new_rounded;
-      case 'survivor_04':
+      case '04':
         return Icons.account_circle_rounded;
-      case 'survivor_01':
+      case '01':
       default:
         return Icons.person_rounded;
     }
   }
 
-  String get _characterAssetPath {
-    final characterId = sessionController.characterId ?? 'survivor_01';
-    return 'assets/characters/$characterId.png';
+  Map<HubCharacterSlot, HubSceneCharacter> get _hubCharacters {
+    final roster = sessionController.survivors;
+    final result = <HubCharacterSlot, HubSceneCharacter>{};
+    final visibleCount = roster.length < hubRosterSlotOrder.length
+        ? roster.length
+        : hubRosterSlotOrder.length;
+
+    for (var index = 0; index < visibleCount; index++) {
+      final survivor = roster[index];
+      result[hubRosterSlotOrder[index]] = HubSceneCharacter(
+        assetPath: survivor.idleAssetPath,
+        fallbackIcon: _characterIcon(survivor.duplicateId),
+      );
+    }
+
+    return result;
   }
 
   @override
@@ -120,18 +149,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                                     height: defaultHubSceneConfiguration
                                         .canvasSize.height,
                                     child: HubScrollableScene(
-                                      characters: <
-                                          HubCharacterSlot,
-                                          HubSceneCharacter
-                                        >{
-                                          HubCharacterSlot.primary:
-                                              HubSceneCharacter(
-                                                assetPath: _characterAssetPath,
-                                                fallbackIcon: _characterIcon(
-                                                  sessionController.characterId,
-                                                ),
-                                              ),
-                                        },
+                                      characters: _hubCharacters,
                                     ),
                                   ),
                                   _HubSectionBar(
