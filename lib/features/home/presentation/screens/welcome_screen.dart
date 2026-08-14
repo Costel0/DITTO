@@ -6,6 +6,10 @@ import '../../../../core/presentation/survival_background.dart';
 import '../../../auth/application/session_controller.dart';
 import '../widgets/hub_panorama.dart';
 
+const double _hubCanvasWidth = 1440;
+const double _hubCanvasHeight = 360;
+const String _hubBackgroundAsset = 'assets/hub/hub_background.png';
+
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({
     super.key,
@@ -80,69 +84,110 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     return Scaffold(
       body: SurvivalBackground(
         child: SafeArea(
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: Column(
-                  children: [
-                    _HubTopBar(
-                      username: sessionController.username,
-                      onSettings: () {},
-                      onLogout: () => _logout(context),
-                    ),
-                    SizedBox(
-                      height: 360,
-                      child: HubPanorama(
-                        canvasSize: const Size(1440, 360),
-                        initialFocusX: 720,
-                        elements: [
-                          HubSceneElement(
-                            position: const Offset(590, 20),
-                            size: const Size(260, 330),
-                            child: _HubCharacterSprite(
-                              assetPath: _characterAssetPath,
-                              fallbackIcon: _characterIcon(
-                                sessionController.characterId,
-                              ),
-                            ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: _hubCanvasWidth),
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: constraints.maxHeight,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF11110E),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFF514634)),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x66000000),
+                            blurRadius: 30,
+                            offset: Offset(0, 12),
                           ),
                         ],
                       ),
-                    ),
-                    _HubSectionBar(
-                      selectedSection: _selectedSection,
-                      onSelected: (section) {
-                        setState(() => _selectedSection = section);
-                      },
-                    ),
-                    Expanded(
-                      child: _HubSectionView(section: _selectedSection),
-                    ),
-                  ],
-                ),
-              ),
-              Positioned(
-                left: 8,
-                bottom: 8,
-                child: IconButton(
-                  tooltip: l10n.resetProfileTestTooltip,
-                  visualDensity: VisualDensity.compact,
-                  onPressed:
-                      _isResettingProfile ? null : _resetProfileForTesting,
-                  icon: _isResettingProfile
-                      ? const SizedBox(
-                          width: 17,
-                          height: 17,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(
-                          Icons.restart_alt_rounded,
-                          size: 20,
-                          color: Color(0xFF817866),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(9),
+                        child: Stack(
+                          children: [
+                            Positioned.fill(
+                              child: Column(
+                                children: [
+                                  _HubTopBar(
+                                    username: sessionController.username,
+                                    onSettings: () {},
+                                    onLogout: () => _logout(context),
+                                  ),
+                                  SizedBox(
+                                    height: _hubCanvasHeight,
+                                    child: HubPanorama(
+                                      canvasSize: const Size(
+                                        _hubCanvasWidth,
+                                        _hubCanvasHeight,
+                                      ),
+                                      backgroundAssetPath: _hubBackgroundAsset,
+                                      initialFocusX: _hubCanvasWidth / 2,
+                                      elements: [
+                                        HubSceneElement(
+                                          position: const Offset(590, 20),
+                                          size: const Size(260, 330),
+                                          child: _HubCharacterSprite(
+                                            assetPath: _characterAssetPath,
+                                            fallbackIcon: _characterIcon(
+                                              sessionController.characterId,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  _HubSectionBar(
+                                    selectedSection: _selectedSection,
+                                    onSelected: (section) {
+                                      setState(
+                                        () => _selectedSection = section,
+                                      );
+                                    },
+                                  ),
+                                  Expanded(
+                                    child: _HubSectionView(
+                                      section: _selectedSection,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Positioned(
+                              left: 8,
+                              bottom: 8,
+                              child: IconButton(
+                                tooltip: l10n.resetProfileTestTooltip,
+                                visualDensity: VisualDensity.compact,
+                                onPressed: _isResettingProfile
+                                    ? null
+                                    : _resetProfileForTesting,
+                                icon: _isResettingProfile
+                                    ? const SizedBox(
+                                        width: 17,
+                                        height: 17,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Icon(
+                                        Icons.restart_alt_rounded,
+                                        size: 20,
+                                        color: Color(0xFF817866),
+                                      ),
+                              ),
+                            ),
+                          ],
                         ),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-            ],
+              );
+            },
           ),
         ),
       ),
@@ -280,6 +325,7 @@ class _HubSectionBar extends StatelessWidget {
 
     return Container(
       height: 64,
+      width: double.infinity,
       decoration: BoxDecoration(
         color: const Color(0xFF171713),
         border: Border.symmetric(
@@ -288,31 +334,33 @@ class _HubSectionBar extends StatelessWidget {
           ),
         ),
       ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            _HubSectionButton(
+      child: Row(
+        children: [
+          Expanded(
+            child: _HubSectionButton(
               icon: Icons.home_work_outlined,
               label: l10n.hubTabShelter,
               selected: selectedSection == _HubSection.shelter,
               onTap: () => onSelected(_HubSection.shelter),
             ),
-            _HubSectionButton(
+          ),
+          Expanded(
+            child: _HubSectionButton(
               icon: Icons.backpack_outlined,
               label: l10n.hubTabInventory,
               selected: selectedSection == _HubSection.inventory,
               onTap: () => onSelected(_HubSection.inventory),
             ),
-            _HubSectionButton(
+          ),
+          Expanded(
+            child: _HubSectionButton(
               icon: Icons.explore_outlined,
               label: l10n.hubTabExpeditions,
               selected: selectedSection == _HubSection.expeditions,
               onTap: () => onSelected(_HubSection.expeditions),
             ),
-            SizedBox(width: MediaQuery.paddingOf(context).right + 8),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -342,8 +390,7 @@ class _HubSectionButton extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 170),
           height: 64,
-          constraints: const BoxConstraints(minWidth: 150),
-          padding: const EdgeInsets.symmetric(horizontal: 22),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
           decoration: BoxDecoration(
             color: selected
                 ? const Color(0xFF2D281F)
@@ -357,27 +404,58 @@ class _HubSectionButton extends StatelessWidget {
               ),
             ),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                size: 20,
-                color: selected
-                    ? const Color(0xFFD7BD89)
-                    : const Color(0xFF8C8477),
-              ),
-              const SizedBox(width: 9),
-              Text(
-                label,
-                style: theme.textTheme.labelLarge?.copyWith(
-                  color: selected
-                      ? const Color(0xFFE3D4B7)
-                      : const Color(0xFF9D9485),
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                ),
-              ),
-            ],
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 135;
+              final iconColor = selected
+                  ? const Color(0xFFD7BD89)
+                  : const Color(0xFF8C8477);
+              final textColor = selected
+                  ? const Color(0xFFE3D4B7)
+                  : const Color(0xFF9D9485);
+
+              if (compact) {
+                return Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(icon, size: 18, color: iconColor),
+                    const SizedBox(height: 2),
+                    Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: textColor,
+                        fontWeight: selected
+                            ? FontWeight.w700
+                            : FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                );
+              }
+
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(icon, size: 20, color: iconColor),
+                  const SizedBox(width: 9),
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: textColor,
+                        fontWeight: selected
+                            ? FontWeight.w700
+                            : FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         ),
       ),
@@ -449,48 +527,50 @@ class _HubSectionContent extends StatelessWidget {
       color: const Color(0xE611110E),
       padding: const EdgeInsets.fromLTRB(24, 22, 24, 36),
       child: SingleChildScrollView(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 920),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF262219),
-                  borderRadius: BorderRadius.circular(5),
-                  border: Border.all(color: const Color(0xFF554936)),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 920),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF262219),
+                    borderRadius: BorderRadius.circular(5),
+                    border: Border.all(color: const Color(0xFF554936)),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: const Color(0xFFC6AA74),
+                  ),
                 ),
-                child: Icon(
-                  icon,
-                  color: const Color(0xFFC6AA74),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        color: const Color(0xFFE6D8BD),
-                        fontWeight: FontWeight.w800,
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          color: const Color(0xFFE6D8BD),
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      description,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: const Color(0xFFA49B8B),
-                        height: 1.5,
+                      const SizedBox(height: 8),
+                      Text(
+                        description,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: const Color(0xFFA49B8B),
+                          height: 1.5,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
