@@ -164,7 +164,7 @@ class _HubCharacterGroundShadowPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = const Color(0x24000000)
+      ..color = const Color(0x45000000)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
 
     final shadow = Rect.fromLTWH(

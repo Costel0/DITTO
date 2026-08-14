@@ -62,19 +62,19 @@ const HubSceneConfiguration defaultHubSceneConfiguration =
   initialFocusX: 720,
   characterPlacements: <HubCharacterSlot, HubElementPlacement>{
     HubCharacterSlot.leftCompanion: HubElementPlacement(
-      position: Offset(180, 90),
+      position: Offset(280, 90),
       size: Size(170, 270),
     ),
     HubCharacterSlot.primary: HubElementPlacement(
-      position: Offset(390, 90),
+      position: Offset(360, 90),
       size: Size(170, 270),
     ),
     HubCharacterSlot.rightCompanion1: HubElementPlacement(
-      position: Offset(600, 90),
+      position: Offset(440, 90),
       size: Size(170, 270),
     ),
     HubCharacterSlot.rightCompanion2: HubElementPlacement(
-      position: Offset(810, 90),
+      position: Offset(520, 90),
       size: Size(170, 270),
     ),
   },
