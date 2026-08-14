@@ -10,21 +10,21 @@ service cloud.firestore {
       function hasValidProfileFields() {
         return !request.resource.data.keys().hasAny([
           'username',
-          'characterId'
+          'initialDuplicateId'
         ]) || (
           request.resource.data.keys().hasAll([
             'username',
-            'characterId'
+            'initialDuplicateId'
           ])
           && request.resource.data.username is string
           && request.resource.data.username.size() >= 3
           && request.resource.data.username.size() <= 24
-          && request.resource.data.characterId is string
-          && request.resource.data.characterId in [
-            'survivor_01',
-            'survivor_02',
-            'survivor_03',
-            'survivor_04'
+          && request.resource.data.initialDuplicateId is string
+          && request.resource.data.initialDuplicateId in [
+            '01',
+            '02',
+            '03',
+            '04'
           ]
         );
       }
@@ -33,7 +33,7 @@ service cloud.firestore {
         return request.resource.data.keys().hasOnly([
           'email',
           'username',
-          'characterId',
+          'initialDuplicateId',
           'createdAt',
           'updatedAt'
         ])
@@ -45,6 +45,49 @@ service cloud.firestore {
       allow read: if isOwner();
       allow create, update: if isOwner() && hasValidProfileShape();
       allow delete: if false;
+
+      match /survivors/{survivorId} {
+        function hasValidStatMods() {
+          return request.resource.data.statMods is map
+            && request.resource.data.statMods.keys().hasOnly([
+              'strength',
+              'agility',
+              'endurance',
+              'scavenging'
+            ])
+            && request.resource.data.statMods.keys().hasAll([
+              'strength',
+              'agility',
+              'endurance',
+              'scavenging'
+            ])
+            && request.resource.data.statMods.strength is int
+            && request.resource.data.statMods.agility is int
+            && request.resource.data.statMods.endurance is int
+            && request.resource.data.statMods.scavenging is int;
+        }
+
+        function hasValidSurvivorShape() {
+          return request.resource.data.keys().hasOnly([
+            'duplicateId',
+            'statMods',
+            'createdAt',
+            'updatedAt'
+          ])
+          && request.resource.data.duplicateId is string
+          && request.resource.data.duplicateId in [
+            '01',
+            '02',
+            '03',
+            '04'
+          ]
+          && hasValidStatMods();
+        }
+
+        allow read: if isOwner();
+        allow create, update: if isOwner() && hasValidSurvivorShape();
+        allow delete: if isOwner();
+      }
     }
   }
 }
