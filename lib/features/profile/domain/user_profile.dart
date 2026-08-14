@@ -3,15 +3,15 @@ class UserProfile {
     required this.userId,
     required this.email,
     required this.username,
-    required this.characterId,
+    required this.initialDuplicateId,
   });
 
   final String userId;
   final String email;
   final String? username;
-  final String? characterId;
+  final String? initialDuplicateId;
 
   bool get hasUsername => username != null && username!.trim().isNotEmpty;
-  bool get hasCharacter =>
-      characterId != null && characterId!.trim().isNotEmpty;
+  bool get hasInitialDuplicate =>
+      initialDuplicateId != null && initialDuplicateId!.trim().isNotEmpty;
 }
