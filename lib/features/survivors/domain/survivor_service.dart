@@ -7,6 +7,4 @@ abstract class SurvivorService {
     required String userId,
     required Survivor survivor,
   });
-
-  Future<void> clearAllSurvivorsForTesting({required String userId});
 }
