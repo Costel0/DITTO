@@ -35,7 +35,9 @@ class FirestoreSurvivorService implements SurvivorService {
     required String userId,
     required Survivor survivor,
   }) async {
-    final survivorId = survivor.id.trim().isNotEmpty ? survivor.id.trim() : 'initial';
+    final survivorId = survivor.id.trim().isNotEmpty
+        ? survivor.id.trim()
+        : 'initial';
     final reference = _survivors(userId).doc(survivorId);
 
     await _firestore.runTransaction((transaction) async {
@@ -49,23 +51,6 @@ class FirestoreSurvivorService implements SurvivorService {
         data['createdAt'] = FieldValue.serverTimestamp();
       }
       transaction.set(reference, data, SetOptions(merge: true));
-    });
-  }
-
-  @override
-  Future<void> addSurvivor({
-    required String userId,
-    required Survivor survivor,
-  }) async {
-    final reference = survivor.id.trim().isNotEmpty
-        ? _survivors(userId).doc(survivor.id.trim())
-        : _survivors(userId).doc();
-
-    await reference.set(<String, dynamic>{
-      ...survivor.toMap(),
-      'id': reference.id,
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
     });
   }
 
