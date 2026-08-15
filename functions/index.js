@@ -6,6 +6,13 @@ initializeApp();
 
 const REGION = "europe-west1";
 const VALID_DUPLICATE_IDS = new Set(["01", "02", "03", "04"]);
+const CALLABLE_OPTIONS = {
+  region: REGION,
+  minInstances: 0,
+  maxInstances: 1,
+  timeoutSeconds: 15,
+  enforceAppCheck: true,
+};
 
 function zeroStatMods() {
   return {
@@ -40,12 +47,7 @@ function normalizedSurvivor(source, survivorId, duplicateId) {
 }
 
 exports.initializeBunker = onCall(
-  {
-    region: REGION,
-    minInstances: 0,
-    maxInstances: 1,
-    timeoutSeconds: 15,
-  },
+  CALLABLE_OPTIONS,
   async (request) => {
     if (!request.auth) {
       throw new HttpsError(
@@ -196,6 +198,82 @@ exports.initializeBunker = onCall(
 
       return {
         survivorId,
+        created: true,
+      };
+    });
+  },
+);
+
+// Temporary development helper. Remove this callable together with the HUB
+// debug add-Survivor button once the real acquisition flow is implemented.
+exports.addSurvivorForTesting = onCall(
+  CALLABLE_OPTIONS,
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError(
+        "unauthenticated",
+        "Authentication is required to add a Survivor.",
+      );
+    }
+
+    const duplicateId = typeof request.data?.duplicateId === "string"
+      ? request.data.duplicateId.trim()
+      : "";
+    if (!VALID_DUPLICATE_IDS.has(duplicateId)) {
+      throw new HttpsError("invalid-argument", "Invalid Duplicate ID.");
+    }
+
+    const uid = request.auth.uid;
+    const db = getFirestore();
+    const userRef = db.collection("users").doc(uid);
+    const bunkerRef = userRef.collection("state").doc("bunker");
+    const survivorRef = userRef.collection("survivors").doc();
+
+    return db.runTransaction(async (transaction) => {
+      const bunkerSnapshot = await transaction.get(bunkerRef);
+      if (!bunkerSnapshot.exists) {
+        throw new HttpsError(
+          "failed-precondition",
+          "The bunker must be initialized before adding Survivors.",
+        );
+      }
+
+      const bunker = bunkerSnapshot.data() || {};
+      const survivors = Array.isArray(bunker.survivors)
+        ? bunker.survivors
+        : [];
+      if (survivors.some((survivor) => survivor?.duplicateId === duplicateId)) {
+        throw new HttpsError(
+          "already-exists",
+          "This Duplicate is already part of the bunker.",
+        );
+      }
+
+      const survivorId = survivorRef.id;
+      const survivor = normalizedSurvivor(null, survivorId, duplicateId);
+      const idleSurvivors = Array.isArray(bunker.idleSurvivors)
+        ? bunker.idleSurvivors.filter((id) => typeof id === "string")
+        : [];
+      const revision = Number.isInteger(bunker.revision)
+        ? bunker.revision + 1
+        : 1;
+      const now = FieldValue.serverTimestamp();
+
+      transaction.create(survivorRef, {
+        ...survivor,
+        createdAt: now,
+        updatedAt: now,
+      });
+      transaction.update(bunkerRef, {
+        survivors: [...survivors, survivor],
+        idleSurvivors: [...new Set([...idleSurvivors, survivorId])],
+        revision,
+        serverUpdatedAt: now,
+      });
+
+      return {
+        survivorId,
+        duplicateId,
         created: true,
       };
     });
