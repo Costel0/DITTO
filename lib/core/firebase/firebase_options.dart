@@ -13,7 +13,10 @@ class DefaultFirebaseOptions {
       case TargetPlatform.android:
         return android;
       case TargetPlatform.iOS:
-        return ios;
+        throw UnsupportedError(
+          'Firebase iOS must be reconfigured for bundle com.example.ditto. '
+          'The previous com.example.gameWiki Firebase app mapping was removed.',
+        );
       case TargetPlatform.macOS:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for macos - '
@@ -51,14 +54,5 @@ class DefaultFirebaseOptions {
     messagingSenderId: '14378781761',
     projectId: 'ditto-app-project',
     storageBucket: 'ditto-app-project.firebasestorage.app',
-  );
-
-  static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyAifw0oGh890Z05f1TeM5S0Pk5HQjjOEkE',
-    appId: '1:14378781761:ios:4b66b250c0840780614ac0',
-    messagingSenderId: '14378781761',
-    projectId: 'ditto-app-project',
-    storageBucket: 'ditto-app-project.firebasestorage.app',
-    iosBundleId: 'com.example.gameWiki',
   );
 }
