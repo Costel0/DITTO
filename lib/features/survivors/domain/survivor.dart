@@ -42,13 +42,15 @@ class SurvivorHealthRecord {
 }
 
 class Survivor {
-  const Survivor({
+  Survivor({
     this.id = '',
     required this.duplicateId,
     this.statMods = SurvivorStats.zero,
-    this.healthHistory = const <SurvivorHealthRecord>[],
-    this.equippedItemIds = const <String>[],
-  });
+    List<SurvivorHealthRecord> healthHistory =
+        const <SurvivorHealthRecord>[],
+    List<String> equippedItemIds = const <String>[],
+  })  : healthHistory = List<SurvivorHealthRecord>.unmodifiable(healthHistory),
+        equippedItemIds = List<String>.unmodifiable(equippedItemIds);
 
   /// Unique ID for this concrete Survivor instance.
   ///
