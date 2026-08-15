@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ditto://schemas/bunker-state-v1",
+  "title": "BunkerState",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "revision",
+    "serverUpdatedAt",
+    "survivors",
+    "resources"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "serverUpdatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "survivors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["duplicateId", "statMods"],
+        "properties": {
+          "duplicateId": {
+            "type": "string"
+          },
+          "statMods": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "strength",
+              "dexterity",
+              "constitution",
+              "stealth",
+              "care",
+              "cunning",
+              "charm"
+            ],
+            "properties": {
+              "strength": { "type": "integer" },
+              "dexterity": { "type": "integer" },
+              "constitution": { "type": "integer" },
+              "stealth": { "type": "integer" },
+              "care": { "type": "integer" },
+              "cunning": { "type": "integer" },
+              "charm": { "type": "integer" }
+            }
+          }
+        }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      }
+    }
+  }
+}
