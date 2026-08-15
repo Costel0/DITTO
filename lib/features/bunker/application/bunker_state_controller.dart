@@ -22,9 +22,11 @@ class BunkerStateController extends ChangeNotifier {
   Timer? _pollTimer;
   bool _isRefreshing = false;
   bool _isDisposed = false;
+  Object? _lastError;
 
   BunkerState? get state => _state;
   bool get isRefreshing => _isRefreshing;
+  Object? get lastError => _lastError;
 
   void startPolling() {
     if (_pollTimer != null) return;
@@ -49,11 +51,19 @@ class BunkerStateController extends ChangeNotifier {
       final nextState = await _service.fetchBunkerState();
       if (_isDisposed) return;
 
+      final hadError = _lastError != null;
+      _lastError = null;
       final currentRevision = _state?.revision;
       if (currentRevision == null || nextState.revision > currentRevision) {
         _state = nextState;
         notifyListeners();
+      } else if (hadError) {
+        notifyListeners();
       }
+    } catch (error) {
+      if (_isDisposed) return;
+      _lastError = error;
+      notifyListeners();
     } finally {
       _isRefreshing = false;
     }
