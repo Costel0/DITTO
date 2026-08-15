@@ -357,34 +357,13 @@ class _CharacterSheet extends StatelessWidget {
         children: [
           Expanded(
             flex: 5,
-            child: Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFF222019),
-                borderRadius: BorderRadius.circular(5),
-                border: Border.all(color: const Color(0xFF4C4437)),
-              ),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  const Positioned(
-                    top: 12,
-                    left: 12,
-                    child: Icon(
-                      Icons.image_outlined,
-                      size: 18,
-                      color: Color(0xFF655E52),
-                    ),
-                  ),
-                  _CharacterPortrait(
-                    imageAsset: imageAsset,
-                    fallbackImageAsset: fallbackImageAsset,
-                    placeholderIcon: placeholderIcon,
-                  ),
-                ],
-              ),
+            child: _CharacterPortrait(
+              imageAsset: imageAsset,
+              fallbackImageAsset: fallbackImageAsset,
+              placeholderIcon: placeholderIcon,
             ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 14),
           Text(
             name,
             textAlign: TextAlign.center,
