@@ -34,4 +34,19 @@ class FirebaseFunctionsSurvivorDevelopmentService
 
     return survivorId;
   }
+
+  @override
+  Future<void> resetUserForTesting() async {
+    final callable = _functions.httpsCallable('resetUserForTesting');
+    final result = await callable.call(<String, dynamic>{
+      'confirm': true,
+    });
+
+    final data = result.data;
+    if (data is! Map || data['deleted'] != true) {
+      throw const FormatException(
+        'resetUserForTesting returned invalid data.',
+      );
+    }
+  }
 }
