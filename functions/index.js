@@ -7,6 +7,38 @@ initializeApp();
 const REGION = "europe-west1";
 const VALID_DUPLICATE_IDS = new Set(["01", "02", "03", "04"]);
 
+function zeroStatMods() {
+  return {
+    strength: 0,
+    dexterity: 0,
+    constitution: 0,
+    stealth: 0,
+    care: 0,
+    cunning: 0,
+    charm: 0,
+  };
+}
+
+function normalizedSurvivor(source, survivorId, duplicateId) {
+  const healthHistory = Array.isArray(source?.healthHistory)
+    ? source.healthHistory
+    : [];
+  const equippedItemIds = Array.isArray(source?.equippedItemIds)
+    ? source.equippedItemIds
+    : [];
+  const statMods = source?.statMods && typeof source.statMods === "object"
+    ? source.statMods
+    : zeroStatMods();
+
+  return {
+    id: survivorId,
+    duplicateId,
+    statMods,
+    healthHistory,
+    equippedItemIds,
+  };
+}
+
 exports.initializeBunker = onCall(
   {
     region: REGION,
@@ -57,24 +89,59 @@ exports.initializeBunker = onCall(
           transaction.get(legacyInitialRef),
         ]);
 
+      const user = userSnapshot.data() || {};
+
       if (bunkerSnapshot.exists) {
         const bunker = bunkerSnapshot.data() || {};
-        const user = userSnapshot.data() || {};
         const survivors = Array.isArray(bunker.survivors)
           ? bunker.survivors
           : [];
         const firstSurvivor = survivors[0];
 
         if (
-          user.username !== username ||
-          user.initialDuplicateId !== duplicateId ||
           typeof firstSurvivor?.id !== "string" ||
-          firstSurvivor.id.length === 0
+          firstSurvivor.id.length === 0 ||
+          firstSurvivor.duplicateId !== duplicateId ||
+          (typeof user.initialDuplicateId === "string" &&
+            user.initialDuplicateId.length > 0 &&
+            user.initialDuplicateId !== duplicateId) ||
+          (typeof user.username === "string" &&
+            user.username.length > 0 &&
+            user.username !== username)
         ) {
           throw new HttpsError(
             "already-exists",
             "This account already has a different bunker configuration.",
           );
+        }
+
+        const survivorRef = userRef
+          .collection("survivors")
+          .doc(firstSurvivor.id);
+        const survivorSnapshot = await transaction.get(survivorRef);
+        const now = FieldValue.serverTimestamp();
+
+        transaction.set(
+          userRef,
+          {
+            email,
+            username,
+            initialDuplicateId: duplicateId,
+            updatedAt: now,
+          },
+          {merge: true},
+        );
+
+        if (!survivorSnapshot.exists) {
+          transaction.set(survivorRef, {
+            ...normalizedSurvivor(
+              firstSurvivor,
+              firstSurvivor.id,
+              duplicateId,
+            ),
+            createdAt: now,
+            updatedAt: now,
+          });
         }
 
         return {
@@ -83,34 +150,20 @@ exports.initializeBunker = onCall(
         };
       }
 
-      let survivorRef = generatedSurvivorRef;
       const legacySurvivor = legacyInitialSnapshot.exists
         ? legacyInitialSnapshot.data()
         : null;
-      if (
-        legacySurvivor &&
-        legacySurvivor.duplicateId === duplicateId
-      ) {
-        survivorRef = legacyInitialRef;
-      }
-
+      const reusesLegacySurvivor =
+        legacySurvivor?.duplicateId === duplicateId;
+      const survivorRef = reusesLegacySurvivor
+        ? legacyInitialRef
+        : generatedSurvivorRef;
       const survivorId = survivorRef.id;
-      const statMods = {
-        strength: 0,
-        dexterity: 0,
-        constitution: 0,
-        stealth: 0,
-        care: 0,
-        cunning: 0,
-        charm: 0,
-      };
-      const survivor = {
-        id: survivorId,
+      const survivor = normalizedSurvivor(
+        reusesLegacySurvivor ? legacySurvivor : null,
+        survivorId,
         duplicateId,
-        statMods,
-        healthHistory: [],
-        equippedItemIds: [],
-      };
+      );
       const now = FieldValue.serverTimestamp();
 
       const profileData = {
@@ -124,17 +177,13 @@ exports.initializeBunker = onCall(
       }
 
       transaction.set(userRef, profileData, {merge: true});
-      transaction.set(
-        survivorRef,
-        {
-          ...survivor,
-          createdAt: legacyInitialSnapshot.exists
-            ? legacyInitialSnapshot.get("createdAt") || now
-            : now,
-          updatedAt: now,
-        },
-        {merge: true},
-      );
+      transaction.set(survivorRef, {
+        ...survivor,
+        createdAt: reusesLegacySurvivor
+          ? legacyInitialSnapshot.get("createdAt") || now
+          : now,
+        updatedAt: now,
+      });
       transaction.create(bunkerRef, {
         schemaVersion: 2,
         revision: 1,
