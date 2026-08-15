@@ -78,11 +78,16 @@ service cloud.firestore {
 
         function hasValidSurvivorShape() {
           return request.resource.data.keys().hasOnly([
+            'id',
             'duplicateId',
             'statMods',
+            'healthHistory',
+            'equippedItemIds',
             'createdAt',
             'updatedAt'
           ])
+          && request.resource.data.id is string
+          && request.resource.data.id == survivorId
           && request.resource.data.duplicateId is string
           && request.resource.data.duplicateId in [
             '01',
@@ -90,12 +95,24 @@ service cloud.firestore {
             '03',
             '04'
           ]
+          && request.resource.data.healthHistory is list
+          && request.resource.data.equippedItemIds is list
           && hasValidStatMods();
         }
 
+        // Kept temporarily for development helpers and legacy migrations.
+        // Gameplay mutations will progressively move behind Cloud Functions.
         allow read: if isOwner();
         allow create, update: if isOwner() && hasValidSurvivorShape();
         allow delete: if isOwner();
+      }
+
+      match /state/{stateId} {
+        // BunkerState is server-authoritative. The Flutter client may only read
+        // its own bunker snapshot. Admin SDK writes from Cloud Functions bypass
+        // these client security rules.
+        allow read: if isOwner() && stateId == 'bunker';
+        allow create, update, delete: if false;
       }
     }
   }
