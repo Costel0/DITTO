@@ -29,7 +29,6 @@ class _SurvivorPortraitArtworkState extends State<SurvivorPortraitArtwork> {
   static const double _photoRotation = -0.022;
   static const double _frameSide = 6;
   static const double _frameBottom = 9;
-  static const double _portraitBrightness = 0.82;
 
   ImageStream? _backgroundImageStream;
   ImageStreamListener? _backgroundImageListener;
@@ -150,6 +149,11 @@ class _SurvivorPortraitArtworkState extends State<SurvivorPortraitArtwork> {
                           ),
                           child: _buildPortrait(),
                         ),
+                        const IgnorePointer(
+                          child: ColoredBox(
+                            color: Color(0x121A1711),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -177,20 +181,12 @@ class _SurvivorPortraitArtworkState extends State<SurvivorPortraitArtwork> {
     }
 
     Widget assetImage(String assetPath, {required Widget Function() onError}) {
-      return ColorFiltered(
-        colorFilter: const ColorFilter.matrix(<double>[
-          _portraitBrightness, 0, 0, 0, 0,
-          0, _portraitBrightness, 0, 0, 0,
-          0, 0, _portraitBrightness, 0, 0,
-          0, 0, 0, 1, 0,
-        ]),
-        child: Image.asset(
-          assetPath,
-          fit: BoxFit.contain,
-          alignment: Alignment.bottomCenter,
-          filterQuality: FilterQuality.high,
-          errorBuilder: (_, _, _) => onError(),
-        ),
+      return Image.asset(
+        assetPath,
+        fit: BoxFit.contain,
+        alignment: Alignment.bottomCenter,
+        filterQuality: FilterQuality.high,
+        errorBuilder: (_, _, _) => onError(),
       );
     }
 
@@ -213,6 +209,8 @@ class _SurvivorPortraitArtworkState extends State<SurvivorPortraitArtwork> {
 class _PortraitBackground extends StatelessWidget {
   const _PortraitBackground({required this.assetPath});
 
+  static const double _backgroundBrightness = 0.80;
+
   final String? assetPath;
 
   @override
@@ -224,11 +222,19 @@ class _PortraitBackground extends StatelessWidget {
       children: [
         const ColoredBox(color: Color(0xFF222019)),
         if (path != null)
-          Image.asset(
-            path,
-            fit: BoxFit.cover,
-            filterQuality: FilterQuality.high,
-            errorBuilder: (_, _, _) => const SizedBox.shrink(),
+          ColorFiltered(
+            colorFilter: const ColorFilter.matrix(<double>[
+              _backgroundBrightness, 0, 0, 0, 0,
+              0, _backgroundBrightness, 0, 0, 0,
+              0, 0, _backgroundBrightness, 0, 0,
+              0, 0, 0, 1, 0,
+            ]),
+            child: Image.asset(
+              path,
+              fit: BoxFit.cover,
+              filterQuality: FilterQuality.high,
+              errorBuilder: (_, _, _) => const SizedBox.shrink(),
+            ),
           ),
       ],
     );
