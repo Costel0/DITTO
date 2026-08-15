@@ -210,7 +210,7 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
               onPageChanged: _selectDuplicate,
               itemBuilder: (context, index) {
                 final duplicate = predefinedDuplicates[index];
-                final stats = duplicate.baseStats.values;
+                final stats = duplicate.baseStats;
                 return Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 2),
                   child: _CharacterSheet(
@@ -222,19 +222,31 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
                     stats: [
                       _CharacterStat(
                         label: l10n.statStrength,
-                        value: stats[0],
+                        value: stats.strength,
                       ),
                       _CharacterStat(
-                        label: l10n.statAgility,
-                        value: stats[1],
+                        label: l10n.statDexterity,
+                        value: stats.dexterity,
                       ),
                       _CharacterStat(
-                        label: l10n.statEndurance,
-                        value: stats[2],
+                        label: l10n.statConstitution,
+                        value: stats.constitution,
                       ),
                       _CharacterStat(
-                        label: l10n.statScavenging,
-                        value: stats[3],
+                        label: l10n.statStealth,
+                        value: stats.stealth,
+                      ),
+                      _CharacterStat(
+                        label: l10n.statCare,
+                        value: stats.care,
+                      ),
+                      _CharacterStat(
+                        label: l10n.statCunning,
+                        value: stats.cunning,
+                      ),
+                      _CharacterStat(
+                        label: l10n.statCharm,
+                        value: stats.charm,
                       ),
                     ],
                   ),
