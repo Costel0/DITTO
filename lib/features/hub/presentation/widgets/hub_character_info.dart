@@ -92,8 +92,9 @@ class HubCharacterInfo extends StatelessWidget {
 
     return Container(
       width: double.infinity,
+      height: double.infinity,
       color: const Color(0xE611110E),
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 30),
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
       child: SingleChildScrollView(
         child: Center(
           child: ConstrainedBox(
@@ -110,7 +111,7 @@ class HubCharacterInfo extends StatelessWidget {
                         assetPath: survivor.idleAssetPath,
                       ),
                     ),
-                    const SizedBox(width: 22),
+                    const SizedBox(width: 18),
                     Expanded(
                       flex: 6,
                       child: Column(
@@ -146,10 +147,10 @@ class HubCharacterInfo extends StatelessWidget {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 18),
+                          const SizedBox(height: 12),
                           for (final stat in stats)
                             Padding(
-                              padding: const EdgeInsets.only(bottom: 14),
+                              padding: const EdgeInsets.only(bottom: 12),
                               child: _StatRow(stat: stat),
                             ),
                         ],
@@ -157,7 +158,7 @@ class HubCharacterInfo extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 12),
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -189,15 +190,16 @@ class _CharacterPortrait extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(minHeight: 190, maxHeight: 300),
-      decoration: BoxDecoration(
-        color: const Color(0xFF222019),
-        borderRadius: BorderRadius.circular(5),
-        border: Border.all(color: const Color(0xFF4C4437)),
-      ),
-      child: SurvivorPortraitArtwork(
-        imageAssetPath: assetPath,
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          maxWidth: 280,
+          maxHeight: 315,
+        ),
+        child: SurvivorPortraitArtwork(
+          imageAssetPath: assetPath,
+        ),
       ),
     );
   }
@@ -273,9 +275,10 @@ class _EmptyCharacterInfo extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
+      height: double.infinity,
       color: const Color(0xE611110E),
-      alignment: Alignment.center,
-      padding: const EdgeInsets.all(24),
+      alignment: Alignment.topCenter,
+      padding: const EdgeInsets.fromLTRB(24, 18, 24, 24),
       child: Text(
         message,
         textAlign: TextAlign.center,
