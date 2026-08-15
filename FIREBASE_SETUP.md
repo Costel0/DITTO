@@ -1,14 +1,16 @@
 # Firebase setup for DITTO
 
-DITTO uses Firebase Authentication for account identity, Cloud Firestore for persisted player data, and Cloud Functions for trusted lightweight game operations.
+DITTO uses Firebase Authentication for account identity, Cloud Firestore for persisted player data, Cloud Functions for trusted lightweight game operations, and Firebase App Check for abuse protection.
 
 ## Current architecture
 
 - Email/password login and registration use Firebase Authentication.
 - After Authentication, a new user chooses a username and initial Duplicate.
 - The Flutter app calls the callable Cloud Function `initializeBunker`.
-- The Function validates the authenticated user and the submitted choices, then atomically creates the profile, initial Survivor and authoritative BunkerState.
+- The Function validates Firebase Auth + App Check, then atomically creates the profile, initial Survivor and authoritative BunkerState.
 - Flutter may read `users/{uid}/state/bunker`, but Firestore rules prevent the client from writing it directly.
+- `users/{uid}/survivors/*` is also read-only from Flutter. Survivor creation/mutations must go through trusted backend code.
+- The temporary HUB debug add-Survivor button calls `addSurvivorForTesting`, which updates the Survivor document and BunkerState in one Firestore transaction. Remove this Function with the debug button once the real acquisition flow exists.
 - Future lightweight operations should normally follow `app -> Cloud Functions -> Firestore`.
 - Operations that need heavier simulation or long-running computation can later follow `app -> VM -> Cloud Functions -> Firestore` or another trusted-server path.
 
@@ -78,7 +80,7 @@ Deploy rules with:
 firebase deploy --only firestore:rules
 ```
 
-The current rules allow an authenticated user to read their own bunker state but not create, update or delete it. Cloud Functions uses the Admin SDK for trusted writes.
+Current rules allow an authenticated user to read their own bunker and Survivor snapshots, but not create, update or delete those documents directly. Cloud Functions uses the Admin SDK for trusted writes.
 
 ## Cloud Functions
 
@@ -90,18 +92,19 @@ functions/
   package.json
 ```
 
-The first callable Function is:
+Current callable Functions:
 
 ```text
 initializeBunker
+addSurvivorForTesting   # temporary development helper
 ```
 
-It currently runs in `europe-west1`, with zero minimum instances and a small maximum instance cap. The Flutter client uses the same region in `FirebaseFunctionsBunkerSetupService`.
+Both run in `europe-west1`, with `minInstances: 0`, `maxInstances: 1`, a short timeout, Firebase Authentication validation and App Check enforcement.
 
 ### One-time setup
 
-1. Make sure the Firebase project `ditto-app-project` is on the **Blaze** billing plan. Cloud Functions deployment requires a billing-enabled project.
-2. Install a supported Node.js version. The repository currently targets Node.js 22 for Functions.
+1. Keep the Firebase project `ditto-app-project` on the **Blaze** billing plan.
+2. Install a supported Node.js version. The repository targets Node.js 22 for Functions.
 3. Install/update Firebase CLI:
 
 ```powershell
@@ -122,28 +125,42 @@ From the project root:
 ```powershell
 flutter pub get
 cd functions
-npm install
+npm ci
 cd ..
 ```
 
-`npm install` creates/updates `functions/package-lock.json`; keep that lockfile under version control once generated.
+Keep both `pubspec.lock` and `functions/package-lock.json` under version control after dependency resolution.
 
-### Deploy the initial backend
+## App Check during development
 
-From the project root:
+Flutter activates App Check only in debug builds for now:
+
+- Android: debug provider.
+- Apple: debug provider once the iOS Firebase app is reconfigured.
+- Web: debug provider.
+
+The debug token must be registered in Firebase Console before deploying the App-Check-enforced callable Functions.
+
+Recommended Android flow:
+
+1. Run `flutter pub get`.
+2. Run the app with `flutter run` and trigger a Firebase request.
+3. Copy the App Check debug token printed in the Android logs.
+4. Firebase Console -> **Security -> App Check -> Apps** -> Android app -> **Manage debug tokens**.
+5. Register the token. Never commit it to Git.
+6. Deploy the Functions and Firestore rules.
+
+Deploy both callables and rules with:
 
 ```powershell
-firebase deploy --only functions:initializeBunker,firestore:rules
+firebase deploy --only "functions:initializeBunker,functions:addSurvivorForTesting,firestore:rules"
 ```
 
-Or deploy Functions and rules separately:
+Cloud Functions has `enforceAppCheck: true`, so calls without a valid App Check token are rejected before game logic executes.
 
-```powershell
-firebase deploy --only functions:initializeBunker
-firebase deploy --only firestore:rules
-```
+For Cloud Firestore, App Check enforcement is enabled separately from Firebase Console. Enable it only after the debug token is registered and verified, otherwise local development requests will be rejected.
 
-After deployment, a newly authenticated user who confirms username + character in the app will call the Function and create their initial bunker state.
+Before production, replace the debug providers with real attestation providers, primarily Play Integrity on Android and an Apple production provider on iOS. Never ship a debug provider/token in a production build.
 
 ## Flutter dependencies
 
@@ -153,6 +170,7 @@ DITTO uses:
 - `firebase_auth`
 - `cloud_firestore`
 - `cloud_functions`
+- `firebase_app_check`
 - `flutter_secure_storage`
 - `flutter_localizations`
 - `intl`
@@ -164,7 +182,17 @@ flutter pub get
 flutter analyze
 ```
 
-## Firebase project configuration
+## Firebase project configuration and identifiers
+
+Android is the currently configured mobile Firebase target and uses:
+
+```text
+com.example.ditto
+```
+
+The iOS Xcode bundle identifier has been aligned to the same identifier. The old Firebase iOS mapping for `com.example.gameWiki` was intentionally removed because it no longer matches the project.
+
+Before running Firebase on iOS, register a new iOS app in `ditto-app-project` using bundle ID `com.example.ditto`, then regenerate FlutterFire configuration so the new Firebase iOS App ID replaces the removed stale mapping.
 
 Platform-specific Firebase configuration is generated by FlutterFire and stored at:
 
@@ -176,19 +204,15 @@ lib/core/firebase/firebase_options.dart
 
 ## BunkerState trust boundary
 
-Flutter's `BunkerState` is intentionally immutable and read-only. The app periodically replaces its local snapshot with newer server data; it does not expose a save/update API for BunkerState.
+Flutter's `BunkerState` is intentionally immutable and read-only. The app replaces its local snapshot with newer server data; it does not expose a save/update API for BunkerState.
 
 The Firestore adapter converts Firestore timestamps into the normalized JSON representation consumed by the shared schema. Future VM/backend code should follow the same schema and increment `revision` whenever authoritative bunker state changes.
 
-## Development note
+## Development controls
 
-The old direct Firestore Survivor write methods are temporarily kept for existing debug controls and legacy migration. They are not the intended production mutation path. As gameplay systems are implemented, those mutations should move behind callable Functions or another trusted backend endpoint.
+The add-Survivor debug control no longer writes Firestore directly. It calls the temporary trusted `addSurvivorForTesting` Function.
 
-The existing debug action that clears the profile/survivor documents does not yet delete the server-authoritative `state/bunker` document. For a full fresh-registration test during this transition, delete that user's bunker state manually in the Firebase Console or use a fresh test account. A trusted development reset Function can be added later if needed.
-
-## Security follow-up
-
-Before production, enable and enforce Firebase App Check for callable Functions and other Firebase resources where appropriate. The current implementation already requires Firebase Authentication for `initializeBunker`, but App Check is an additional abuse-protection layer.
+The profile reset debug control only clears profile setup fields. It intentionally leaves Survivor documents and BunkerState intact so the client cannot create a partially deleted authoritative state. Re-enter the same initial Duplicate to recover the profile. For a completely fresh account or a different initial Duplicate, use a fresh test account or delete the authoritative state manually in Firebase Console.
 
 ## Future VM
 
