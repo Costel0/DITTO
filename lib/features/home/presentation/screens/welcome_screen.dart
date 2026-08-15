@@ -130,9 +130,20 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     });
   }
 
+  void _changeSelectedSurvivor(int delta) {
+    final target = _selectedSurvivorIndex + delta;
+    if (target < 0 || target >= sessionController.survivors.length) return;
+
+    setState(() {
+      _selectedSurvivorIndex = target;
+      _selectedSection = _HubSection.character;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final rosterLength = sessionController.survivors.length;
 
     return Scaffold(
       body: SurvivalBackground(
@@ -192,6 +203,16 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                                     child: _HubSectionView(
                                       section: _selectedSection,
                                       survivor: _selectedSurvivor,
+                                      onPreviousSurvivor:
+                                          _selectedSurvivorIndex > 0
+                                              ? () =>
+                                                  _changeSelectedSurvivor(-1)
+                                              : null,
+                                      onNextSurvivor:
+                                          _selectedSurvivorIndex + 1 <
+                                                  rosterLength
+                                              ? () => _changeSelectedSurvivor(1)
+                                              : null,
                                     ),
                                   ),
                                 ],
@@ -445,10 +466,14 @@ class _HubSectionView extends StatelessWidget {
   const _HubSectionView({
     required this.section,
     required this.survivor,
+    required this.onPreviousSurvivor,
+    required this.onNextSurvivor,
   });
 
   final _HubSection section;
   final Survivor? survivor;
+  final VoidCallback? onPreviousSurvivor;
+  final VoidCallback? onNextSurvivor;
 
   @override
   Widget build(BuildContext context) {
@@ -461,6 +486,8 @@ class _HubSectionView extends StatelessWidget {
           child: HubCharacterInfo(
             key: ValueKey(survivor?.duplicateId ?? 'no-character'),
             survivor: survivor,
+            onPrevious: onPreviousSurvivor,
+            onNext: onNextSurvivor,
           ),
         );
       case _HubSection.inventory:
