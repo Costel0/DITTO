@@ -163,7 +163,7 @@ class _CharacterPortrait extends StatelessWidget {
           fit: BoxFit.contain,
           alignment: Alignment.bottomCenter,
           filterQuality: FilterQuality.high,
-          errorBuilder: (_, __, ___) => const Center(
+          errorBuilder: (_, _, _) => const Center(
             child: Icon(
               Icons.person_rounded,
               size: 110,
