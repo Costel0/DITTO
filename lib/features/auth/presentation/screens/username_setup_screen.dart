@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../app/navigation/app_routes.dart';
 import '../../../../core/localization/l10n.dart';
 import '../../../survivors/domain/duplicate_catalog.dart';
+import '../../../survivors/presentation/widgets/survivor_portrait_artwork.dart';
 import '../../application/session_controller.dart';
 import '../widgets/auth_card_scaffold.dart';
 import '../widgets/auth_error_box.dart';
@@ -428,46 +429,10 @@ class _CharacterPortrait extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget placeholder() {
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
-        child: FittedBox(
-          fit: BoxFit.contain,
-          child: Icon(
-            placeholderIcon,
-            color: const Color(0xFFB7A47E),
-          ),
-        ),
-      );
-    }
-
-    Widget assetImage(String assetPath, {required Widget Function() onError}) {
-      return Image.asset(
-        assetPath,
-        fit: BoxFit.contain,
-        alignment: Alignment.bottomCenter,
-        filterQuality: FilterQuality.high,
-        errorBuilder: (_, _, _) => onError(),
-      );
-    }
-
-    return Center(
-      child: FractionallySizedBox(
-        heightFactor: 0.94,
-        child: AspectRatio(
-          aspectRatio: 2 / 3,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: assetImage(
-              imageAsset,
-              onError: () => assetImage(
-                fallbackImageAsset,
-                onError: placeholder,
-              ),
-            ),
-          ),
-        ),
-      ),
+    return SurvivorPortraitArtwork(
+      imageAssetPath: imageAsset,
+      fallbackImageAssetPath: fallbackImageAsset,
+      placeholderIcon: placeholderIcon,
     );
   }
 }
