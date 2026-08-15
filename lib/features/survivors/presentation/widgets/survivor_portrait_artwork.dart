@@ -26,6 +26,10 @@ class SurvivorPortraitArtwork extends StatefulWidget {
 
 class _SurvivorPortraitArtworkState extends State<SurvivorPortraitArtwork> {
   static const double _fallbackBackgroundAspectRatio = 0.62;
+  static const double _photoRotation = -0.022;
+  static const double _frameSide = 6;
+  static const double _frameBottom = 9;
+  static const double _portraitBrightness = 0.82;
 
   ImageStream? _backgroundImageStream;
   ImageStreamListener? _backgroundImageListener;
@@ -109,20 +113,48 @@ class _SurvivorPortraitArtworkState extends State<SurvivorPortraitArtwork> {
           child: SizedBox(
             width: fittedSize.width,
             height: fittedSize.height,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                if (widget.backgroundAssetPath != null)
-                  _FadedPortraitBackground(
-                    assetPath: widget.backgroundAssetPath!,
+            child: Transform.rotate(
+              angle: _photoRotation,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFC7BEAA),
+                  border: Border.all(
+                    color: const Color(0xFF665D4D),
+                    width: 1,
                   ),
-                Padding(
-                  padding: EdgeInsets.only(
-                    bottom: widget.portraitBottomInset,
-                  ),
-                  child: _buildPortrait(),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x66000000),
+                      blurRadius: 10,
+                      offset: Offset(3, 5),
+                    ),
+                  ],
                 ),
-              ],
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    _frameSide,
+                    _frameSide,
+                    _frameSide,
+                    _frameBottom,
+                  ),
+                  child: ClipRect(
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        _PortraitBackground(
+                          assetPath: widget.backgroundAssetPath,
+                        ),
+                        Padding(
+                          padding: EdgeInsets.only(
+                            bottom: widget.portraitBottomInset,
+                          ),
+                          child: _buildPortrait(),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
         );
@@ -138,19 +170,27 @@ class _SurvivorPortraitArtworkState extends State<SurvivorPortraitArtwork> {
           fit: BoxFit.contain,
           child: Icon(
             widget.placeholderIcon,
-            color: const Color(0xFFB7A47E),
+            color: const Color(0xFF8E8169),
           ),
         ),
       );
     }
 
     Widget assetImage(String assetPath, {required Widget Function() onError}) {
-      return Image.asset(
-        assetPath,
-        fit: BoxFit.contain,
-        alignment: Alignment.bottomCenter,
-        filterQuality: FilterQuality.high,
-        errorBuilder: (_, _, _) => onError(),
+      return ColorFiltered(
+        colorFilter: const ColorFilter.matrix(<double>[
+          _portraitBrightness, 0, 0, 0, 0,
+          0, _portraitBrightness, 0, 0, 0,
+          0, 0, _portraitBrightness, 0, 0,
+          0, 0, 0, 1, 0,
+        ]),
+        child: Image.asset(
+          assetPath,
+          fit: BoxFit.contain,
+          alignment: Alignment.bottomCenter,
+          filterQuality: FilterQuality.high,
+          errorBuilder: (_, _, _) => onError(),
+        ),
       );
     }
 
@@ -170,54 +210,27 @@ class _SurvivorPortraitArtworkState extends State<SurvivorPortraitArtwork> {
   }
 }
 
-class _FadedPortraitBackground extends StatelessWidget {
-  const _FadedPortraitBackground({required this.assetPath});
+class _PortraitBackground extends StatelessWidget {
+  const _PortraitBackground({required this.assetPath});
 
-  final String assetPath;
+  final String? assetPath;
 
   @override
   Widget build(BuildContext context) {
-    final background = Stack(
+    final path = assetPath;
+
+    return Stack(
       fit: StackFit.expand,
       children: [
         const ColoredBox(color: Color(0xFF222019)),
-        Image.asset(
-          assetPath,
-          fit: BoxFit.cover,
-          filterQuality: FilterQuality.high,
-          errorBuilder: (_, _, _) => const SizedBox.shrink(),
-        ),
+        if (path != null)
+          Image.asset(
+            path,
+            fit: BoxFit.cover,
+            filterQuality: FilterQuality.high,
+            errorBuilder: (_, _, _) => const SizedBox.shrink(),
+          ),
       ],
-    );
-
-    return ShaderMask(
-      blendMode: BlendMode.dstIn,
-      shaderCallback: (bounds) => const LinearGradient(
-        begin: Alignment.centerLeft,
-        end: Alignment.centerRight,
-        colors: [
-          Colors.transparent,
-          Colors.white,
-          Colors.white,
-          Colors.transparent,
-        ],
-        stops: [0, 0.26, 0.74, 1],
-      ).createShader(bounds),
-      child: ShaderMask(
-        blendMode: BlendMode.dstIn,
-        shaderCallback: (bounds) => const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Colors.transparent,
-            Colors.white,
-            Colors.white,
-            Colors.transparent,
-          ],
-          stops: [0, 0.18, 0.76, 1],
-        ).createShader(bounds),
-        child: background,
-      ),
     );
   }
 }
