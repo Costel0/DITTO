@@ -11,17 +11,45 @@ class BunkerState {
     required this.revision,
     required this.serverUpdatedAt,
     required List<Survivor> survivors,
-    required Map<String, int> resources,
+    required List<String> idleSurvivors,
+    required Map<String, List<String>> busySurvivors,
+    required Map<String, int> inventory,
   })  : survivors = List<Survivor>.unmodifiable(survivors),
-        resources = Map<String, int>.unmodifiable(resources);
+        idleSurvivors = List<String>.unmodifiable(idleSurvivors),
+        busySurvivors = Map<String, List<String>>.unmodifiable(
+          busySurvivors.map(
+            (occupation, survivorIds) => MapEntry(
+              occupation,
+              List<String>.unmodifiable(survivorIds),
+            ),
+          ),
+        ),
+        inventory = Map<String, int>.unmodifiable(inventory);
 
-  static const int supportedSchemaVersion = 1;
+  static const int supportedSchemaVersion = 2;
 
   final int schemaVersion;
   final int revision;
   final DateTime serverUpdatedAt;
+
+  /// Complete authoritative roster.
   final List<Survivor> survivors;
-  final Map<String, int> resources;
+
+  /// IDs of Survivors currently available for new tasks.
+  final List<String> idleSurvivors;
+
+  /// Occupation ID -> Survivor IDs currently assigned to that occupation.
+  final Map<String, List<String>> busySurvivors;
+
+  /// Item ID -> quantity owned.
+  final Map<String, int> inventory;
+
+  Survivor? survivorById(String id) {
+    for (final survivor in survivors) {
+      if (survivor.id == id) return survivor;
+    }
+    return null;
+  }
 
   factory BunkerState.fromJson(Map<String, dynamic> json) {
     final schemaVersion = _requiredInt(json, 'schemaVersion');
@@ -51,18 +79,59 @@ class BunkerState {
       return Survivor.fromMap(Map<String, dynamic>.from(rawSurvivor));
     }).toList(growable: false);
 
-    final resourcesRaw = json['resources'];
-    if (resourcesRaw is! Map) {
-      throw const FormatException('resources must be an object.');
+    final survivorIds = survivors.map((survivor) => survivor.id).toList();
+    if (survivorIds.any((id) => id.isEmpty) ||
+        survivorIds.toSet().length != survivorIds.length) {
+      throw const FormatException(
+        'Every bunker Survivor must have a unique non-empty id.',
+      );
     }
-    final resources = <String, int>{};
-    for (final entry in resourcesRaw.entries) {
-      if (entry.key is! String || entry.value is! num) {
+    final knownSurvivorIds = survivorIds.toSet();
+
+    final idleSurvivors = _stringList(json, 'idleSurvivors');
+    _validateSurvivorReferences(
+      idleSurvivors,
+      knownSurvivorIds,
+      'idleSurvivors',
+    );
+
+    final busyRaw = json['busySurvivors'];
+    if (busyRaw is! Map) {
+      throw const FormatException('busySurvivors must be an object.');
+    }
+    final busySurvivors = <String, List<String>>{};
+    for (final entry in busyRaw.entries) {
+      if (entry.key is! String || entry.value is! List) {
         throw const FormatException(
-          'Resource keys must be strings and values must be numbers.',
+          'busySurvivors must map occupation IDs to lists of Survivor IDs.',
         );
       }
-      resources[entry.key as String] = (entry.value as num).toInt();
+      final ids = (entry.value as List).whereType<String>().toList();
+      if (ids.length != (entry.value as List).length) {
+        throw const FormatException(
+          'busySurvivors lists may contain only Survivor IDs.',
+        );
+      }
+      _validateSurvivorReferences(ids, knownSurvivorIds, entry.key as String);
+      busySurvivors[entry.key as String] = ids;
+    }
+
+    final inventoryRaw = json['inventory'];
+    if (inventoryRaw is! Map) {
+      throw const FormatException('inventory must be an object.');
+    }
+    final inventory = <String, int>{};
+    for (final entry in inventoryRaw.entries) {
+      if (entry.key is! String || entry.value is! num) {
+        throw const FormatException(
+          'Inventory keys must be strings and values must be numbers.',
+        );
+      }
+      final quantity = (entry.value as num).toInt();
+      if (quantity < 0) {
+        throw const FormatException('Inventory quantities cannot be negative.');
+      }
+      inventory[entry.key as String] = quantity;
     }
 
     return BunkerState._(
@@ -70,8 +139,31 @@ class BunkerState {
       revision: _requiredInt(json, 'revision'),
       serverUpdatedAt: serverUpdatedAt,
       survivors: survivors,
-      resources: resources,
+      idleSurvivors: idleSurvivors,
+      busySurvivors: busySurvivors,
+      inventory: inventory,
     );
+  }
+
+  static List<String> _stringList(Map<String, dynamic> json, String key) {
+    final raw = json[key];
+    if (raw is! List || raw.any((value) => value is! String)) {
+      throw FormatException('$key must be a list of strings.');
+    }
+    return raw.cast<String>().toList(growable: false);
+  }
+
+  static void _validateSurvivorReferences(
+    List<String> ids,
+    Set<String> knownIds,
+    String field,
+  ) {
+    if (ids.toSet().length != ids.length) {
+      throw FormatException('$field contains duplicate Survivor IDs.');
+    }
+    if (ids.any((id) => !knownIds.contains(id))) {
+      throw FormatException('$field references an unknown Survivor ID.');
+    }
   }
 
   static int _requiredInt(Map<String, dynamic> json, String key) {
