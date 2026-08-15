@@ -16,7 +16,16 @@ class FirestoreSurvivorService implements SurvivorService {
   Future<List<Survivor>> loadSurvivors({required String userId}) async {
     final snapshot = await _survivors(userId).orderBy('createdAt').get();
     return snapshot.docs
-        .map((document) => Survivor.fromMap(document.data()))
+        .map((document) {
+          final data = document.data();
+          final storedId = data['id'] as String?;
+          return Survivor.fromMap(<String, dynamic>{
+            ...data,
+            'id': storedId != null && storedId.trim().isNotEmpty
+                ? storedId.trim()
+                : document.id,
+          });
+        })
         .where((survivor) => survivor.duplicateId.isNotEmpty)
         .toList(growable: false);
   }
@@ -26,12 +35,14 @@ class FirestoreSurvivorService implements SurvivorService {
     required String userId,
     required Survivor survivor,
   }) async {
-    final reference = _survivors(userId).doc('initial');
+    final survivorId = survivor.id.trim().isNotEmpty ? survivor.id.trim() : 'initial';
+    final reference = _survivors(userId).doc(survivorId);
 
     await _firestore.runTransaction((transaction) async {
       final snapshot = await transaction.get(reference);
       final data = <String, dynamic>{
         ...survivor.toMap(),
+        'id': survivorId,
         'updatedAt': FieldValue.serverTimestamp(),
       };
       if (!snapshot.exists) {
@@ -46,8 +57,13 @@ class FirestoreSurvivorService implements SurvivorService {
     required String userId,
     required Survivor survivor,
   }) async {
-    await _survivors(userId).add(<String, dynamic>{
+    final reference = survivor.id.trim().isNotEmpty
+        ? _survivors(userId).doc(survivor.id.trim())
+        : _survivors(userId).doc();
+
+    await reference.set(<String, dynamic>{
       ...survivor.toMap(),
+      'id': reference.id,
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
