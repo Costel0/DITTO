@@ -193,18 +193,18 @@ class SessionController extends ChangeNotifier {
     }
   }
 
+  /// Temporary development-only reset. Firebase Authentication is preserved,
+  /// while the trusted callable recursively deletes the user's Firestore tree.
   Future<bool> clearInitialProfileForTesting() async {
-    final profileService = _userProfileService;
+    final developmentService = _survivorDevelopmentService;
     final userId = _credentials?.userId;
-    if (profileService == null || userId == null) return false;
+    if (developmentService == null || userId == null) return false;
 
     try {
-      // Do not delete Survivors here: BunkerState is authoritative and cannot
-      // be deleted by the client. Keeping both snapshots intact avoids a debug
-      // reset leaving Firestore in an internally inconsistent state.
-      await profileService.clearInitialProfile(userId: userId);
+      await developmentService.resetUserForTesting();
       _profileUsername = null;
       _initialDuplicateId = null;
+      _survivors = const <Survivor>[];
       notifyListeners();
       return true;
     } catch (_) {
