@@ -435,7 +435,7 @@ class _CharacterPortrait extends StatelessWidget {
         fit: BoxFit.contain,
         alignment: Alignment.bottomCenter,
         filterQuality: FilterQuality.high,
-        errorBuilder: (_, __, ___) => onError(),
+        errorBuilder: (_, _, _) => onError(),
       );
     }
 
