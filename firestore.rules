@@ -51,20 +51,29 @@ service cloud.firestore {
           return request.resource.data.statMods is map
             && request.resource.data.statMods.keys().hasOnly([
               'strength',
-              'agility',
-              'endurance',
-              'scavenging'
+              'dexterity',
+              'constitution',
+              'stealth',
+              'care',
+              'cunning',
+              'charm'
             ])
             && request.resource.data.statMods.keys().hasAll([
               'strength',
-              'agility',
-              'endurance',
-              'scavenging'
+              'dexterity',
+              'constitution',
+              'stealth',
+              'care',
+              'cunning',
+              'charm'
             ])
             && request.resource.data.statMods.strength is int
-            && request.resource.data.statMods.agility is int
-            && request.resource.data.statMods.endurance is int
-            && request.resource.data.statMods.scavenging is int;
+            && request.resource.data.statMods.dexterity is int
+            && request.resource.data.statMods.constitution is int
+            && request.resource.data.statMods.stealth is int
+            && request.resource.data.statMods.care is int
+            && request.resource.data.statMods.cunning is int
+            && request.resource.data.statMods.charm is int;
         }
 
         function hasValidSurvivorShape() {
