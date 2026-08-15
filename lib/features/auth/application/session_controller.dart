@@ -1,5 +1,3 @@
-// ignore_for_file: prefer_initializing_formals
-
 import 'package:flutter/foundation.dart';
 
 import '../../profile/domain/user_profile_service.dart';
@@ -13,9 +11,17 @@ class SessionController extends ChangeNotifier {
     required AuthService authService,
     UserProfileService? userProfileService,
     SurvivorService? survivorService,
-  })  : _authService = authService,
-        _userProfileService = userProfileService,
-        _survivorService = survivorService;
+  }) : this._(
+          authService,
+          userProfileService,
+          survivorService,
+        );
+
+  SessionController._(
+    this._authService,
+    this._userProfileService,
+    this._survivorService,
+  );
 
   final AuthService _authService;
   final UserProfileService? _userProfileService;
