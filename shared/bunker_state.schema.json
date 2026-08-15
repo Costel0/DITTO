@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "ditto://schemas/bunker-state-v1",
+  "$id": "ditto://schemas/bunker-state-v2",
   "title": "BunkerState",
   "type": "object",
   "additionalProperties": false,
@@ -9,11 +9,13 @@
     "revision",
     "serverUpdatedAt",
     "survivors",
-    "resources"
+    "idleSurvivors",
+    "busySurvivors",
+    "inventory"
   ],
   "properties": {
     "schemaVersion": {
-      "const": 1
+      "const": 2
     },
     "revision": {
       "type": "integer",
@@ -25,44 +27,92 @@
     },
     "survivors": {
       "type": "array",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["duplicateId", "statMods"],
-        "properties": {
-          "duplicateId": {
-            "type": "string"
-          },
-          "statMods": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "strength",
-              "dexterity",
-              "constitution",
-              "stealth",
-              "care",
-              "cunning",
-              "charm"
-            ],
-            "properties": {
-              "strength": { "type": "integer" },
-              "dexterity": { "type": "integer" },
-              "constitution": { "type": "integer" },
-              "stealth": { "type": "integer" },
-              "care": { "type": "integer" },
-              "cunning": { "type": "integer" },
-              "charm": { "type": "integer" }
-            }
-          }
-        }
+      "items": { "$ref": "#/$defs/survivor" }
+    },
+    "idleSurvivors": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "busySurvivors": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "uniqueItems": true,
+        "items": { "type": "string", "minLength": 1 }
       }
     },
-    "resources": {
+    "inventory": {
       "type": "object",
       "additionalProperties": {
         "type": "integer",
         "minimum": 0
+      }
+    }
+  },
+  "$defs": {
+    "survivor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "duplicateId",
+        "statMods",
+        "healthHistory",
+        "equippedItemIds"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "duplicateId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "statMods": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "strength",
+            "dexterity",
+            "constitution",
+            "stealth",
+            "care",
+            "cunning",
+            "charm"
+          ],
+          "properties": {
+            "strength": { "type": "integer" },
+            "dexterity": { "type": "integer" },
+            "constitution": { "type": "integer" },
+            "stealth": { "type": "integer" },
+            "care": { "type": "integer" },
+            "cunning": { "type": "integer" },
+            "charm": { "type": "integer" }
+          }
+        },
+        "healthHistory": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "type", "recordedAt"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "type": { "type": "string", "minLength": 1 },
+              "recordedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "details": { "type": "string" }
+            }
+          }
+        },
+        "equippedItemIds": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
       }
     }
   }
