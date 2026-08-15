@@ -47,63 +47,11 @@ service cloud.firestore {
       allow delete: if false;
 
       match /survivors/{survivorId} {
-        function hasValidStatMods() {
-          return request.resource.data.statMods is map
-            && request.resource.data.statMods.keys().hasOnly([
-              'strength',
-              'dexterity',
-              'constitution',
-              'stealth',
-              'care',
-              'cunning',
-              'charm'
-            ])
-            && request.resource.data.statMods.keys().hasAll([
-              'strength',
-              'dexterity',
-              'constitution',
-              'stealth',
-              'care',
-              'cunning',
-              'charm'
-            ])
-            && request.resource.data.statMods.strength is int
-            && request.resource.data.statMods.dexterity is int
-            && request.resource.data.statMods.constitution is int
-            && request.resource.data.statMods.stealth is int
-            && request.resource.data.statMods.care is int
-            && request.resource.data.statMods.cunning is int
-            && request.resource.data.statMods.charm is int;
-        }
-
-        function hasValidSurvivorShape() {
-          return request.resource.data.keys().hasOnly([
-            'id',
-            'duplicateId',
-            'statMods',
-            'healthHistory',
-            'equippedItemIds',
-            'createdAt',
-            'updatedAt'
-          ])
-          && request.resource.data.id is string
-          && request.resource.data.id == survivorId
-          && request.resource.data.duplicateId is string
-          && request.resource.data.duplicateId in [
-            '01',
-            '02',
-            '03',
-            '04'
-          ]
-          && request.resource.data.healthHistory is list
-          && request.resource.data.equippedItemIds is list
-          && hasValidStatMods();
-        }
-
-        // Kept temporarily for development helpers and legacy migrations.
-        // Gameplay mutations will progressively move behind Cloud Functions.
+        // Survivor creation and gameplay mutations are server-authoritative.
+        // The temporary delete permission remains only for the local profile
+        // reset development helper and should be removed with that helper.
         allow read: if isOwner();
-        allow create, update: if isOwner() && hasValidSurvivorShape();
+        allow create, update: if false;
         allow delete: if isOwner();
       }
 
