@@ -13,6 +13,10 @@ const CALLABLE_OPTIONS = {
   timeoutSeconds: 15,
   enforceAppCheck: true,
 };
+const RESET_CALLABLE_OPTIONS = {
+  ...CALLABLE_OPTIONS,
+  timeoutSeconds: 30,
+};
 
 function zeroStatMods() {
   return {
@@ -277,5 +281,35 @@ exports.addSurvivorForTesting = onCall(
         created: true,
       };
     });
+  },
+);
+
+// Temporary development helper. Deletes the authenticated user's entire
+// Firestore subtree under users/{uid}, but intentionally preserves Firebase
+// Authentication so the same account can run the initial setup again.
+exports.resetUserForTesting = onCall(
+  RESET_CALLABLE_OPTIONS,
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError(
+        "unauthenticated",
+        "Authentication is required to reset user data.",
+      );
+    }
+    if (request.data?.confirm !== true) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Explicit confirmation is required to reset user data.",
+      );
+    }
+
+    const db = getFirestore();
+    const userRef = db.collection("users").doc(request.auth.uid);
+
+    await db.recursiveDelete(userRef);
+
+    return {
+      deleted: true,
+    };
   },
 );
