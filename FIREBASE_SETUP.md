@@ -1,26 +1,58 @@
 # Firebase setup for DITTO
 
-DITTO uses Firebase Authentication for account identity and Cloud Firestore for user profile data.
+DITTO uses Firebase Authentication for account identity, Cloud Firestore for persisted player data, and Cloud Functions for trusted lightweight game operations.
 
-Current development behavior:
+## Current architecture
 
 - Email/password login and registration use Firebase Authentication.
-- The temporary **Skip** button remains local and creates the development user `user/password`.
-- Authenticated Firebase users without a stored username are redirected to the username setup screen.
-- User profiles are stored in `users/{firebaseUid}` in Cloud Firestore.
+- After Authentication, a new user chooses a username and initial Duplicate.
+- The Flutter app calls the callable Cloud Function `initializeBunker`.
+- The Function validates the authenticated user and the submitted choices, then atomically creates the profile, initial Survivor and authoritative BunkerState.
+- Flutter may read `users/{uid}/state/bunker`, but Firestore rules prevent the client from writing it directly.
+- Future lightweight operations should normally follow `app -> Cloud Functions -> Firestore`.
+- Operations that need heavier simulation or long-running computation can later follow `app -> VM -> Cloud Functions -> Firestore` or another trusted-server path.
 
-## Project structure
+The temporary **Skip** button remains local and is not part of the production Firebase flow.
 
-Firebase-specific Flutter code lives under:
+## Firestore layout
 
 ```text
-lib/core/firebase/
-  firebase_auth_service.dart
-  firebase_options.dart
-  firestore_user_profile_service.dart
+users/{uid}
+  email
+  username
+  initialDuplicateId
+  createdAt
+  updatedAt
+
+users/{uid}/survivors/{survivorId}
+  id
+  duplicateId
+  statMods
+  healthHistory
+  equippedItemIds
+  createdAt
+  updatedAt
+
+users/{uid}/state/bunker
+  schemaVersion
+  revision
+  serverUpdatedAt
+  survivors
+  idleSurvivors
+  busySurvivors
+  inventory
 ```
 
-Authentication UI/state lives under `lib/features/auth/`, profile contracts under `lib/features/profile/`, and general app navigation/configuration under `lib/app/`.
+`BunkerState` schema version 2 is documented in `shared/bunker_state.schema.json`.
+
+Current gameplay fields are:
+
+- `survivors`: complete Survivor list.
+- `idleSurvivors`: unique Survivor IDs available for new work.
+- `busySurvivors`: occupation/task ID -> Survivor ID list.
+- `inventory`: item ID -> owned quantity.
+
+The Dart `Survivor` model also contains `healthHistory` for wounds, mutilations and other persistent health records, plus `equippedItemIds` for equipped items.
 
 ## Authentication
 
@@ -35,67 +67,129 @@ In Firebase Console:
 In Firebase Console:
 
 1. Open **Firestore Database**.
-2. Create the default database using **Standard edition**.
-3. Choose the desired data location.
-4. Production mode is recommended because DITTO keeps its Firestore rules in this repository.
+2. Create the default database using **Standard edition** if it does not already exist.
+3. Keep note of the database location because the Cloud Functions region should stay close to it.
 
-After the database exists, from the project root run:
+Firestore collections/documents do not need to be created manually.
 
-```bash
-firebase deploy --only firestore
+Deploy rules with:
+
+```powershell
+firebase deploy --only firestore:rules
 ```
 
-The deployed rules come from `firestore.rules`. An authenticated user can read and write only their own `users/{uid}` profile document. Usernames currently accept spaces and Unicode characters and are limited to 3–24 characters.
+The current rules allow an authenticated user to read their own bunker state but not create, update or delete it. Cloud Functions uses the Admin SDK for trusted writes.
 
-No collection needs to be created manually. Firestore creates the `users` collection the first time DITTO saves a username.
+## Cloud Functions
 
-Current profile shape:
+Functions source lives in:
 
 ```text
-users/{uid}
-  email
-  username
-  createdAt
-  updatedAt
+functions/
+  index.js
+  package.json
 ```
+
+The first callable Function is:
+
+```text
+initializeBunker
+```
+
+It currently runs in `europe-west1`, with zero minimum instances and a small maximum instance cap. The Flutter client uses the same region in `FirebaseFunctionsBunkerSetupService`.
+
+### One-time setup
+
+1. Make sure the Firebase project `ditto-app-project` is on the **Blaze** billing plan. Cloud Functions deployment requires a billing-enabled project.
+2. Install a supported Node.js version. The repository currently targets Node.js 22 for Functions.
+3. Install/update Firebase CLI:
+
+```powershell
+npm install -g firebase-tools
+firebase login
+```
+
+The repository includes `.firebaserc` with `ditto-app-project` as the default project. Verify it with:
+
+```powershell
+firebase use
+```
+
+### Install dependencies
+
+From the project root:
+
+```powershell
+flutter pub get
+cd functions
+npm install
+cd ..
+```
+
+`npm install` creates/updates `functions/package-lock.json`; keep that lockfile under version control once generated.
+
+### Deploy the initial backend
+
+From the project root:
+
+```powershell
+firebase deploy --only functions:initializeBunker,firestore:rules
+```
+
+Or deploy Functions and rules separately:
+
+```powershell
+firebase deploy --only functions:initializeBunker
+firebase deploy --only firestore:rules
+```
+
+After deployment, a newly authenticated user who confirms username + character in the app will call the Function and create their initial bunker state.
 
 ## Flutter dependencies
 
-DITTO currently uses:
+DITTO uses:
 
 - `firebase_core`
 - `firebase_auth`
 - `cloud_firestore`
+- `cloud_functions`
+- `flutter_secure_storage`
 - `flutter_localizations`
 - `intl`
 
-After pulling dependency changes run:
+After dependency changes run:
 
-```bash
+```powershell
 flutter pub get
+flutter analyze
 ```
 
 ## Firebase project configuration
 
-The platform-specific Firebase configuration is generated by FlutterFire and is stored at:
+Platform-specific Firebase configuration is generated by FlutterFire and stored at:
 
 ```text
 lib/core/firebase/firebase_options.dart
 ```
 
-`firebase.json` also points FlutterFire to this organized location.
+`firebase.json` points FlutterFire to this location and also configures `functions/` as the Functions source directory.
 
-## Localization
+## BunkerState trust boundary
 
-UI strings are stored as ARB resources in:
+Flutter's `BunkerState` is intentionally immutable and read-only. The app periodically replaces its local snapshot with newer server data; it does not expose a save/update API for BunkerState.
 
-```text
-lib/l10n/app_en.arb
-lib/l10n/app_es.arb
-```
+The Firestore adapter converts Firestore timestamps into the normalized JSON representation consumed by the shared schema. Future VM/backend code should follow the same schema and increment `revision` whenever authoritative bunker state changes.
 
-Flutter generates the localization Dart sources into `lib/l10n/generated/` during `flutter pub get`, `flutter run`, or `flutter gen-l10n`.
+## Development note
 
-## Backend note
+The old direct Firestore Survivor write methods are temporarily kept for existing debug controls and legacy migration. They are not the intended production mutation path. As gameplay systems are implemented, those mutations should move behind callable Functions or another trusted backend endpoint.
 
-DITTO's future Python backend on OVHcloud should validate Firebase ID tokens sent by authenticated clients rather than receiving or storing Firebase passwords. Server-only credentials and secrets must never be included in the Flutter/web application.
+The existing debug action that clears the profile/survivor documents does not yet delete the server-authoritative `state/bunker` document. For a full fresh-registration test during this transition, delete that user's bunker state manually in the Firebase Console or use a fresh test account. A trusted development reset Function can be added later if needed.
+
+## Security follow-up
+
+Before production, enable and enforce Firebase App Check for callable Functions and other Firebase resources where appropriate. The current implementation already requires Firebase Authentication for `initializeBunker`, but App Check is an additional abuse-protection layer.
+
+## Future VM
+
+A future VM should authenticate requests using Firebase ID tokens or another trusted server-to-server mechanism. It must never receive or store users' Firebase passwords. Server-only credentials and secrets must not be included in the Flutter/web application.
