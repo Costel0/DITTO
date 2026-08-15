@@ -195,7 +195,7 @@ class SessionController extends ChangeNotifier {
 
   /// Temporary development-only reset. Firebase Authentication is preserved,
   /// while the trusted callable recursively deletes the user's Firestore tree.
-  Future<bool> resetUserForTesting() async {
+  Future<bool> clearInitialProfileForTesting() async {
     final developmentService = _survivorDevelopmentService;
     final userId = _credentials?.userId;
     if (developmentService == null || userId == null) return false;
