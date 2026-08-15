@@ -33,7 +33,6 @@
           "projectId": "ditto-app-project",
           "configurations": {
             "android": "1:14378781761:android:0a5e0306a5894f1d614ac0",
-            "ios": "1:14378781761:ios:4b66b250c0840780614ac0",
             "web": "1:14378781761:web:31308987893f0a91614ac0"
           }
         }
