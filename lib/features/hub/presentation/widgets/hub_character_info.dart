@@ -3,14 +3,19 @@ import 'package:flutter/material.dart';
 import '../../../../core/localization/l10n.dart';
 import '../../../survivors/domain/duplicate_catalog.dart';
 import '../../../survivors/domain/survivor.dart';
+import '../../../survivors/presentation/widgets/survivor_portrait_artwork.dart';
 
 class HubCharacterInfo extends StatelessWidget {
   const HubCharacterInfo({
     super.key,
     required this.survivor,
+    this.onPrevious,
+    this.onNext,
   });
 
   final Survivor? survivor;
+  final VoidCallback? onPrevious;
+  final VoidCallback? onNext;
 
   String _name(BuildContext context, String duplicateId) {
     final l10n = context.l10n;
@@ -111,12 +116,35 @@ class HubCharacterInfo extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Text(
-                            _name(context, survivor.duplicateId),
-                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                  color: const Color(0xFFE6D8BD),
-                                  fontWeight: FontWeight.w800,
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  _name(context, survivor.duplicateId),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleLarge
+                                      ?.copyWith(
+                                        color: const Color(0xFFE6D8BD),
+                                        fontWeight: FontWeight.w800,
+                                      ),
                                 ),
+                              ),
+                              const SizedBox(width: 8),
+                              IconButton.outlined(
+                                tooltip: context.l10n.previousCharacter,
+                                onPressed: onPrevious,
+                                icon: const Icon(Icons.chevron_left_rounded),
+                              ),
+                              const SizedBox(width: 4),
+                              IconButton.outlined(
+                                tooltip: context.l10n.nextCharacter,
+                                onPressed: onNext,
+                                icon: const Icon(Icons.chevron_right_rounded),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 18),
                           for (final stat in stats)
@@ -164,25 +192,12 @@ class _CharacterPortrait extends StatelessWidget {
     return Container(
       constraints: const BoxConstraints(minHeight: 190, maxHeight: 300),
       decoration: BoxDecoration(
-        color: const Color(0xFF1D1C17),
+        color: const Color(0xFF222019),
         borderRadius: BorderRadius.circular(5),
-        border: Border.all(color: const Color(0xFF4F4638)),
+        border: Border.all(color: const Color(0xFF4C4437)),
       ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(10, 12, 10, 0),
-        child: Image.asset(
-          assetPath,
-          fit: BoxFit.contain,
-          alignment: Alignment.bottomCenter,
-          filterQuality: FilterQuality.high,
-          errorBuilder: (_, _, _) => const Center(
-            child: Icon(
-              Icons.person_rounded,
-              size: 110,
-              color: Color(0xFF9C8D70),
-            ),
-          ),
-        ),
+      child: SurvivorPortraitArtwork(
+        imageAssetPath: assetPath,
       ),
     );
   }
