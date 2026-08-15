@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import 'app/ditto_app.dart';
 import 'core/firebase/firebase_auth_service.dart';
+import 'core/firebase/firebase_functions_bunker_setup_service.dart';
 import 'core/firebase/firebase_options.dart';
 import 'core/firebase/firestore_survivor_service.dart';
 import 'core/firebase/firestore_user_profile_service.dart';
@@ -17,6 +18,7 @@ Future<void> main() async {
 
   final sessionController = SessionController(
     authService: FirebaseAuthService(),
+    bunkerSetupService: FirebaseFunctionsBunkerSetupService(),
     userProfileService: FirestoreUserProfileService(),
     survivorService: FirestoreSurvivorService(),
   );
