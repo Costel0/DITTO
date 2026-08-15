@@ -43,7 +43,7 @@ exports.initializeBunker = onCall(
   {
     region: REGION,
     minInstances: 0,
-    maxInstances: 5,
+    maxInstances: 1,
     timeoutSeconds: 15,
   },
   async (request) => {
