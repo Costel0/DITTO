@@ -1,13 +1,12 @@
 import 'package:cloud_functions/cloud_functions.dart';
 
 import '../../features/bunker/domain/bunker_setup_service.dart';
+import 'firebase_functions_config.dart';
 
 class FirebaseFunctionsBunkerSetupService implements BunkerSetupService {
   FirebaseFunctionsBunkerSetupService({FirebaseFunctions? functions})
       : _functions = functions ??
-            FirebaseFunctions.instanceFor(region: functionsRegion);
-
-  static const String functionsRegion = 'europe-west1';
+            FirebaseFunctions.instanceFor(region: firebaseFunctionsRegion);
 
   final FirebaseFunctions _functions;
 
