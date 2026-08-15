@@ -53,16 +53,4 @@ class FirestoreSurvivorService implements SurvivorService {
       transaction.set(reference, data, SetOptions(merge: true));
     });
   }
-
-  @override
-  Future<void> clearAllSurvivorsForTesting({required String userId}) async {
-    final snapshot = await _survivors(userId).get();
-    if (snapshot.docs.isEmpty) return;
-
-    final batch = _firestore.batch();
-    for (final document in snapshot.docs) {
-      batch.delete(document.reference);
-    }
-    await batch.commit();
-  }
 }
