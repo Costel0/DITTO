@@ -48,6 +48,7 @@
   "resetProfileTestError": "Unable to clear the profile data.",
   "hubTitle": "DITTO // HUB",
   "settingsTooltip": "Settings",
+  "hubTabCharacter": "Character",
   "hubTabShelter": "Shelter",
   "hubTabInventory": "Inventory",
   "hubTabExpeditions": "Expeditions",

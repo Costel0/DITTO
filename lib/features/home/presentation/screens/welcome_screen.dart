@@ -5,8 +5,10 @@ import '../../../../core/localization/l10n.dart';
 import '../../../../core/presentation/survival_background.dart';
 import '../../../auth/application/session_controller.dart';
 import '../../../hub/domain/hub_scene_configuration.dart';
+import '../../../hub/presentation/widgets/hub_character_info.dart';
 import '../../../hub/presentation/widgets/hub_debug_controls.dart';
 import '../../../hub/presentation/widgets/hub_scrollable_scene.dart';
+import '../../../survivors/domain/survivor.dart';
 
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({
@@ -21,13 +23,14 @@ class WelcomeScreen extends StatefulWidget {
 }
 
 enum _HubSection {
-  shelter,
+  character,
   inventory,
   expeditions,
 }
 
 class _WelcomeScreenState extends State<WelcomeScreen> {
-  _HubSection _selectedSection = _HubSection.shelter;
+  _HubSection _selectedSection = _HubSection.character;
+  int _selectedSurvivorIndex = 0;
 
   SessionController get sessionController => widget.sessionController;
 
@@ -44,7 +47,16 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   }
 
   void _onSessionChanged() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+
+    setState(() {
+      final rosterLength = sessionController.survivors.length;
+      if (rosterLength == 0) {
+        _selectedSurvivorIndex = 0;
+      } else if (_selectedSurvivorIndex >= rosterLength) {
+        _selectedSurvivorIndex = rosterLength - 1;
+      }
+    });
   }
 
   Future<void> _logout(BuildContext context) async {
@@ -99,6 +111,25 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     return result;
   }
 
+  Survivor? get _selectedSurvivor {
+    final roster = sessionController.survivors;
+    if (roster.isEmpty) return null;
+    if (_selectedSurvivorIndex >= roster.length) return roster.last;
+    return roster[_selectedSurvivorIndex];
+  }
+
+  void _openCharacterFromSlot(HubCharacterSlot slot) {
+    final rosterIndex = hubRosterSlotOrder.indexOf(slot);
+    if (rosterIndex < 0 || rosterIndex >= sessionController.survivors.length) {
+      return;
+    }
+
+    setState(() {
+      _selectedSurvivorIndex = rosterIndex;
+      _selectedSection = _HubSection.character;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
@@ -146,6 +177,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                                         .canvasSize.height,
                                     child: HubScrollableScene(
                                       characters: _hubCharacters,
+                                      onCharacterTap: _openCharacterFromSlot,
                                     ),
                                   ),
                                   _HubSectionBar(
@@ -159,6 +191,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                                   Expanded(
                                     child: _HubSectionView(
                                       section: _selectedSection,
+                                      survivor: _selectedSurvivor,
                                     ),
                                   ),
                                 ],
@@ -220,30 +253,14 @@ class _HubTopBar extends StatelessWidget {
           return Row(
             children: [
               Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      l10n.hubTitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        color: const Color(0xFFE7D8BB),
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1.1,
-                      ),
-                    ),
-                    if (!compact)
-                      Text(
-                        username,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: const Color(0xFF8F8677),
-                        ),
-                      ),
-                  ],
+                child: Text(
+                  username,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: const Color(0xFF8F8677),
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
               IconButton(
@@ -299,10 +316,10 @@ class _HubSectionBar extends StatelessWidget {
         children: [
           Expanded(
             child: _HubSectionButton(
-              icon: Icons.home_work_outlined,
-              label: l10n.hubTabShelter,
-              selected: selectedSection == _HubSection.shelter,
-              onTap: () => onSelected(_HubSection.shelter),
+              icon: Icons.person_outline_rounded,
+              label: l10n.hubTabCharacter,
+              selected: selectedSection == _HubSection.character,
+              onTap: () => onSelected(_HubSection.character),
             ),
           ),
           Expanded(
@@ -425,45 +442,42 @@ class _HubSectionButton extends StatelessWidget {
 }
 
 class _HubSectionView extends StatelessWidget {
-  const _HubSectionView({required this.section});
+  const _HubSectionView({
+    required this.section,
+    required this.survivor,
+  });
 
   final _HubSection section;
+  final Survivor? survivor;
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
 
-    late final IconData icon;
-    late final String title;
-    late final String description;
-
     switch (section) {
-      case _HubSection.shelter:
-        icon = Icons.home_work_outlined;
-        title = l10n.hubShelterTitle;
-        description = l10n.hubShelterDescription;
-        break;
+      case _HubSection.character:
+        return AnimatedSwitcher(
+          duration: const Duration(milliseconds: 180),
+          child: HubCharacterInfo(
+            key: ValueKey(survivor?.duplicateId ?? 'no-character'),
+            survivor: survivor,
+          ),
+        );
       case _HubSection.inventory:
-        icon = Icons.backpack_outlined;
-        title = l10n.hubInventoryTitle;
-        description = l10n.hubInventoryDescription;
-        break;
+        return _HubSectionContent(
+          key: const ValueKey(_HubSection.inventory),
+          icon: Icons.backpack_outlined,
+          title: l10n.hubInventoryTitle,
+          description: l10n.hubInventoryDescription,
+        );
       case _HubSection.expeditions:
-        icon = Icons.explore_outlined;
-        title = l10n.hubExpeditionsTitle;
-        description = l10n.hubExpeditionsDescription;
-        break;
+        return _HubSectionContent(
+          key: const ValueKey(_HubSection.expeditions),
+          icon: Icons.explore_outlined,
+          title: l10n.hubExpeditionsTitle,
+          description: l10n.hubExpeditionsDescription,
+        );
     }
-
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 180),
-      child: _HubSectionContent(
-        key: ValueKey(section),
-        icon: icon,
-        title: title,
-        description: description,
-      ),
-    );
   }
 }
 

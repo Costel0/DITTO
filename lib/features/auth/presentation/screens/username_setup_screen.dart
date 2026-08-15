@@ -214,7 +214,8 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
                 return Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 2),
                   child: _CharacterSheet(
-                    imageAsset: duplicate.idleAssetPath,
+                    imageAsset: duplicate.dormantAssetPath,
+                    fallbackImageAsset: duplicate.idleAssetPath,
                     placeholderIcon: _placeholderIcon(index),
                     name: _characterName(index),
                     description: _characterDescription(index),
@@ -313,6 +314,7 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
 class _CharacterSheet extends StatelessWidget {
   const _CharacterSheet({
     required this.imageAsset,
+    required this.fallbackImageAsset,
     required this.placeholderIcon,
     required this.name,
     required this.description,
@@ -320,6 +322,7 @@ class _CharacterSheet extends StatelessWidget {
   });
 
   final String imageAsset;
+  final String fallbackImageAsset;
   final IconData placeholderIcon;
   final String name;
   final String description;
@@ -361,6 +364,7 @@ class _CharacterSheet extends StatelessWidget {
                   ),
                   _CharacterPortrait(
                     imageAsset: imageAsset,
+                    fallbackImageAsset: fallbackImageAsset,
                     placeholderIcon: placeholderIcon,
                   ),
                 ],
@@ -402,10 +406,12 @@ class _CharacterSheet extends StatelessWidget {
 class _CharacterPortrait extends StatelessWidget {
   const _CharacterPortrait({
     required this.imageAsset,
+    required this.fallbackImageAsset,
     required this.placeholderIcon,
   });
 
   final String imageAsset;
+  final String fallbackImageAsset;
   final IconData placeholderIcon;
 
   @override
@@ -423,6 +429,16 @@ class _CharacterPortrait extends StatelessWidget {
       );
     }
 
+    Widget assetImage(String assetPath, {required Widget Function() onError}) {
+      return Image.asset(
+        assetPath,
+        fit: BoxFit.contain,
+        alignment: Alignment.bottomCenter,
+        filterQuality: FilterQuality.high,
+        errorBuilder: (_, __, ___) => onError(),
+      );
+    }
+
     return Center(
       child: FractionallySizedBox(
         heightFactor: 0.94,
@@ -430,12 +446,12 @@ class _CharacterPortrait extends StatelessWidget {
           aspectRatio: 2 / 3,
           child: ClipRRect(
             borderRadius: BorderRadius.circular(4),
-            child: Image.asset(
+            child: assetImage(
               imageAsset,
-              fit: BoxFit.contain,
-              alignment: Alignment.bottomCenter,
-              filterQuality: FilterQuality.high,
-              errorBuilder: (_, __, ___) => placeholder(),
+              onError: () => assetImage(
+                fallbackImageAsset,
+                onError: placeholder,
+              ),
             ),
           ),
         ),

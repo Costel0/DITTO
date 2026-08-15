@@ -48,6 +48,7 @@
   "resetProfileTestError": "No se han podido borrar los datos del perfil.",
   "hubTitle": "DITTO // HUB",
   "settingsTooltip": "Ajustes",
+  "hubTabCharacter": "Personaje",
   "hubTabShelter": "Refugio",
   "hubTabInventory": "Inventario",
   "hubTabExpeditions": "Expediciones",

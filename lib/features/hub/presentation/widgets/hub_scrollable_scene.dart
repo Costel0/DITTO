@@ -19,12 +19,14 @@ class HubScrollableScene extends StatefulWidget {
   const HubScrollableScene({
     super.key,
     required this.characters,
+    this.onCharacterTap,
     this.configuration = defaultHubSceneConfiguration,
   });
 
   /// Only occupied slots need to be supplied. Slots absent from this map stay
   /// empty but retain their configured position for future companions.
   final Map<HubCharacterSlot, HubSceneCharacter> characters;
+  final ValueChanged<HubCharacterSlot>? onCharacterTap;
   final HubSceneConfiguration configuration;
 
   @override
@@ -43,16 +45,26 @@ class _HubScrollableSceneState extends State<HubScrollableScene> {
     super.dispose();
   }
 
-  void _scheduleInitialScroll(double viewportWidth) {
-    if (_initialScrollScheduled) return;
-    _initialScrollScheduled = true;
+  double get _initialFocusX {
+    if (widget.characters.isNotEmpty) {
+      final firstOccupiedSlot = widget.characters.keys.first;
+      final placement = configuration.placementFor(firstOccupiedSlot);
+      return placement.position.dx + placement.size.width / 2;
+    }
 
-    if (viewportWidth >= configuration.canvasSize.width) return;
+    return configuration.initialFocusX;
+  }
+
+  void _scheduleInitialScroll(double viewportWidth) {
+    if (_initialScrollScheduled || viewportWidth >= configuration.canvasSize.width) {
+      return;
+    }
+    _initialScrollScheduled = true;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scrollController.hasClients) return;
 
-      final target = (configuration.initialFocusX - viewportWidth / 2)
+      final target = (_initialFocusX - viewportWidth / 2)
           .clamp(0.0, _scrollController.position.maxScrollExtent)
           .toDouble();
       _scrollController.jumpTo(target);
@@ -125,34 +137,45 @@ class _HubScrollableSceneState extends State<HubScrollableScene> {
     required HubSceneCharacter character,
   }) {
     final placement = configuration.placementFor(slot);
+    final onTap = widget.onCharacterTap == null
+        ? null
+        : () => widget.onCharacterTap!(slot);
 
     return Positioned(
       left: canvasOffsetX + placement.position.dx,
       top: placement.position.dy,
       width: placement.size.width,
       height: placement.size.height,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          const Positioned(
-            left: 18,
-            right: 18,
-            bottom: 0,
-            height: 30,
-            child: IgnorePointer(
-              child: CustomPaint(
-                painter: _HubCharacterGroundShadowPainter(),
+      child: MouseRegion(
+        cursor: onTap == null
+            ? SystemMouseCursors.basic
+            : SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: onTap,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              const Positioned(
+                left: 18,
+                right: 18,
+                bottom: 0,
+                height: 30,
+                child: IgnorePointer(
+                  child: CustomPaint(
+                    painter: _HubCharacterGroundShadowPainter(),
+                  ),
+                ),
               ),
-            ),
+              Positioned.fill(
+                child: _HubCharacterSprite(
+                  assetPath: character.assetPath,
+                  fallbackIcon: character.fallbackIcon,
+                  brightness: configuration.characterBrightness,
+                ),
+              ),
+            ],
           ),
-          Positioned.fill(
-            child: _HubCharacterSprite(
-              assetPath: character.assetPath,
-              fallbackIcon: character.fallbackIcon,
-              brightness: configuration.characterBrightness,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
