@@ -48,11 +48,8 @@ service cloud.firestore {
 
       match /survivors/{survivorId} {
         // Survivor creation and gameplay mutations are server-authoritative.
-        // The temporary delete permission remains only for the local profile
-        // reset development helper and should be removed with that helper.
         allow read: if isOwner();
-        allow create, update: if false;
-        allow delete: if isOwner();
+        allow create, update, delete: if false;
       }
 
       match /state/{stateId} {
