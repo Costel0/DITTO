@@ -60,16 +60,28 @@ class HubCharacterInfo extends StatelessWidget {
         value: (baseStats?.strength ?? 0) + mods.strength,
       ),
       _CharacterStat(
-        label: context.l10n.statAgility,
-        value: (baseStats?.agility ?? 0) + mods.agility,
+        label: context.l10n.statDexterity,
+        value: (baseStats?.dexterity ?? 0) + mods.dexterity,
       ),
       _CharacterStat(
-        label: context.l10n.statEndurance,
-        value: (baseStats?.endurance ?? 0) + mods.endurance,
+        label: context.l10n.statConstitution,
+        value: (baseStats?.constitution ?? 0) + mods.constitution,
       ),
       _CharacterStat(
-        label: context.l10n.statScavenging,
-        value: (baseStats?.scavenging ?? 0) + mods.scavenging,
+        label: context.l10n.statStealth,
+        value: (baseStats?.stealth ?? 0) + mods.stealth,
+      ),
+      _CharacterStat(
+        label: context.l10n.statCare,
+        value: (baseStats?.care ?? 0) + mods.care,
+      ),
+      _CharacterStat(
+        label: context.l10n.statCunning,
+        value: (baseStats?.cunning ?? 0) + mods.cunning,
+      ),
+      _CharacterStat(
+        label: context.l10n.statCharm,
+        value: (baseStats?.charm ?? 0) + mods.charm,
       ),
     ];
 
