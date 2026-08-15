@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../bunker/domain/bunker_setup_service.dart';
 import '../../profile/domain/user_profile_service.dart';
 import '../../survivors/domain/duplicate_catalog.dart';
 import '../../survivors/domain/survivor.dart';
@@ -9,21 +10,25 @@ import '../domain/auth_service.dart';
 class SessionController extends ChangeNotifier {
   SessionController({
     required AuthService authService,
+    BunkerSetupService? bunkerSetupService,
     UserProfileService? userProfileService,
     SurvivorService? survivorService,
   }) : this._(
           authService,
+          bunkerSetupService,
           userProfileService,
           survivorService,
         );
 
   SessionController._(
     this._authService,
+    this._bunkerSetupService,
     this._userProfileService,
     this._survivorService,
   );
 
   final AuthService _authService;
+  final BunkerSetupService? _bunkerSetupService;
   final UserProfileService? _userProfileService;
   final SurvivorService? _survivorService;
 
@@ -82,27 +87,58 @@ class SessionController extends ChangeNotifier {
     required String duplicateId,
   }) async {
     final credentials = _credentials;
-    final profileService = _userProfileService;
-    final survivorService = _survivorService;
     final userId = credentials?.userId;
 
-    if (credentials == null ||
-        profileService == null ||
-        survivorService == null ||
-        userId == null) {
-      return false;
-    }
+    if (credentials == null || userId == null) return false;
 
     final cleanUsername = username.trim();
     final cleanDuplicateId = duplicateId.trim();
-    if (duplicateById(cleanDuplicateId) == null) return false;
+    if (cleanUsername.length < 3 ||
+        cleanUsername.length > 24 ||
+        duplicateById(cleanDuplicateId) == null) {
+      return false;
+    }
 
     try {
-      final initialSurvivor = Survivor(duplicateId: cleanDuplicateId);
+      final bunkerSetupService = _bunkerSetupService;
+      if (bunkerSetupService != null) {
+        final result = await bunkerSetupService.initializeBunker(
+          username: cleanUsername,
+          duplicateId: cleanDuplicateId,
+        );
 
-      // The initial document has a deterministic ID, so retrying this flow does
-      // not create duplicate Survivor instances. A future trusted server can
-      // replace this client-side creation without changing the domain model.
+        _profileUsername = cleanUsername;
+        _initialDuplicateId = cleanDuplicateId;
+
+        final survivorService = _survivorService;
+        if (survivorService != null) {
+          try {
+            _survivors = await survivorService.loadSurvivors(userId: userId);
+          } catch (_) {
+            _survivors = const <Survivor>[];
+          }
+        }
+
+        if (_survivors.isEmpty) {
+          _survivors = <Survivor>[
+            Survivor(
+              id: result.survivorId,
+              duplicateId: cleanDuplicateId,
+            ),
+          ];
+        }
+
+        notifyListeners();
+        return true;
+      }
+
+      // Compatibility path for tests or alternative builds without a trusted
+      // bunker setup service. Production injects the Cloud Functions service.
+      final profileService = _userProfileService;
+      final survivorService = _survivorService;
+      if (profileService == null || survivorService == null) return false;
+
+      final initialSurvivor = Survivor(duplicateId: cleanDuplicateId);
       await survivorService.saveInitialSurvivor(
         userId: userId,
         survivor: initialSurvivor,
@@ -223,12 +259,11 @@ class SessionController extends ChangeNotifier {
           if (_survivors.isEmpty &&
               duplicateId != null &&
               duplicateById(duplicateId) != null) {
-            final migrated = Survivor(duplicateId: duplicateId);
             await survivorService.saveInitialSurvivor(
               userId: userId,
-              survivor: migrated,
+              survivor: Survivor(duplicateId: duplicateId),
             );
-            _survivors = <Survivor>[migrated];
+            _survivors = await survivorService.loadSurvivors(userId: userId);
           }
         } catch (_) {
           // Profile/authentication remains usable even if roster loading fails.
