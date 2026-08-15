@@ -12,8 +12,10 @@ import '../domain/bunker_state_service.dart';
 class BunkerStateController extends ChangeNotifier {
   BunkerStateController({
     required BunkerStateService service,
-    this.pollInterval = const Duration(seconds: 30),
-  }) : _service = service;
+    Duration pollInterval = const Duration(seconds: 30),
+  }) : this._(service, pollInterval);
+
+  BunkerStateController._(this._service, this.pollInterval);
 
   final BunkerStateService _service;
   final Duration pollInterval;
