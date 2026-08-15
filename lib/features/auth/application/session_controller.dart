@@ -195,19 +195,16 @@ class SessionController extends ChangeNotifier {
 
   Future<bool> clearInitialProfileForTesting() async {
     final profileService = _userProfileService;
-    final survivorService = _survivorService;
     final userId = _credentials?.userId;
-
-    if (profileService == null || survivorService == null || userId == null) {
-      return false;
-    }
+    if (profileService == null || userId == null) return false;
 
     try {
-      await survivorService.clearAllSurvivorsForTesting(userId: userId);
+      // Do not delete Survivors here: BunkerState is authoritative and cannot
+      // be deleted by the client. Keeping both snapshots intact avoids a debug
+      // reset leaving Firestore in an internally inconsistent state.
       await profileService.clearInitialProfile(userId: userId);
       _profileUsername = null;
       _initialDuplicateId = null;
-      _survivors = const <Survivor>[];
       notifyListeners();
       return true;
     } catch (_) {
