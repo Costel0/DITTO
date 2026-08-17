@@ -82,7 +82,7 @@ class _DebugAddItemDialogState extends State<DebugAddItemDialog> {
               controller: _quantityController,
               keyboardType: TextInputType.number,
               textInputAction: TextInputAction.done,
-              inputFormatters: const <TextInputFormatter>[
+              inputFormatters: <TextInputFormatter>[
                 FilteringTextInputFormatter.digitsOnly,
               ],
               onSubmitted: (_) => _submit(),
