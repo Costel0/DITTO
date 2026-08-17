@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/firebase/firestore_item_catalog_service.dart';
 import '../../../../core/localization/l10n.dart';
-import '../../domain/item_catalog.dart';
-import '../item_display_catalog.dart';
+import '../../domain/item.dart';
 import 'item_artwork.dart';
 import 'item_detail_dialog.dart';
 
@@ -46,24 +46,48 @@ class EquippedItemList extends StatelessWidget {
             ),
           )
         else
-          for (var index = 0; index < itemIds.length; index++) ...[
-            _EquippedItemRow(itemId: itemIds[index]),
-            if (index + 1 < itemIds.length) const SizedBox(height: 7),
-          ],
+          StreamBuilder<Map<String, Item>>(
+            stream: FirestoreItemCatalogService.instance.watchCatalog(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting &&
+                  !snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              final catalog = snapshot.data ?? const <String, Item>{};
+              return Column(
+                children: [
+                  for (var index = 0; index < itemIds.length; index++) ...[
+                    _EquippedItemRow(
+                      itemId: itemIds[index],
+                      item: catalog[itemIds[index]],
+                    ),
+                    if (index + 1 < itemIds.length)
+                      const SizedBox(height: 7),
+                  ],
+                ],
+              );
+            },
+          ),
       ],
     );
   }
 }
 
 class _EquippedItemRow extends StatelessWidget {
-  const _EquippedItemRow({required this.itemId});
+  const _EquippedItemRow({
+    required this.itemId,
+    required this.item,
+  });
 
   final String itemId;
+  final Item? item;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final item = itemById(itemId);
+    final languageCode = Localizations.localeOf(context).languageCode;
+    final name = item?.nameForLanguage(languageCode) ?? itemId;
 
     return Material(
       color: const Color(0xFF171713),
@@ -97,7 +121,7 @@ class _EquippedItemRow extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      itemNameForId(context, itemId),
+                      name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodyMedium?.copyWith(
@@ -105,10 +129,10 @@ class _EquippedItemRow extends StatelessWidget {
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    if (item != null && item.subtype.isNotEmpty) ...[
+                    if (item != null && item!.subtype.isNotEmpty) ...[
                       const SizedBox(height: 2),
                       Text(
-                        item.subtype,
+                        item!.subtype.join(' · '),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.labelSmall?.copyWith(

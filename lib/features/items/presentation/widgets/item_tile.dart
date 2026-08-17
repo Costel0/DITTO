@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../item_display_catalog.dart';
+import '../../domain/item.dart';
 import 'item_artwork.dart';
 
 class ItemTile extends StatelessWidget {
@@ -9,15 +9,19 @@ class ItemTile extends StatelessWidget {
     required this.itemId,
     required this.quantity,
     required this.onTap,
+    this.item,
   });
 
   final String itemId;
   final int quantity;
+  final Item? item;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final languageCode = Localizations.localeOf(context).languageCode;
+    final name = item?.nameForLanguage(languageCode) ?? itemId;
 
     return AspectRatio(
       aspectRatio: 1,
@@ -50,7 +54,7 @@ class ItemTile extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   color: const Color(0xFF29241C),
                   child: Text(
-                    itemNameForId(context, itemId),
+                    name,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,

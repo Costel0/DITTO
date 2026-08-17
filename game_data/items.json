@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 2,
+  "catalogVersion": 2,
+  "items": [
+    {
+      "id": "scrap_metal",
+      "type": ["resource"],
+      "subtype": ["metal"],
+      "value": 4,
+      "stackable": true,
+      "name": {
+        "en": "Scrap metal",
+        "es": "Chatarra"
+      },
+      "description": {
+        "en": "Recovered metal pieces useful for repairs and crafting.",
+        "es": "Piezas de metal recuperadas, útiles para reparaciones y fabricación."
+      },
+      "stats": {
+        "craftingValue": 1
+      }
+    },
+    {
+      "id": "field_ration",
+      "type": ["food"],
+      "subtype": ["ration"],
+      "value": 12,
+      "stackable": true,
+      "name": {
+        "en": "Field ration",
+        "es": "Ración de campo"
+      },
+      "description": {
+        "en": "A compact preserved meal intended for expeditions.",
+        "es": "Una comida compacta y conservada pensada para expediciones."
+      },
+      "stats": {
+        "hunger": 25
+      }
+    },
+    {
+      "id": "makeshift_pistol",
+      "type": ["weapon"],
+      "subtype": ["ranged"],
+      "value": 45,
+      "stackable": false,
+      "name": {
+        "en": "Makeshift pistol",
+        "es": "Pistola improvisada"
+      },
+      "description": {
+        "en": "A crude but serviceable ranged weapon assembled from recovered parts.",
+        "es": "Un arma a distancia rudimentaria pero funcional, montada con piezas recuperadas."
+      },
+      "stats": {
+        "damage": 4,
+        "range": 6,
+        "twoHanded": false
+      }
+    },
+    {
+      "id": "work_helmet",
+      "type": ["equipment"],
+      "subtype": ["head"],
+      "value": 28,
+      "stackable": false,
+      "name": {
+        "en": "Work helmet",
+        "es": "Casco de trabajo"
+      },
+      "description": {
+        "en": "A battered industrial helmet that still offers basic head protection.",
+        "es": "Un casco industrial desgastado que todavía ofrece protección básica para la cabeza."
+      },
+      "stats": {
+        "armor": 2
+      }
+    }
+  ]
+}

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/firebase/firestore_item_catalog_service.dart';
 import '../../../../core/localization/l10n.dart';
-import '../../../items/domain/item_catalog.dart';
-import '../../../items/presentation/item_display_catalog.dart';
+import '../../../items/domain/item.dart';
 import '../../../items/presentation/widgets/item_detail_dialog.dart';
 import '../../../items/presentation/widgets/item_tile.dart';
 
@@ -41,9 +41,7 @@ class HubInventory extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 12),
-              Expanded(
-                child: _buildBody(context, inventory),
-              ),
+              Expanded(child: _buildBody(context, inventory)),
             ],
           ),
         ),
@@ -70,15 +68,10 @@ class HubInventory extends StatelessWidget {
       return const Center(child: CircularProgressIndicator());
     }
 
-    final entries = inventory.entries
+    final ownedEntries = inventory.entries
         .where((entry) => entry.value > 0)
-        .toList(growable: false)
-      ..sort(
-        (a, b) => itemNameForId(context, a.key)
-            .compareTo(itemNameForId(context, b.key)),
-      );
-
-    if (entries.isEmpty) {
+        .toList(growable: false);
+    if (ownedEntries.isEmpty) {
       return Align(
         alignment: Alignment.topCenter,
         child: Text(
@@ -90,25 +83,46 @@ class HubInventory extends StatelessWidget {
       );
     }
 
-    return GridView.builder(
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 150,
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
-        childAspectRatio: 1,
-      ),
-      itemCount: entries.length,
-      itemBuilder: (context, index) {
-        final entry = entries[index];
-        return ItemTile(
-          itemId: entry.key,
-          quantity: entry.value,
-          onTap: () => ItemDetailDialog.show(
-            context,
-            itemId: entry.key,
-            quantity: entry.value,
-            item: itemById(entry.key),
+    return StreamBuilder<Map<String, Item>>(
+      stream: FirestoreItemCatalogService.instance.watchCatalog(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final catalog = snapshot.data ?? const <String, Item>{};
+        final languageCode = Localizations.localeOf(context).languageCode;
+        final entries = List<MapEntry<String, int>>.from(ownedEntries)
+          ..sort((a, b) {
+            final aName = catalog[a.key]?.nameForLanguage(languageCode) ?? a.key;
+            final bName = catalog[b.key]?.nameForLanguage(languageCode) ?? b.key;
+            return aName.compareTo(bName);
+          });
+
+        return GridView.builder(
+          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+            maxCrossAxisExtent: 150,
+            mainAxisSpacing: 12,
+            crossAxisSpacing: 12,
+            childAspectRatio: 1,
           ),
+          itemCount: entries.length,
+          itemBuilder: (context, index) {
+            final entry = entries[index];
+            final item = catalog[entry.key];
+            return ItemTile(
+              itemId: entry.key,
+              item: item,
+              quantity: entry.value,
+              onTap: () => ItemDetailDialog.show(
+                context,
+                itemId: entry.key,
+                quantity: entry.value,
+                item: item,
+              ),
+            );
+          },
         );
       },
     );
