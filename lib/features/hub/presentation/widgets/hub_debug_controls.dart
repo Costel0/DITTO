@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../../auth/application/session_controller.dart';
+import '../../../development/presentation/debug_add_item_dialog.dart';
 import '../../../survivors/domain/duplicate_catalog.dart';
 
-/// Temporary development-only controls for manipulating the local game state.
+/// Temporary development-only controls for manipulating server game state.
 ///
 /// Keep all visual debug controls here so they can be removed from the HUB with
 /// a single widget/file deletion once the real server-authoritative flows exist.
@@ -12,11 +13,13 @@ class HubDebugControls extends StatefulWidget {
     super.key,
     required this.sessionController,
     required this.onResetProfile,
+    required this.onItemAdded,
     required this.resetTooltip,
   });
 
   final SessionController sessionController;
   final Future<void> Function() onResetProfile;
+  final Future<void> Function() onItemAdded;
   final String resetTooltip;
 
   @override
@@ -26,6 +29,9 @@ class HubDebugControls extends StatefulWidget {
 class _HubDebugControlsState extends State<HubDebugControls> {
   bool _isResetting = false;
   bool _isAddingSurvivor = false;
+  bool _isAddingItem = false;
+
+  bool get _isBusy => _isResetting || _isAddingSurvivor || _isAddingItem;
 
   String? get _nextMissingDuplicateId {
     final ownedIds = widget.sessionController.survivors
@@ -39,7 +45,7 @@ class _HubDebugControlsState extends State<HubDebugControls> {
   }
 
   Future<void> _resetProfile() async {
-    if (_isResetting || _isAddingSurvivor) return;
+    if (_isBusy) return;
     setState(() => _isResetting = true);
     try {
       await widget.onResetProfile();
@@ -49,7 +55,7 @@ class _HubDebugControlsState extends State<HubDebugControls> {
   }
 
   Future<void> _addNextSurvivor() async {
-    if (_isAddingSurvivor || _isResetting) return;
+    if (_isBusy) return;
     final duplicateId = _nextMissingDuplicateId;
     if (duplicateId == null) return;
 
@@ -67,6 +73,45 @@ class _HubDebugControlsState extends State<HubDebugControls> {
     }
   }
 
+  Future<void> _addItem() async {
+    if (_isBusy) return;
+
+    final request = await DebugAddItemDialog.show(context);
+    if (!mounted || request == null) return;
+
+    setState(() => _isAddingItem = true);
+    try {
+      final added = await widget.sessionController.addItemForTesting(
+        itemId: request.itemId,
+        quantity: request.quantity,
+      );
+      if (!mounted) return;
+
+      if (!added) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'DEBUG: Could not add item. Check that the ID exists in the server catalog.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      await widget.onItemAdded();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'DEBUG: Added ${request.quantity} × ${request.itemId}.',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isAddingItem = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final nextDuplicateId = _nextMissingDuplicateId;
@@ -77,7 +122,7 @@ class _HubDebugControlsState extends State<HubDebugControls> {
         IconButton(
           tooltip: widget.resetTooltip,
           visualDensity: VisualDensity.compact,
-          onPressed: _isAddingSurvivor || _isResetting ? null : _resetProfile,
+          onPressed: _isBusy ? null : _resetProfile,
           icon: _isResetting
               ? const SizedBox(
                   width: 17,
@@ -95,9 +140,7 @@ class _HubDebugControlsState extends State<HubDebugControls> {
               ? 'DEBUG: All predefined Survivors owned'
               : 'DEBUG: Add Survivor $nextDuplicateId',
           visualDensity: VisualDensity.compact,
-          onPressed: nextDuplicateId == null ||
-                  _isAddingSurvivor ||
-                  _isResetting
+          onPressed: nextDuplicateId == null || _isBusy
               ? null
               : _addNextSurvivor,
           icon: _isAddingSurvivor
@@ -108,6 +151,22 @@ class _HubDebugControlsState extends State<HubDebugControls> {
                 )
               : const Icon(
                   Icons.person_add_alt_1_rounded,
+                  size: 19,
+                  color: Color(0xFF817866),
+                ),
+        ),
+        IconButton(
+          tooltip: 'DEBUG: Add item',
+          visualDensity: VisualDensity.compact,
+          onPressed: _isBusy ? null : _addItem,
+          icon: _isAddingItem
+              ? const SizedBox(
+                  width: 17,
+                  height: 17,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(
+                  Icons.add_box_outlined,
                   size: 19,
                   color: Color(0xFF817866),
                 ),
