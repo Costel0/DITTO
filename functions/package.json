@@ -7,7 +7,8 @@
   },
   "scripts": {
     "serve": "firebase emulators:start --only functions,firestore",
-    "deploy": "firebase deploy --only functions"
+    "deploy": "firebase deploy --only functions",
+    "sync:items": "node scripts/sync_items_catalog.js"
   },
   "dependencies": {
     "firebase-admin": "^14.2.0",
