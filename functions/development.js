@@ -5,10 +5,11 @@ const {onCall, HttpsError} = require("firebase-functions/v2/https");
 //
 // This module contains every callable that bypasses normal gameplay acquisition
 // rules. Production can remove this file + the three exports in index.js, or
-// set DEVELOPMENT_TOOLS_REQUIRE_ADMIN to true and grant the Firebase Auth
+// set DITTO_DEVELOPMENT_TOOLS_REQUIRE_ADMIN=true and grant the Firebase Auth
 // custom claim {admin: true} only to trusted accounts.
 const REGION = "europe-west1";
-const DEVELOPMENT_TOOLS_REQUIRE_ADMIN = false;
+const DEVELOPMENT_TOOLS_REQUIRE_ADMIN =
+  process.env.DITTO_DEVELOPMENT_TOOLS_REQUIRE_ADMIN === "true";
 const VALID_DUPLICATE_IDS = new Set(["01", "02", "03", "04"]);
 const ITEM_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const MAX_INVENTORY_QUANTITY = 1000000000;
