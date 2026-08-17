@@ -91,11 +91,13 @@ class ItemDetailDialog extends StatelessWidget {
         if (item != null) ...[
           _DetailRow(
             label: l10n.itemDetailType,
-            value: _typeLabel(context, item!.type),
+            value: item!.type
+                .map((type) => _typeLabel(context, type))
+                .join(' · '),
           ),
           _DetailRow(
             label: l10n.itemDetailSubtype,
-            value: item!.subtype.isEmpty ? '-' : item!.subtype,
+            value: item!.subtype.isEmpty ? '-' : item!.subtype.join(' · '),
           ),
           _DetailRow(
             label: l10n.itemDetailValue,
