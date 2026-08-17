@@ -94,11 +94,17 @@ class Item {
     String itemId, {
     bool allowEmpty = true,
   }) {
-    if (raw is! List || raw.any((value) => value is! String)) {
+    // Temporary migration compatibility: documents written with catalog schema
+    // v1 stored type/subtype as a single string. New writes always use lists.
+    final List<String> values;
+    if (raw is String) {
+      values = <String>[raw.trim()];
+    } else if (raw is List && raw.every((value) => value is String)) {
+      values = raw.cast<String>().map((value) => value.trim()).toList();
+    } else {
       throw FormatException('Item $itemId $field must be a list of strings.');
     }
 
-    final values = raw.cast<String>().map((value) => value.trim()).toList();
     if (values.any((value) => value.isEmpty)) {
       throw FormatException('Item $itemId $field cannot contain empty values.');
     }
