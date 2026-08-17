@@ -12,15 +12,17 @@ From the repository root:
 cd functions
 npm install
 npm run sync:items -- --dry-run
-npm run sync:items -- --project=YOUR_FIREBASE_PROJECT_ID
+npm run sync:items
 ```
 
-The script uses Firebase Admin Application Default Credentials. Locally, configure `GOOGLE_APPLICATION_CREDENTIALS` with a service-account JSON path or use another Application Default Credentials setup supported by Firebase Admin.
+The script resolves the Firebase project from `--project=...`, the standard Google Cloud project environment variables, or the repository `.firebaserc` (currently `ditto-app-project`).
+
+It uses Firebase Admin Application Default Credentials. Locally, configure `GOOGLE_APPLICATION_CREDENTIALS` with a service-account JSON path or use another Application Default Credentials setup supported by Firebase Admin.
 
 Use `--prune` only when `game_data/items.json` should be treated as the exact complete catalog; it deletes Firestore `/items` documents whose IDs are absent from the JSON.
 
 ```bash
-npm run sync:items -- --project=YOUR_FIREBASE_PROJECT_ID --prune
+npm run sync:items -- --prune
 ```
 
 When `FIRESTORE_EMULATOR_HOST` is set, the script targets the Firestore emulator instead.
