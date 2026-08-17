@@ -10,7 +10,7 @@ DITTO uses Firebase Authentication for account identity, Cloud Firestore for per
 - The Function validates Firebase Auth + App Check, then atomically creates the profile, initial Survivor and authoritative BunkerState.
 - Flutter may read `users/{uid}/state/bunker`, but Firestore rules prevent the client from writing it directly.
 - `users/{uid}/survivors/*` is also read-only from Flutter. Survivor creation/mutations must go through trusted backend code.
-- The temporary HUB debug add-Survivor button calls `addSurvivorForTesting`, which updates the Survivor document and BunkerState in one Firestore transaction. Remove this Function with the debug button once the real acquisition flow exists.
+- Temporary gameplay-bypassing tools are isolated behind a development service in Flutter and `functions/development.js` on the backend.
 - Future lightweight operations should normally follow `app -> Cloud Functions -> Firestore`.
 - Operations that need heavier simulation or long-running computation can later follow `app -> VM -> Cloud Functions -> Firestore` or another trusted-server path.
 
@@ -19,6 +19,15 @@ The temporary **Skip** button remains local and is not part of the production Fi
 ## Firestore layout
 
 ```text
+items/{itemId}
+  type
+  subtype
+  value
+  stackable
+  name
+  description
+  stats
+
 users/{uid}
   email
   username
@@ -88,7 +97,8 @@ Functions source lives in:
 
 ```text
 functions/
-  index.js
+  index.js          # normal trusted gameplay entrypoints
+  development.js    # removable development-only mutations
   package.json
 ```
 
@@ -97,9 +107,33 @@ Current callable Functions:
 ```text
 initializeBunker
 addSurvivorForTesting   # temporary development helper
+addItemForTesting       # temporary development helper
+resetUserForTesting     # temporary development helper
 ```
 
-Both run in `europe-west1`, with `minInstances: 0`, `maxInstances: 1`, a short timeout, Firebase Authentication validation and App Check enforcement.
+They run in `europe-west1`, with `minInstances: 0`, `maxInstances: 1`, short timeouts, Firebase Authentication validation and App Check enforcement.
+
+`addItemForTesting` validates that the requested item ID exists in the server `items` catalog before incrementing `BunkerState.inventory`. It also increments the bunker `revision` and updates `serverUpdatedAt`.
+
+### Development-tools access boundary
+
+All gameplay-bypassing backend helpers live in `functions/development.js` and all client calls live behind `DevelopmentService` / `FirebaseFunctionsDevelopmentService`.
+
+The HUB debug widget renders nothing outside Flutter debug builds (`kDebugMode`). This removes the buttons from release/profile builds, but the callable endpoints must still be removed or restricted before production because hiding UI is not a server-side security boundary.
+
+The development Functions can be switched to admin-only access by setting:
+
+```text
+DITTO_DEVELOPMENT_TOOLS_REQUIRE_ADMIN=true
+```
+
+When enabled, the Functions require the authenticated Firebase user to have the custom claim:
+
+```json
+{"admin": true}
+```
+
+Custom claims must only be assigned from trusted server/admin tooling. Before production, either enable this admin gate or preferably remove the development module and its exports entirely if the tools are no longer needed.
 
 ### One-time setup
 
@@ -139,7 +173,7 @@ Flutter activates App Check only in debug builds for now:
 - Apple: debug provider once the iOS Firebase app is reconfigured.
 - Web: debug provider.
 
-The debug token must be registered in Firebase Console before deploying the App-Check-enforced callable Functions.
+The debug token must be registered in Firebase Console before deploying App-Check-enforced callable Functions.
 
 Recommended Android flow:
 
@@ -150,17 +184,17 @@ Recommended Android flow:
 5. Register the token. Never commit it to Git.
 6. Deploy the Functions and Firestore rules.
 
-Deploy both callables and rules with:
+Deploy current callables and rules with:
 
 ```powershell
-firebase deploy --only "functions:initializeBunker,functions:addSurvivorForTesting,firestore:rules"
+firebase deploy --only "functions:initializeBunker,functions:addSurvivorForTesting,functions:addItemForTesting,functions:resetUserForTesting,firestore:rules"
 ```
 
 Cloud Functions has `enforceAppCheck: true`, so calls without a valid App Check token are rejected before game logic executes.
 
-For Cloud Firestore, App Check enforcement is enabled separately from Firebase Console. Enable it only after the debug token is registered and verified, otherwise local development requests will be rejected.
+For Cloud Firestore, App Check enforcement is enabled separately from Firebase Console. Enable it only after the debug tokens for every development platform you still use are registered and verified, otherwise those local requests will be rejected.
 
-Before production, replace the debug providers with real attestation providers, primarily Play Integrity on Android and an Apple production provider on iOS. Never ship a debug provider/token in a production build.
+Before production, replace the debug providers with real attestation providers, primarily Play Integrity on Android and reCAPTCHA Enterprise for Web. Never ship a debug provider/token in a production build.
 
 ## Flutter dependencies
 
@@ -210,9 +244,13 @@ The Firestore adapter converts Firestore timestamps into the normalized JSON rep
 
 ## Development controls
 
-The add-Survivor debug control no longer writes Firestore directly. It calls the temporary trusted `addSurvivorForTesting` Function.
+The three HUB debug controls are currently:
 
-The profile reset debug control only clears profile setup fields. It intentionally leaves Survivor documents and BunkerState intact so the client cannot create a partially deleted authoritative state. Re-enter the same initial Duplicate to recover the profile. For a completely fresh account or a different initial Duplicate, use a fresh test account or delete the authoritative state manually in Firebase Console.
+- Reset user Firestore state through `resetUserForTesting` while preserving Firebase Authentication.
+- Add the next missing predefined Survivor through `addSurvivorForTesting`.
+- Add an arbitrary positive quantity of an existing server-catalog item through `addItemForTesting`.
+
+None of these controls writes authoritative Firestore gameplay data directly from Flutter.
 
 ## Future VM
 
