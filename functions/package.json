@@ -9,7 +9,11 @@
     "serve": "firebase emulators:start --only functions,firestore",
     "deploy": "firebase deploy --only functions",
     "sync:items": "node scripts/sync_items_catalog.js",
-    "sync:server-data": "node scripts/sync_server_data.js"
+    "sync:items:check": "node scripts/sync_items_catalog.js --dry-run",
+    "sync:items:exact": "node scripts/sync_items_catalog.js --prune",
+    "sync:server-data": "node scripts/sync_server_data.js",
+    "sync:server-data:check": "node scripts/sync_server_data.js --dry-run",
+    "sync:server-data:exact": "node scripts/sync_server_data.js --prune"
   },
   "dependencies": {
     "firebase-admin": "^14.2.0",
