@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/localization/l10n.dart';
+import '../../../items/presentation/widgets/equipped_item_list.dart';
 import '../../../survivors/domain/duplicate_catalog.dart';
 import '../../../survivors/domain/survivor.dart';
 import '../../../survivors/presentation/widgets/survivor_portrait_artwork.dart';
@@ -174,6 +175,8 @@ class HubCharacterInfo extends StatelessWidget {
                         ),
                   ),
                 ),
+                const SizedBox(height: 18),
+                EquippedItemList(itemIds: survivor.equippedItemIds),
               ],
             ),
           ),

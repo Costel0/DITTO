@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 
 import '../../../../app/navigation/app_routes.dart';
+import '../../../../core/firebase/firestore_bunker_state_service.dart';
 import '../../../../core/localization/l10n.dart';
 import '../../../../core/presentation/survival_background.dart';
 import '../../../auth/application/session_controller.dart';
+import '../../../bunker/application/bunker_state_controller.dart';
 import '../../../hub/domain/hub_scene_configuration.dart';
 import '../../../hub/presentation/widgets/hub_character_info.dart';
 import '../../../hub/presentation/widgets/hub_debug_controls.dart';
+import '../../../hub/presentation/widgets/hub_inventory.dart';
 import '../../../hub/presentation/widgets/hub_scrollable_scene.dart';
 import '../../../survivors/domain/survivor.dart';
 
@@ -31,6 +34,7 @@ enum _HubSection {
 class _WelcomeScreenState extends State<WelcomeScreen> {
   _HubSection _selectedSection = _HubSection.character;
   int _selectedSurvivorIndex = 0;
+  BunkerStateController? _bunkerStateController;
 
   SessionController get sessionController => widget.sessionController;
 
@@ -38,11 +42,29 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   void initState() {
     super.initState();
     sessionController.addListener(_onSessionChanged);
+    _initializeBunkerStateController();
+  }
+
+  void _initializeBunkerStateController() {
+    final userId = sessionController.credentials?.userId;
+    if (userId == null || userId.isEmpty) return;
+
+    final controller = BunkerStateController(
+      service: FirestoreBunkerStateService(userId: userId),
+    );
+    controller.addListener(_onBunkerStateChanged);
+    _bunkerStateController = controller;
+    controller.startPolling();
   }
 
   @override
   void dispose() {
     sessionController.removeListener(_onSessionChanged);
+    final bunkerController = _bunkerStateController;
+    if (bunkerController != null) {
+      bunkerController.removeListener(_onBunkerStateChanged);
+      bunkerController.dispose();
+    }
     super.dispose();
   }
 
@@ -57,6 +79,11 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         _selectedSurvivorIndex = rosterLength - 1;
       }
     });
+  }
+
+  void _onBunkerStateChanged() {
+    if (!mounted) return;
+    setState(() {});
   }
 
   Future<void> _logout(BuildContext context) async {
@@ -116,6 +143,12 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     if (roster.isEmpty) return null;
     if (_selectedSurvivorIndex >= roster.length) return roster.last;
     return roster[_selectedSurvivorIndex];
+  }
+
+  Map<String, int>? get _inventory {
+    final controller = _bunkerStateController;
+    if (controller == null) return const <String, int>{};
+    return controller.state?.inventory;
   }
 
   void _openCharacterFromSlot(HubCharacterSlot slot) {
@@ -203,6 +236,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                                     child: _HubSectionView(
                                       section: _selectedSection,
                                       survivor: _selectedSurvivor,
+                                      inventory: _inventory,
+                                      inventoryLoadError:
+                                          _bunkerStateController?.lastError,
                                       onPreviousSurvivor:
                                           _selectedSurvivorIndex > 0
                                               ? () =>
@@ -466,12 +502,16 @@ class _HubSectionView extends StatelessWidget {
   const _HubSectionView({
     required this.section,
     required this.survivor,
+    required this.inventory,
+    required this.inventoryLoadError,
     required this.onPreviousSurvivor,
     required this.onNextSurvivor,
   });
 
   final _HubSection section;
   final Survivor? survivor;
+  final Map<String, int>? inventory;
+  final Object? inventoryLoadError;
   final VoidCallback? onPreviousSurvivor;
   final VoidCallback? onNextSurvivor;
 
@@ -491,11 +531,10 @@ class _HubSectionView extends StatelessWidget {
           ),
         );
       case _HubSection.inventory:
-        return _HubSectionContent(
+        return HubInventory(
           key: const ValueKey(_HubSection.inventory),
-          icon: Icons.backpack_outlined,
-          title: l10n.hubInventoryTitle,
-          description: l10n.hubInventoryDescription,
+          inventory: inventory,
+          loadError: inventoryLoadError,
         );
       case _HubSection.expeditions:
         return _HubSectionContent(
