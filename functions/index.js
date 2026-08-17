@@ -13,10 +13,6 @@ const CALLABLE_OPTIONS = {
   timeoutSeconds: 15,
   enforceAppCheck: true,
 };
-const RESET_CALLABLE_OPTIONS = {
-  ...CALLABLE_OPTIONS,
-  timeoutSeconds: 30,
-};
 
 function zeroStatMods() {
   return {
@@ -208,108 +204,9 @@ exports.initializeBunker = onCall(
   },
 );
 
-// Temporary development helper. Remove this callable together with the HUB
-// debug add-Survivor button once the real acquisition flow is implemented.
-exports.addSurvivorForTesting = onCall(
-  CALLABLE_OPTIONS,
-  async (request) => {
-    if (!request.auth) {
-      throw new HttpsError(
-        "unauthenticated",
-        "Authentication is required to add a Survivor.",
-      );
-    }
+// All gameplay-bypassing helpers live in one removable development module.
+const development = require("./development");
 
-    const duplicateId = typeof request.data?.duplicateId === "string"
-      ? request.data.duplicateId.trim()
-      : "";
-    if (!VALID_DUPLICATE_IDS.has(duplicateId)) {
-      throw new HttpsError("invalid-argument", "Invalid Duplicate ID.");
-    }
-
-    const uid = request.auth.uid;
-    const db = getFirestore();
-    const userRef = db.collection("users").doc(uid);
-    const bunkerRef = userRef.collection("state").doc("bunker");
-    const survivorRef = userRef.collection("survivors").doc();
-
-    return db.runTransaction(async (transaction) => {
-      const bunkerSnapshot = await transaction.get(bunkerRef);
-      if (!bunkerSnapshot.exists) {
-        throw new HttpsError(
-          "failed-precondition",
-          "The bunker must be initialized before adding Survivors.",
-        );
-      }
-
-      const bunker = bunkerSnapshot.data() || {};
-      const survivors = Array.isArray(bunker.survivors)
-        ? bunker.survivors
-        : [];
-      if (survivors.some((survivor) => survivor?.duplicateId === duplicateId)) {
-        throw new HttpsError(
-          "already-exists",
-          "This Duplicate is already part of the bunker.",
-        );
-      }
-
-      const survivorId = survivorRef.id;
-      const survivor = normalizedSurvivor(null, survivorId, duplicateId);
-      const idleSurvivors = Array.isArray(bunker.idleSurvivors)
-        ? bunker.idleSurvivors.filter((id) => typeof id === "string")
-        : [];
-      const revision = Number.isInteger(bunker.revision)
-        ? bunker.revision + 1
-        : 1;
-      const now = FieldValue.serverTimestamp();
-
-      transaction.create(survivorRef, {
-        ...survivor,
-        createdAt: now,
-        updatedAt: now,
-      });
-      transaction.update(bunkerRef, {
-        survivors: [...survivors, survivor],
-        idleSurvivors: [...new Set([...idleSurvivors, survivorId])],
-        revision,
-        serverUpdatedAt: now,
-      });
-
-      return {
-        survivorId,
-        duplicateId,
-        created: true,
-      };
-    });
-  },
-);
-
-// Temporary development helper. Deletes the authenticated user's entire
-// Firestore subtree under users/{uid}, but intentionally preserves Firebase
-// Authentication so the same account can run the initial setup again.
-exports.resetUserForTesting = onCall(
-  RESET_CALLABLE_OPTIONS,
-  async (request) => {
-    if (!request.auth) {
-      throw new HttpsError(
-        "unauthenticated",
-        "Authentication is required to reset user data.",
-      );
-    }
-    if (request.data?.confirm !== true) {
-      throw new HttpsError(
-        "failed-precondition",
-        "Explicit confirmation is required to reset user data.",
-      );
-    }
-
-    const db = getFirestore();
-    const userRef = db.collection("users").doc(request.auth.uid);
-
-    await db.recursiveDelete(userRef);
-
-    return {
-      deleted: true,
-    };
-  },
-);
+exports.addSurvivorForTesting = development.addSurvivorForTesting;
+exports.addItemForTesting = development.addItemForTesting;
+exports.resetUserForTesting = development.resetUserForTesting;
