@@ -18,7 +18,7 @@ class ItemDetailDialog extends StatelessWidget {
   final int quantity;
   final Item? item;
 
-  static Future<void?> show(
+  static Future<void> show(
     BuildContext context, {
     required String itemId,
     required int quantity,
