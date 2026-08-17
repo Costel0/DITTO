@@ -6,7 +6,7 @@
       "id": "scrap_metal",
       "type": ["resource"],
       "subtype": ["metal"],
-      "value": 4,
+      "value": 2,
       "stackable": true,
       "name": {
         "en": "Scrap metal",
@@ -39,23 +39,24 @@
       }
     },
     {
-      "id": "makeshift_pistol",
-      "type": ["weapon"],
-      "subtype": ["ranged"],
-      "value": 45,
-      "stackable": false,
+      "id": "wood_plank",
+      "type": ["weapon", "resource"],
+      "subtype": ["melee", "wood"],
+      "value": 4,
+      "stackable": true,
       "name": {
-        "en": "Makeshift pistol",
-        "es": "Pistola improvisada"
+        "en": "Wood plank",
+        "es": "Tablón de madera"
       },
       "description": {
-        "en": "A crude but serviceable ranged weapon assembled from recovered parts.",
-        "es": "Un arma a distancia rudimentaria pero funcional, montada con piezas recuperadas."
+        "en": "A medium size pece of wood",
+        "es": "Un tablón de madera de tamaño medio"
       },
       "stats": {
-        "damage": 4,
-        "range": 6,
-        "twoHanded": false
+        "damage": 1,
+        "range": 2,
+        "twoHanded": false,
+        "craftingValue": 2
       }
     },
     {
