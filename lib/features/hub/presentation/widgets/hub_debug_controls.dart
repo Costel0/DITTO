@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../auth/application/session_controller.dart';
@@ -8,18 +9,19 @@ import '../../../survivors/domain/duplicate_catalog.dart';
 ///
 /// Keep all visual debug controls here so they can be removed from the HUB with
 /// a single widget/file deletion once the real server-authoritative flows exist.
+/// This widget renders nothing outside debug builds.
 class HubDebugControls extends StatefulWidget {
   const HubDebugControls({
     super.key,
     required this.sessionController,
     required this.onResetProfile,
-    required this.onItemAdded,
+    this.onItemAdded,
     required this.resetTooltip,
   });
 
   final SessionController sessionController;
   final Future<void> Function() onResetProfile;
-  final Future<void> Function() onItemAdded;
+  final Future<void> Function()? onItemAdded;
   final String resetTooltip;
 
   @override
@@ -98,7 +100,10 @@ class _HubDebugControlsState extends State<HubDebugControls> {
         return;
       }
 
-      await widget.onItemAdded();
+      final onItemAdded = widget.onItemAdded;
+      if (onItemAdded != null) {
+        await onItemAdded();
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -114,6 +119,8 @@ class _HubDebugControlsState extends State<HubDebugControls> {
 
   @override
   Widget build(BuildContext context) {
+    if (!kDebugMode) return const SizedBox.shrink();
+
     final nextDuplicateId = _nextMissingDuplicateId;
 
     return Row(
