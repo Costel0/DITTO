@@ -132,7 +132,7 @@ class _EquippedItemRow extends StatelessWidget {
                     if (item != null && item!.subtype.isNotEmpty) ...[
                       const SizedBox(height: 2),
                       Text(
-                        item!.subtype,
+                        item!.subtype.join(' · '),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.labelSmall?.copyWith(
