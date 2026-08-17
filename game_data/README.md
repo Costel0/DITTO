@@ -20,17 +20,19 @@ From the repository root:
 ```bash
 cd functions
 npm install
-npm run sync:items -- --dry-run
-npm run sync:items -- --prune
+npm run sync:items:check
+npm run sync:items:exact
 ```
 
-`--dry-run` validates the local JSON without writing to Firestore.
+`sync:items:check` validates the local JSON without initializing Firestore or writing anything.
 
-`--prune` treats `game_data/items.json` as the complete source of truth: it writes all local item definitions and deletes `/items` documents whose IDs are no longer present locally.
+`sync:items:exact` treats `game_data/items.json` as the complete source of truth: it writes all local item definitions and deletes `/items` documents whose IDs are no longer present locally.
+
+The underlying Node script still supports `--dry-run` and `--prune` when invoked directly. Dedicated npm commands are used because some npm versions interpret `--dry-run` as an npm option instead of forwarding it to the child script.
 
 The script resolves the Firebase project from `--project=...`, the standard Google Cloud project environment variables, or the repository `.firebaserc` (currently `ditto-app-project`).
 
-It uses Firebase Admin Application Default Credentials. Locally, configure `GOOGLE_APPLICATION_CREDENTIALS` with a service-account JSON path or use another Application Default Credentials setup supported by Firebase Admin.
+It uses Firebase Admin Application Default Credentials. For local development, Application Default Credentials can be configured with the Google Cloud CLI or via `GOOGLE_APPLICATION_CREDENTIALS` pointing to a securely stored service-account JSON file.
 
 When `FIRESTORE_EMULATOR_HOST` is set, the script targets the Firestore emulator instead.
 
@@ -49,11 +51,13 @@ Sync them with:
 
 ```bash
 cd functions
-npm run sync:server-data -- --dry-run
-npm run sync:server-data -- --prune
+npm run sync:server-data:check
+npm run sync:server-data:exact
 ```
 
-Each Firestore `/serverData/{documentId}` document is replaced with exactly the root JSON object from its corresponding local file. `--prune` also deletes remote `/serverData` documents that no longer have a local JSON file.
+`sync:server-data:check` validates all local private JSON files without initializing Firestore or writing anything.
+
+Each Firestore `/serverData/{documentId}` document is replaced with exactly the root JSON object from its corresponding local file. `sync:server-data:exact` also deletes remote `/serverData` documents that no longer have a local JSON file.
 
 Client Firestore rules explicitly deny all access to `/serverData`. Cloud Functions and trusted VM processes using Firebase Admin can access it because Admin SDK bypasses client security rules.
 
