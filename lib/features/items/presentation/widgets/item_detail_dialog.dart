@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/localization/l10n.dart';
+import '../../../../core/presentation/detail_popup.dart';
 import '../../domain/item.dart';
 import '../item_display_catalog.dart';
 import 'item_artwork.dart';
@@ -17,7 +18,7 @@ class ItemDetailDialog extends StatelessWidget {
   final int quantity;
   final Item? item;
 
-  static Future<void> show(
+  static Future<void?> show(
     BuildContext context, {
     required String itemId,
     required int quantity,
@@ -56,112 +57,76 @@ class ItemDetailDialog extends StatelessWidget {
         ? catalogDescription
         : item?.description ?? '';
 
-    return Dialog(
-      backgroundColor: const Color(0xFF171713),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(7),
-        side: const BorderSide(color: Color(0xFF5A4E3B)),
-      ),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(22, 18, 22, 22),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Text(
-                      itemNameForId(context, itemId),
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        color: const Color(0xFFE7D9BE),
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close_rounded),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Center(
-                child: Container(
-                  width: 210,
-                  height: 210,
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF11110E),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: const Color(0xFF4C4437)),
-                  ),
-                  child: ItemArtwork(
-                    itemId: itemId,
-                    placeholderIconSize: 70,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 18),
-              if (resolvedDescription.isNotEmpty) ...[
-                Text(
-                  resolvedDescription,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFFAAA18F),
-                    height: 1.45,
-                  ),
-                ),
-                const SizedBox(height: 18),
-              ],
-              _DetailRow(
-                label: l10n.itemDetailQuantity,
-                value: quantity.toString(),
-              ),
-              if (item != null) ...[
-                _DetailRow(
-                  label: l10n.itemDetailType,
-                  value: _typeLabel(context, item!.type),
-                ),
-                _DetailRow(
-                  label: l10n.itemDetailSubtype,
-                  value: item!.subtype.isEmpty ? '-' : item!.subtype,
-                ),
-                _DetailRow(
-                  label: l10n.itemDetailValue,
-                  value: item!.value.toString(),
-                ),
-                if (item!.stats.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    l10n.itemDetailStats,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      color: const Color(0xFFD3C29E),
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  for (final entry in item!.stats.entries)
-                    _DetailRow(
-                      label: entry.key,
-                      value: entry.value.toString(),
-                    ),
-                ],
-              ] else ...[
-                const SizedBox(height: 8),
-                Text(
-                  l10n.itemDetailUnknown,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: const Color(0xFF827A6D),
-                  ),
-                ),
-              ],
-            ],
-          ),
+    return DetailPopup(
+      title: itemNameForId(context, itemId),
+      preview: Container(
+        width: 210,
+        height: 210,
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: const Color(0xFF11110E),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: const Color(0xFF4C4437)),
+        ),
+        child: ItemArtwork(
+          itemId: itemId,
+          placeholderIconSize: 70,
         ),
       ),
+      children: [
+        if (resolvedDescription.isNotEmpty) ...[
+          Text(
+            resolvedDescription,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: const Color(0xFFAAA18F),
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: 18),
+        ],
+        _DetailRow(
+          label: l10n.itemDetailQuantity,
+          value: quantity.toString(),
+        ),
+        if (item != null) ...[
+          _DetailRow(
+            label: l10n.itemDetailType,
+            value: _typeLabel(context, item!.type),
+          ),
+          _DetailRow(
+            label: l10n.itemDetailSubtype,
+            value: item!.subtype.isEmpty ? '-' : item!.subtype,
+          ),
+          _DetailRow(
+            label: l10n.itemDetailValue,
+            value: item!.value.toString(),
+          ),
+          if (item!.stats.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              l10n.itemDetailStats,
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: const Color(0xFFD3C29E),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            for (final entry in item!.stats.entries)
+              _DetailRow(
+                label: entry.key,
+                value: entry.value.toString(),
+              ),
+          ],
+        ] else ...[
+          const SizedBox(height: 8),
+          Text(
+            l10n.itemDetailUnknown,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: const Color(0xFF827A6D),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
