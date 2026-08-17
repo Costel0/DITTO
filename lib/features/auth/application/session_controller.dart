@@ -1,10 +1,10 @@
 import 'package:flutter/foundation.dart';
 
 import '../../bunker/domain/bunker_setup_service.dart';
+import '../../development/domain/development_service.dart';
 import '../../profile/domain/user_profile_service.dart';
 import '../../survivors/domain/duplicate_catalog.dart';
 import '../../survivors/domain/survivor.dart';
-import '../../survivors/domain/survivor_development_service.dart';
 import '../../survivors/domain/survivor_service.dart';
 import '../domain/auth_service.dart';
 
@@ -12,13 +12,13 @@ class SessionController extends ChangeNotifier {
   SessionController({
     required AuthService authService,
     BunkerSetupService? bunkerSetupService,
-    SurvivorDevelopmentService? survivorDevelopmentService,
+    DevelopmentService? developmentService,
     UserProfileService? userProfileService,
     SurvivorService? survivorService,
   }) : this._(
           authService,
           bunkerSetupService,
-          survivorDevelopmentService,
+          developmentService,
           userProfileService,
           survivorService,
         );
@@ -26,14 +26,14 @@ class SessionController extends ChangeNotifier {
   SessionController._(
     this._authService,
     this._bunkerSetupService,
-    this._survivorDevelopmentService,
+    this._developmentService,
     this._userProfileService,
     this._survivorService,
   );
 
   final AuthService _authService;
   final BunkerSetupService? _bunkerSetupService;
-  final SurvivorDevelopmentService? _survivorDevelopmentService;
+  final DevelopmentService? _developmentService;
   final UserProfileService? _userProfileService;
   final SurvivorService? _survivorService;
 
@@ -168,7 +168,7 @@ class SessionController extends ChangeNotifier {
   /// Temporary development-only command. The mutation itself is executed by a
   /// callable Cloud Function so Firestore remains server-authoritative.
   Future<bool> addSurvivorForTesting(String duplicateId) async {
-    final developmentService = _survivorDevelopmentService;
+    final developmentService = _developmentService;
     final survivorService = _survivorService;
     final userId = _credentials?.userId;
     final cleanDuplicateId = duplicateId.trim();
@@ -193,10 +193,38 @@ class SessionController extends ChangeNotifier {
     }
   }
 
+  /// Temporary development-only command. Inventory remains authoritative in
+  /// BunkerState and is mutated only by the trusted callable.
+  Future<bool> addItemForTesting({
+    required String itemId,
+    required int quantity,
+  }) async {
+    final developmentService = _developmentService;
+    final userId = _credentials?.userId;
+    final cleanItemId = itemId.trim();
+
+    if (developmentService == null ||
+        userId == null ||
+        cleanItemId.isEmpty ||
+        quantity <= 0) {
+      return false;
+    }
+
+    try {
+      await developmentService.addItemForTesting(
+        itemId: cleanItemId,
+        quantity: quantity,
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Temporary development-only reset. Firebase Authentication is preserved,
   /// while the trusted callable recursively deletes the user's Firestore tree.
   Future<bool> clearInitialProfileForTesting() async {
-    final developmentService = _survivorDevelopmentService;
+    final developmentService = _developmentService;
     final userId = _credentials?.userId;
     if (developmentService == null || userId == null) return false;
 
