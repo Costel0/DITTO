@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../../../core/localization/l10n.dart';
 import '../../../../core/presentation/detail_popup.dart';
 import '../../domain/item.dart';
-import '../item_display_catalog.dart';
 import 'item_artwork.dart';
 
 class ItemDetailDialog extends StatelessWidget {
@@ -34,17 +33,19 @@ class ItemDetailDialog extends StatelessWidget {
     );
   }
 
-  String _typeLabel(BuildContext context, ItemType type) {
+  String _typeLabel(BuildContext context, String type) {
     final l10n = context.l10n;
     switch (type) {
-      case ItemType.weapon:
+      case 'weapon':
         return l10n.itemTypeWeapon;
-      case ItemType.equipment:
+      case 'equipment':
         return l10n.itemTypeEquipment;
-      case ItemType.resource:
+      case 'resource':
         return l10n.itemTypeResource;
-      case ItemType.food:
+      case 'food':
         return l10n.itemTypeFood;
+      default:
+        return type;
     }
   }
 
@@ -52,13 +53,12 @@ class ItemDetailDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = context.l10n;
-    final catalogDescription = itemDescriptionForId(context, itemId);
-    final resolvedDescription = catalogDescription.isNotEmpty
-        ? catalogDescription
-        : item?.description ?? '';
+    final languageCode = Localizations.localeOf(context).languageCode;
+    final name = item?.nameForLanguage(languageCode) ?? itemId;
+    final description = item?.descriptionForLanguage(languageCode) ?? '';
 
     return DetailPopup(
-      title: itemNameForId(context, itemId),
+      title: name,
       preview: Container(
         width: 210,
         height: 210,
@@ -74,9 +74,9 @@ class ItemDetailDialog extends StatelessWidget {
         ),
       ),
       children: [
-        if (resolvedDescription.isNotEmpty) ...[
+        if (description.isNotEmpty) ...[
           Text(
-            resolvedDescription,
+            description,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: const Color(0xFFAAA18F),
               height: 1.45,
