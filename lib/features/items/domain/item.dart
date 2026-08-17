@@ -13,13 +13,13 @@ class Item {
   /// Stable identifier used by inventories, equipment and local artwork.
   final String id;
 
-  /// Server-defined category. Current values are weapon, equipment, resource
-  /// and food. It remains a string so adding future categories does not make an
-  /// older client unable to deserialize the catalog.
-  final String type;
+  /// Server-defined categories. An item may belong to more than one category,
+  /// for example both `weapon` and `resource`.
+  final List<String> type;
 
-  /// Server-defined subtype such as head, ranged, twohanded, medical, etc.
-  final String subtype;
+  /// Server-defined subtypes such as `head`, `ranged`, `twohanded`, etc.
+  /// Multiple subtypes may apply to the same item.
+  final List<String> subtype;
   final int value;
   final bool stackable;
 
@@ -41,8 +41,8 @@ class Item {
       _localizedValue(descriptions, languageCode);
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'type': type,
-        'subtype': subtype,
+        'type': List<String>.from(type),
+        'subtype': List<String>.from(subtype),
         'value': value,
         'stackable': stackable,
         'name': Map<String, String>.from(names),
@@ -54,8 +54,8 @@ class Item {
     String id,
     Map<String, dynamic> data,
   ) {
-    final type = data['type'];
-    final subtype = data['subtype'];
+    final types = _stringList(data['type'], 'type', id, allowEmpty: false);
+    final subtypes = _stringList(data['subtype'], 'subtype', id);
     final value = data['value'];
     final names = _stringMap(data['name'], 'name');
     final descriptions = _stringMap(
@@ -65,12 +65,6 @@ class Item {
     );
     final statsRaw = data['stats'];
 
-    if (type is! String || type.trim().isEmpty) {
-      throw FormatException('Item $id type must be a non-empty string.');
-    }
-    if (subtype is! String) {
-      throw FormatException('Item $id subtype must be a string.');
-    }
     if (value is! num) {
       throw FormatException('Item $id value must be numeric.');
     }
@@ -80,16 +74,41 @@ class Item {
 
     return Item(
       id: id,
-      type: type,
-      subtype: subtype,
+      type: List<String>.unmodifiable(types),
+      subtype: List<String>.unmodifiable(subtypes),
       value: value.toInt(),
       stackable: data['stackable'] as bool? ?? false,
       names: names,
       descriptions: descriptions,
       stats: statsRaw == null
           ? const <String, dynamic>{}
-          : Map<String, dynamic>.from(statsRaw),
+          : Map<String, dynamic>.unmodifiable(
+              Map<String, dynamic>.from(statsRaw),
+            ),
     );
+  }
+
+  static List<String> _stringList(
+    Object? raw,
+    String field,
+    String itemId, {
+    bool allowEmpty = true,
+  }) {
+    if (raw is! List || raw.any((value) => value is! String)) {
+      throw FormatException('Item $itemId $field must be a list of strings.');
+    }
+
+    final values = raw.cast<String>().map((value) => value.trim()).toList();
+    if (values.any((value) => value.isEmpty)) {
+      throw FormatException('Item $itemId $field cannot contain empty values.');
+    }
+    if (!allowEmpty && values.isEmpty) {
+      throw FormatException('Item $itemId $field must contain at least one value.');
+    }
+    if (values.toSet().length != values.length) {
+      throw FormatException('Item $itemId $field cannot contain duplicates.');
+    }
+    return values;
   }
 
   static Map<String, String> _stringMap(
