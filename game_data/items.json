@@ -1,11 +1,11 @@
 {
-  "schemaVersion": 1,
-  "catalogVersion": 1,
+  "schemaVersion": 2,
+  "catalogVersion": 2,
   "items": [
     {
       "id": "scrap_metal",
-      "type": "resource",
-      "subtype": "metal",
+      "type": ["resource"],
+      "subtype": ["metal"],
       "value": 4,
       "stackable": true,
       "name": {
@@ -22,8 +22,8 @@
     },
     {
       "id": "field_ration",
-      "type": "food",
-      "subtype": "ration",
+      "type": ["food"],
+      "subtype": ["ration"],
       "value": 12,
       "stackable": true,
       "name": {
@@ -40,8 +40,8 @@
     },
     {
       "id": "makeshift_pistol",
-      "type": "weapon",
-      "subtype": "ranged",
+      "type": ["weapon"],
+      "subtype": ["ranged"],
       "value": 45,
       "stackable": false,
       "name": {
@@ -60,8 +60,8 @@
     },
     {
       "id": "work_helmet",
-      "type": "equipment",
-      "subtype": "head",
+      "type": ["equipment"],
+      "subtype": ["head"],
       "value": 28,
       "stackable": false,
       "name": {
