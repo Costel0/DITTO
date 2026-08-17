@@ -102,20 +102,38 @@ function validateCatalog(catalog) {
   return ids;
 }
 
-function initializeAdmin(projectId) {
-  const resolvedProjectId = projectId ||
+function projectIdFromFirebaseRc() {
+  const firebaseRcPath = path.resolve(__dirname, "../../.firebaserc");
+  if (!fs.existsSync(firebaseRcPath)) return null;
+
+  try {
+    const firebaseRc = JSON.parse(fs.readFileSync(firebaseRcPath, "utf8"));
+    const projectId = firebaseRc?.projects?.default;
+    return typeof projectId === "string" && projectId.trim()
+      ? projectId.trim()
+      : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function resolveProjectId(explicitProjectId) {
+  return explicitProjectId ||
     process.env.GOOGLE_CLOUD_PROJECT ||
     process.env.GCLOUD_PROJECT ||
+    projectIdFromFirebaseRc() ||
     null;
+}
 
+function initializeAdmin(projectId) {
   if (process.env.FIRESTORE_EMULATOR_HOST) {
-    initializeApp({projectId: resolvedProjectId || "ditto-local"});
+    initializeApp({projectId: projectId || "ditto-local"});
     return;
   }
 
   initializeApp({
     credential: applicationDefault(),
-    ...(resolvedProjectId ? {projectId: resolvedProjectId} : {}),
+    ...(projectId ? {projectId} : {}),
   });
 }
 
@@ -138,6 +156,7 @@ async function main() {
   const catalogPath = path.resolve(__dirname, "../../game_data/items.json");
   const catalog = JSON.parse(fs.readFileSync(catalogPath, "utf8"));
   const sourceIds = validateCatalog(catalog);
+  const projectId = resolveProjectId(options.projectId);
 
   console.log(
     `Catalog v${catalog.catalogVersion}: ${catalog.items.length} valid items.`,
@@ -148,7 +167,13 @@ async function main() {
     return;
   }
 
-  initializeAdmin(options.projectId);
+  if (!projectId && !process.env.FIRESTORE_EMULATOR_HOST) {
+    throw new Error(
+      "Firebase project ID was not found. Use --project=PROJECT_ID, an environment variable, or .firebaserc.",
+    );
+  }
+
+  initializeAdmin(projectId);
   const db = getFirestore();
   const operations = [];
 
@@ -187,7 +212,7 @@ async function main() {
   }, {merge: false});
 
   console.log(
-    `Synced ${catalog.items.length} items to /items.` +
+    `Synced ${catalog.items.length} items to /items in ${projectId || "emulator"}.` +
       (options.prune ? ` Pruned ${prunedCount} stale items.` : ""),
   );
 }
