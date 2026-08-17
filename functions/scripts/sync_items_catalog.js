@@ -56,6 +56,26 @@ function validateLocalizedText(value, field, itemId, allowEmpty = false) {
   }
 }
 
+function validateStringList(value, field, itemId, allowEmpty = true) {
+  if (!Array.isArray(value)) {
+    throw new Error(`${itemId}.${field} must be an array of strings.`);
+  }
+  if (!allowEmpty && value.length === 0) {
+    throw new Error(`${itemId}.${field} must contain at least one value.`);
+  }
+
+  const seen = new Set();
+  for (const entry of value) {
+    if (typeof entry !== "string" || !entry.trim()) {
+      throw new Error(`${itemId}.${field} contains an invalid value.`);
+    }
+    if (seen.has(entry)) {
+      throw new Error(`${itemId}.${field} contains duplicate value: ${entry}`);
+    }
+    seen.add(entry);
+  }
+}
+
 function validateCatalog(catalog) {
   if (!Number.isInteger(catalog.schemaVersion) || catalog.schemaVersion < 1) {
     throw new Error("schemaVersion must be a positive integer.");
@@ -80,12 +100,14 @@ function validateCatalog(catalog) {
     }
     ids.add(item.id);
 
-    if (!VALID_TYPES.has(item.type)) {
-      throw new Error(`Unsupported type for ${item.id}: ${item.type}`);
+    validateStringList(item.type, "type", item.id, false);
+    for (const type of item.type) {
+      if (!VALID_TYPES.has(type)) {
+        throw new Error(`Unsupported type for ${item.id}: ${type}`);
+      }
     }
-    if (typeof item.subtype !== "string") {
-      throw new Error(`${item.id}.subtype must be a string.`);
-    }
+    validateStringList(item.subtype, "subtype", item.id, true);
+
     if (!Number.isInteger(item.value) || item.value < 0) {
       throw new Error(`${item.id}.value must be a non-negative integer.`);
     }
