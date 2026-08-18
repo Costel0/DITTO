@@ -10,6 +10,7 @@ import '../../../hub/domain/hub_scene_configuration.dart';
 import '../../../hub/presentation/widgets/hub_character_info.dart';
 import '../../../hub/presentation/widgets/hub_debug_controls.dart';
 import '../../../hub/presentation/widgets/hub_inventory.dart';
+import '../../../hub/presentation/widgets/hub_jobs.dart';
 import '../../../hub/presentation/widgets/hub_scrollable_scene.dart';
 import '../../../survivors/domain/survivor.dart';
 
@@ -28,6 +29,7 @@ class WelcomeScreen extends StatefulWidget {
 enum _HubSection {
   character,
   inventory,
+  jobs,
   expeditions,
 }
 
@@ -416,6 +418,14 @@ class _HubSectionBar extends StatelessWidget {
           ),
           Expanded(
             child: _HubSectionButton(
+              icon: Icons.work_outline_rounded,
+              label: l10n.hubTabJobs,
+              selected: selectedSection == _HubSection.jobs,
+              onTap: () => onSelected(_HubSection.jobs),
+            ),
+          ),
+          Expanded(
+            child: _HubSectionButton(
               icon: Icons.explore_outlined,
               label: l10n.hubTabExpeditions,
               selected: selectedSection == _HubSection.expeditions,
@@ -562,6 +572,10 @@ class _HubSectionView extends StatelessWidget {
           key: const ValueKey(_HubSection.inventory),
           inventory: inventory,
           loadError: inventoryLoadError,
+        );
+      case _HubSection.jobs:
+        return const HubJobs(
+          key: ValueKey(_HubSection.jobs),
         );
       case _HubSection.expeditions:
         return _HubSectionContent(
