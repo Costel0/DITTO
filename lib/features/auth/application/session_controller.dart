@@ -41,6 +41,7 @@ class SessionController extends ChangeNotifier {
   String? _profileUsername;
   String? _initialDuplicateId;
   List<Survivor> _survivors = const <Survivor>[];
+  String? _lastDevelopmentError;
 
   AuthCredentials? get credentials => _credentials;
   bool get isAuthenticated => _credentials != null;
@@ -52,6 +53,7 @@ class SessionController extends ChangeNotifier {
   String? get profileUsername => _profileUsername;
   String? get initialDuplicateId => _initialDuplicateId;
   List<Survivor> get survivors => List<Survivor>.unmodifiable(_survivors);
+  String? get lastDevelopmentError => _lastDevelopmentError;
   String get username => _profileUsername ?? _credentials?.username ?? '';
   String get email => _credentials?.email ?? _credentials?.username ?? '';
 
@@ -197,10 +199,18 @@ class SessionController extends ChangeNotifier {
     final userId = _credentials?.userId;
     final cleanItemId = itemId.trim();
 
-    if (developmentService == null ||
-        userId == null ||
-        cleanItemId.isEmpty ||
-        quantity <= 0) {
+    _lastDevelopmentError = null;
+
+    if (developmentService == null) {
+      _lastDevelopmentError = 'DevelopmentService is not configured.';
+      return false;
+    }
+    if (userId == null) {
+      _lastDevelopmentError = 'No authenticated Firebase user is available.';
+      return false;
+    }
+    if (cleanItemId.isEmpty || quantity <= 0) {
+      _lastDevelopmentError = 'Invalid item ID or quantity.';
       return false;
     }
 
@@ -210,7 +220,8 @@ class SessionController extends ChangeNotifier {
         quantity: quantity,
       );
       return true;
-    } catch (_) {
+    } catch (error) {
+      _lastDevelopmentError = error.toString();
       return false;
     }
   }
@@ -240,6 +251,7 @@ class SessionController extends ChangeNotifier {
     _profileUsername = null;
     _initialDuplicateId = null;
     _survivors = const <Survivor>[];
+    _lastDevelopmentError = null;
     notifyListeners();
   }
 
@@ -250,6 +262,7 @@ class SessionController extends ChangeNotifier {
     _profileUsername = null;
     _initialDuplicateId = null;
     _survivors = const <Survivor>[];
+    _lastDevelopmentError = null;
 
     final userId = _credentials?.userId;
     final profileService = _userProfileService;
