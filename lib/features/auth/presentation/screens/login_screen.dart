@@ -1,8 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../app/navigation/app_routes.dart';
 import '../../../../core/localization/l10n.dart';
 import '../../../../core/security/local_login_credentials_store.dart';
+import '../../../development/domain/admin_login_config.dart';
 import '../../application/session_controller.dart';
 import '../auth_failure_localization.dart';
 import '../widgets/auth_card_scaffold.dart';
@@ -89,8 +91,15 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  Future<void> _skip() async {
-    if (_isSubmitting) return;
+  Future<void> _loginAsAdmin() async {
+    if (!kDebugMode || _isSubmitting) return;
+
+    if (!AdminLoginConfig.isConfigured) {
+      setState(() {
+        _errorMessage = context.l10n.adminLoginNotConfigured;
+      });
+      return;
+    }
 
     setState(() {
       _isSubmitting = true;
@@ -98,11 +107,18 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      final result = await widget.sessionController.skip();
+      final result = await widget.sessionController.signIn(
+        username: AdminLoginConfig.email,
+        password: AdminLoginConfig.password,
+      );
       if (!mounted) return;
 
       if (result.isSuccess) {
-        Navigator.of(context).pushReplacementNamed(AppRoutes.welcome);
+        Navigator.of(context).pushReplacementNamed(_postAuthRoute());
+      } else {
+        setState(() {
+          _errorMessage = localizedAuthFailure(context, result.failure);
+        });
       }
     } finally {
       if (mounted) {
@@ -192,19 +208,22 @@ class _LoginScreenState extends State<LoginScreen> {
                       .pushReplacementNamed(AppRoutes.register),
               child: Text(l10n.createAccountPrompt),
             ),
-            const SizedBox(height: 2),
-            TextButton(
-              onPressed: _isSubmitting ? null : _skip,
-              child: Text(l10n.skipForNow),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              l10n.developmentShortcut,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: const Color(0xFF7F786A),
-                  ),
-            ),
+            if (kDebugMode) ...[
+              const SizedBox(height: 2),
+              TextButton.icon(
+                onPressed: _isSubmitting ? null : _loginAsAdmin,
+                icon: const Icon(Icons.admin_panel_settings_outlined),
+                label: Text(l10n.loginAsAdmin),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                l10n.adminLoginDevelopmentShortcut,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: const Color(0xFF7F786A),
+                    ),
+              ),
+            ],
           ],
         ),
       ),
