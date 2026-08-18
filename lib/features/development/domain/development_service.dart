@@ -13,3 +13,31 @@ abstract interface class DevelopmentService {
 
   Future<void> resetUserForTesting();
 }
+
+/// Transport-neutral error exposed by the development service layer.
+///
+/// Firebase-specific exceptions are converted to this type so presentation and
+/// application code can inspect useful diagnostics without importing Firebase.
+class DevelopmentServiceException implements Exception {
+  const DevelopmentServiceException({
+    required this.operation,
+    required this.code,
+    this.message,
+    this.details,
+  });
+
+  final String operation;
+  final String code;
+  final String? message;
+  final Object? details;
+
+  @override
+  String toString() {
+    return 'DevelopmentServiceException('
+        'operation: $operation, '
+        'code: $code, '
+        'message: ${message ?? '<none>'}, '
+        'details: ${details ?? '<none>'}'
+        ')';
+  }
+}
