@@ -46,8 +46,6 @@ abstract class AuthService {
     required String password,
   });
 
-  Future<AuthResult> skip();
-
   Future<void> signOut();
 }
 
@@ -70,13 +68,6 @@ class PlaceholderAuthService implements AuthService {
   }) async {
     return AuthResult.success(
       AuthCredentials(username: username, password: password),
-    );
-  }
-
-  @override
-  Future<AuthResult> skip() async {
-    return const AuthResult.success(
-      AuthCredentials(username: 'user', password: 'password'),
     );
   }
 
