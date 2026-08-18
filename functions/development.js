@@ -1,5 +1,10 @@
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {onCall, HttpsError} = require("firebase-functions/v2/https");
+const {
+  fixStatus,
+  normalizedBunkerSurvivors,
+  normalizedSurvivor,
+} = require("./bunker_status");
 
 // DEVELOPMENT-ONLY SERVER SURFACE.
 //
@@ -8,7 +13,6 @@ const {onCall, HttpsError} = require("firebase-functions/v2/https");
 // set DITTO_DEVELOPMENT_TOOLS_REQUIRE_ADMIN=true and grant the Firebase Auth
 // custom claim {admin: true} only to trusted accounts.
 const REGION = "europe-west1";
-const BUNKER_SCHEMA_VERSION = 3;
 const DEVELOPMENT_TOOLS_REQUIRE_ADMIN =
   process.env.DITTO_DEVELOPMENT_TOOLS_REQUIRE_ADMIN === "true";
 const VALID_DUPLICATE_IDS = new Set(["01", "02", "03", "04"]);
@@ -44,89 +48,6 @@ function requireDevelopmentAccess(request) {
       "Administrator access is required to use development tools.",
     );
   }
-}
-
-function zeroStatMods() {
-  return {
-    strength: 0,
-    dexterity: 0,
-    constitution: 0,
-    stealth: 0,
-    care: 0,
-    cunning: 0,
-    charm: 0,
-  };
-}
-
-function normalizedSurvivor(source, survivorId, duplicateId) {
-  const healthHistory = Array.isArray(source?.healthHistory)
-    ? source.healthHistory
-    : [];
-  const equippedItemIds = Array.isArray(source?.equippedItemIds)
-    ? source.equippedItemIds
-    : [];
-  const statMods = source?.statMods && typeof source.statMods === "object"
-    ? source.statMods
-    : zeroStatMods();
-  const energy = Number.isInteger(source?.energy) ? source.energy : 0;
-
-  return {
-    id: survivorId,
-    duplicateId,
-    energy,
-    statMods,
-    healthHistory,
-    equippedItemIds,
-  };
-}
-
-function normalizedBunkerSurvivors(source) {
-  if (!Array.isArray(source)) return [];
-
-  return source.map((survivor) => normalizedSurvivor(
-    survivor,
-    typeof survivor?.id === "string" ? survivor.id : "",
-    typeof survivor?.duplicateId === "string" ? survivor.duplicateId : "",
-  ));
-}
-
-function normalizedBusySurvivors(source) {
-  if (Array.isArray(source)) {
-    return source
-      .filter((entry) =>
-        entry &&
-        typeof entry === "object" &&
-        typeof entry.survivorId === "string" &&
-        entry.survivorId.trim().length > 0 &&
-        typeof entry.activity === "string" &&
-        entry.activity.trim().length > 0,
-      )
-      .map((entry) => ({
-        survivorId: entry.survivorId.trim(),
-        activity: entry.activity.trim(),
-      }));
-  }
-
-  // Compatibility migration for schema v2:
-  // activity -> [survivorId, ...]
-  if (source && typeof source === "object") {
-    const result = [];
-    for (const [activity, survivorIds] of Object.entries(source)) {
-      if (!Array.isArray(survivorIds) || activity.trim().length === 0) continue;
-      for (const survivorId of survivorIds) {
-        if (typeof survivorId !== "string" || survivorId.trim().length === 0) {
-          continue;
-        }
-        result.push({
-          survivorId: survivorId.trim(),
-          activity: activity.trim(),
-        });
-      }
-    }
-    return result;
-  }
-
-  return [];
 }
 
 exports.addSurvivorForTesting = onCall(
@@ -170,29 +91,29 @@ exports.addSurvivorForTesting = onCall(
       const idleSurvivors = Array.isArray(bunker.idleSurvivors)
         ? bunker.idleSurvivors.filter((id) => typeof id === "string")
         : [];
-      const revision = Number.isInteger(bunker.revision)
-        ? bunker.revision + 1
-        : 1;
-      const now = FieldValue.serverTimestamp();
+      const fixedBunker = await fixStatus({
+        transaction,
+        db,
+        bunker: {
+          ...bunker,
+          survivors: [...survivors, survivor],
+          idleSurvivors: [...new Set([...idleSurvivors, survivorId])],
+        },
+      });
+      const metadataNow = FieldValue.serverTimestamp();
 
       transaction.create(survivorRef, {
         ...survivor,
-        createdAt: now,
-        updatedAt: now,
+        createdAt: metadataNow,
+        updatedAt: metadataNow,
       });
-      transaction.update(bunkerRef, {
-        schemaVersion: BUNKER_SCHEMA_VERSION,
-        survivors: [...survivors, survivor],
-        idleSurvivors: [...new Set([...idleSurvivors, survivorId])],
-        busySurvivors: normalizedBusySurvivors(bunker.busySurvivors),
-        revision,
-        serverUpdatedAt: now,
-      });
+      transaction.set(bunkerRef, fixedBunker);
 
       return {
         survivorId,
         duplicateId,
         created: true,
+        revision: fixedBunker.revision,
       };
     });
   },
@@ -266,24 +187,22 @@ exports.addItemForTesting = onCall(
       }
 
       inventory[itemId] = nextQuantity;
-      const revision = Number.isInteger(bunker.revision)
-        ? bunker.revision + 1
-        : 1;
-
-      transaction.update(bunkerRef, {
-        schemaVersion: BUNKER_SCHEMA_VERSION,
-        survivors: normalizedBunkerSurvivors(bunker.survivors),
-        busySurvivors: normalizedBusySurvivors(bunker.busySurvivors),
-        inventory,
-        revision,
-        serverUpdatedAt: FieldValue.serverTimestamp(),
+      const fixedBunker = await fixStatus({
+        transaction,
+        db,
+        bunker: {
+          ...bunker,
+          inventory,
+        },
       });
+
+      transaction.set(bunkerRef, fixedBunker);
 
       return {
         itemId,
         addedQuantity: quantity,
         quantity: nextQuantity,
-        revision,
+        revision: fixedBunker.revision,
       };
     });
   },
