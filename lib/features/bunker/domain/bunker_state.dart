@@ -1,5 +1,36 @@
 import '../../survivors/domain/survivor.dart';
 
+class BusySurvivor {
+  const BusySurvivor({
+    required this.survivorId,
+    required this.activity,
+  });
+
+  final String survivorId;
+  final String activity;
+
+  factory BusySurvivor.fromJson(Map<String, dynamic> json) {
+    final survivorId = json['survivorId'];
+    final activity = json['activity'];
+
+    if (survivorId is! String || survivorId.trim().isEmpty) {
+      throw const FormatException(
+        'Busy Survivor survivorId must be a non-empty string.',
+      );
+    }
+    if (activity is! String || activity.trim().isEmpty) {
+      throw const FormatException(
+        'Busy Survivor activity must be a non-empty string.',
+      );
+    }
+
+    return BusySurvivor(
+      survivorId: survivorId.trim(),
+      activity: activity.trim(),
+    );
+  }
+}
+
 /// Immutable snapshot of the player's bunker state as provided by the server.
 ///
 /// The app intentionally exposes no mutation or serialization API for this
@@ -12,21 +43,15 @@ class BunkerState {
     required this.serverUpdatedAt,
     required List<Survivor> survivors,
     required List<String> idleSurvivors,
-    required Map<String, List<String>> busySurvivors,
+    required List<BusySurvivor> busySurvivors,
     required Map<String, int> inventory,
   })  : survivors = List<Survivor>.unmodifiable(survivors),
         idleSurvivors = List<String>.unmodifiable(idleSurvivors),
-        busySurvivors = Map<String, List<String>>.unmodifiable(
-          busySurvivors.map(
-            (occupation, survivorIds) => MapEntry(
-              occupation,
-              List<String>.unmodifiable(survivorIds),
-            ),
-          ),
-        ),
+        busySurvivors = List<BusySurvivor>.unmodifiable(busySurvivors),
         inventory = Map<String, int>.unmodifiable(inventory);
 
-  static const int supportedSchemaVersion = 2;
+  static const int supportedSchemaVersion = 3;
+  static const int legacySchemaVersion = 2;
 
   final int schemaVersion;
   final int revision;
@@ -38,8 +63,8 @@ class BunkerState {
   /// IDs of Survivors currently available for new tasks.
   final List<String> idleSurvivors;
 
-  /// Occupation ID -> Survivor IDs currently assigned to that occupation.
-  final Map<String, List<String>> busySurvivors;
+  /// Survivors currently occupied and the gameplay activity occupying them.
+  final List<BusySurvivor> busySurvivors;
 
   /// Item ID -> quantity owned.
   final Map<String, int> inventory;
@@ -51,9 +76,17 @@ class BunkerState {
     return null;
   }
 
+  BusySurvivor? busySurvivorById(String id) {
+    for (final busySurvivor in busySurvivors) {
+      if (busySurvivor.survivorId == id) return busySurvivor;
+    }
+    return null;
+  }
+
   factory BunkerState.fromJson(Map<String, dynamic> json) {
     final schemaVersion = _requiredInt(json, 'schemaVersion');
-    if (schemaVersion != supportedSchemaVersion) {
+    if (schemaVersion != legacySchemaVersion &&
+        schemaVersion != supportedSchemaVersion) {
       throw FormatException(
         'Unsupported bunker state schema version: $schemaVersion',
       );
@@ -95,25 +128,22 @@ class BunkerState {
       'idleSurvivors',
     );
 
-    final busyRaw = json['busySurvivors'];
-    if (busyRaw is! Map) {
-      throw const FormatException('busySurvivors must be an object.');
+    final busySurvivors = _parseBusySurvivors(
+      json['busySurvivors'],
+      knownSurvivorIds,
+    );
+    final busyIds = busySurvivors
+        .map((busySurvivor) => busySurvivor.survivorId)
+        .toList(growable: false);
+    if (busyIds.toSet().length != busyIds.length) {
+      throw const FormatException(
+        'busySurvivors cannot contain the same Survivor more than once.',
+      );
     }
-    final busySurvivors = <String, List<String>>{};
-    for (final entry in busyRaw.entries) {
-      if (entry.key is! String || entry.value is! List) {
-        throw const FormatException(
-          'busySurvivors must map occupation IDs to lists of Survivor IDs.',
-        );
-      }
-      final ids = (entry.value as List).whereType<String>().toList();
-      if (ids.length != (entry.value as List).length) {
-        throw const FormatException(
-          'busySurvivors lists may contain only Survivor IDs.',
-        );
-      }
-      _validateSurvivorReferences(ids, knownSurvivorIds, entry.key as String);
-      busySurvivors[entry.key as String] = ids;
+    if (idleSurvivors.any(busyIds.toSet().contains)) {
+      throw const FormatException(
+        'A Survivor cannot be both idle and busy in the same bunker state.',
+      );
     }
 
     final inventoryRaw = json['inventory'];
@@ -142,6 +172,71 @@ class BunkerState {
       idleSurvivors: idleSurvivors,
       busySurvivors: busySurvivors,
       inventory: inventory,
+    );
+  }
+
+  static List<BusySurvivor> _parseBusySurvivors(
+    Object? raw,
+    Set<String> knownSurvivorIds,
+  ) {
+    if (raw is List) {
+      final result = <BusySurvivor>[];
+      for (final rawBusySurvivor in raw) {
+        if (rawBusySurvivor is! Map) {
+          throw const FormatException(
+            'Each busySurvivors entry must be an object.',
+          );
+        }
+        final busySurvivor = BusySurvivor.fromJson(
+          Map<String, dynamic>.from(rawBusySurvivor),
+        );
+        _validateSurvivorReferences(
+          <String>[busySurvivor.survivorId],
+          knownSurvivorIds,
+          'busySurvivors',
+        );
+        result.add(busySurvivor);
+      }
+      return result;
+    }
+
+    // Compatibility with schema v2, where busySurvivors was stored as
+    // activity -> list of Survivor IDs.
+    if (raw is Map) {
+      final result = <BusySurvivor>[];
+      for (final entry in raw.entries) {
+        if (entry.key is! String ||
+            (entry.key as String).trim().isEmpty ||
+            entry.value is! List) {
+          throw const FormatException(
+            'Legacy busySurvivors must map activities to Survivor ID lists.',
+          );
+        }
+        final ids = (entry.value as List).whereType<String>().toList();
+        if (ids.length != (entry.value as List).length) {
+          throw const FormatException(
+            'Legacy busySurvivors lists may contain only Survivor IDs.',
+          );
+        }
+        _validateSurvivorReferences(
+          ids,
+          knownSurvivorIds,
+          'busySurvivors',
+        );
+        for (final id in ids) {
+          result.add(
+            BusySurvivor(
+              survivorId: id,
+              activity: (entry.key as String).trim(),
+            ),
+          );
+        }
+      }
+      return result;
+    }
+
+    throw const FormatException(
+      'busySurvivors must be a list of Survivor/activity pairs.',
     );
   }
 
