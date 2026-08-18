@@ -93,7 +93,7 @@ class _HubDebugControlsState extends State<HubDebugControls> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'DEBUG: Could not add item. Check that the ID exists in the server catalog.',
+              'DEBUG: Could not add item. Verify that /items is synced to Firestore (npm run sync:items:exact).',
             ),
           ),
         );
