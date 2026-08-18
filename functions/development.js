@@ -8,6 +8,7 @@ const {onCall, HttpsError} = require("firebase-functions/v2/https");
 // set DITTO_DEVELOPMENT_TOOLS_REQUIRE_ADMIN=true and grant the Firebase Auth
 // custom claim {admin: true} only to trusted accounts.
 const REGION = "europe-west1";
+const BUNKER_SCHEMA_VERSION = 3;
 const DEVELOPMENT_TOOLS_REQUIRE_ADMIN =
   process.env.DITTO_DEVELOPMENT_TOOLS_REQUIRE_ADMIN === "true";
 const VALID_DUPLICATE_IDS = new Set(["01", "02", "03", "04"]);
@@ -67,14 +68,65 @@ function normalizedSurvivor(source, survivorId, duplicateId) {
   const statMods = source?.statMods && typeof source.statMods === "object"
     ? source.statMods
     : zeroStatMods();
+  const energy = Number.isInteger(source?.energy) ? source.energy : 0;
 
   return {
     id: survivorId,
     duplicateId,
+    energy,
     statMods,
     healthHistory,
     equippedItemIds,
   };
+}
+
+function normalizedBunkerSurvivors(source) {
+  if (!Array.isArray(source)) return [];
+
+  return source.map((survivor) => normalizedSurvivor(
+    survivor,
+    typeof survivor?.id === "string" ? survivor.id : "",
+    typeof survivor?.duplicateId === "string" ? survivor.duplicateId : "",
+  ));
+}
+
+function normalizedBusySurvivors(source) {
+  if (Array.isArray(source)) {
+    return source
+      .filter((entry) =>
+        entry &&
+        typeof entry === "object" &&
+        typeof entry.survivorId === "string" &&
+        entry.survivorId.trim().length > 0 &&
+        typeof entry.activity === "string" &&
+        entry.activity.trim().length > 0,
+      )
+      .map((entry) => ({
+        survivorId: entry.survivorId.trim(),
+        activity: entry.activity.trim(),
+      }));
+  }
+
+  // Compatibility migration for schema v2:
+  // activity -> [survivorId, ...]
+  if (source && typeof source === "object") {
+    const result = [];
+    for (const [activity, survivorIds] of Object.entries(source)) {
+      if (!Array.isArray(survivorIds) || activity.trim().length === 0) continue;
+      for (const survivorId of survivorIds) {
+        if (typeof survivorId !== "string" || survivorId.trim().length === 0) {
+          continue;
+        }
+        result.push({
+          survivorId: survivorId.trim(),
+          activity: activity.trim(),
+        });
+      }
+    }
+    return result;
+  }
+
+  return [];
 }
 
 exports.addSurvivorForTesting = onCall(
@@ -105,10 +157,8 @@ exports.addSurvivorForTesting = onCall(
       }
 
       const bunker = bunkerSnapshot.data() || {};
-      const survivors = Array.isArray(bunker.survivors)
-        ? bunker.survivors
-        : [];
-      if (survivors.some((survivor) => survivor?.duplicateId === duplicateId)) {
+      const survivors = normalizedBunkerSurvivors(bunker.survivors);
+      if (survivors.some((survivor) => survivor.duplicateId === duplicateId)) {
         throw new HttpsError(
           "already-exists",
           "This Duplicate is already part of the bunker.",
@@ -131,8 +181,10 @@ exports.addSurvivorForTesting = onCall(
         updatedAt: now,
       });
       transaction.update(bunkerRef, {
+        schemaVersion: BUNKER_SCHEMA_VERSION,
         survivors: [...survivors, survivor],
         idleSurvivors: [...new Set([...idleSurvivors, survivorId])],
+        busySurvivors: normalizedBusySurvivors(bunker.busySurvivors),
         revision,
         serverUpdatedAt: now,
       });
@@ -219,6 +271,9 @@ exports.addItemForTesting = onCall(
         : 1;
 
       transaction.update(bunkerRef, {
+        schemaVersion: BUNKER_SCHEMA_VERSION,
+        survivors: normalizedBunkerSurvivors(bunker.survivors),
+        busySurvivors: normalizedBusySurvivors(bunker.busySurvivors),
         inventory,
         revision,
         serverUpdatedAt: FieldValue.serverTimestamp(),
