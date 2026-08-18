@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../../core/presentation/random_asset_variant_image.dart';
 import '../../domain/hub_background_configuration.dart';
 import '../../domain/hub_scene_configuration.dart';
 
@@ -225,8 +226,8 @@ class _HubCharacterSprite extends StatelessWidget {
           0, 0, brightness, 0, 0,
           0, 0, 0, 1, 0,
         ]),
-        child: Image.asset(
-          assetPath,
+        child: RandomAssetVariantImage(
+          baseAssetPath: assetPath,
           fit: BoxFit.contain,
           alignment: Alignment.bottomCenter,
           filterQuality: FilterQuality.high,
