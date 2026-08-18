@@ -16,26 +16,38 @@ class FirebaseFunctionsDevelopmentService implements DevelopmentService {
 
   @override
   Future<String> addSurvivorForTesting({required String duplicateId}) async {
-    final callable = _functions.httpsCallable('addSurvivorForTesting');
-    final result = await callable.call(<String, dynamic>{
-      'duplicateId': duplicateId.trim(),
-    });
+    try {
+      final callable = _functions.httpsCallable('addSurvivorForTesting');
+      final result = await callable.call(<String, dynamic>{
+        'duplicateId': duplicateId.trim(),
+      });
 
-    final data = result.data;
-    if (data is! Map) {
-      throw const FormatException(
-        'addSurvivorForTesting returned invalid data.',
+      final data = result.data;
+      if (data is! Map) {
+        throw const FormatException(
+          'addSurvivorForTesting returned invalid data.',
+        );
+      }
+
+      final survivorId = data['survivorId'];
+      if (survivorId is! String || survivorId.isEmpty) {
+        throw const FormatException(
+          'addSurvivorForTesting did not return a survivorId.',
+        );
+      }
+
+      return survivorId;
+    } on FirebaseFunctionsException catch (error, stackTrace) {
+      Error.throwWithStackTrace(
+        DevelopmentServiceException(
+          operation: 'addSurvivorForTesting',
+          code: error.code,
+          message: error.message,
+          details: error.details,
+        ),
+        stackTrace,
       );
     }
-
-    final survivorId = data['survivorId'];
-    if (survivorId is! String || survivorId.isEmpty) {
-      throw const FormatException(
-        'addSurvivorForTesting did not return a survivorId.',
-      );
-    }
-
-    return survivorId;
   }
 
   @override
@@ -43,38 +55,62 @@ class FirebaseFunctionsDevelopmentService implements DevelopmentService {
     required String itemId,
     required int quantity,
   }) async {
-    final callable = _functions.httpsCallable('addItemForTesting');
-    final result = await callable.call(<String, dynamic>{
-      'itemId': itemId.trim(),
-      'quantity': quantity,
-    });
+    try {
+      final callable = _functions.httpsCallable('addItemForTesting');
+      final result = await callable.call(<String, dynamic>{
+        'itemId': itemId.trim(),
+        'quantity': quantity,
+      });
 
-    final data = result.data;
-    if (data is! Map) {
-      throw const FormatException('addItemForTesting returned invalid data.');
-    }
+      final data = result.data;
+      if (data is! Map) {
+        throw const FormatException('addItemForTesting returned invalid data.');
+      }
 
-    final resultingQuantity = data['quantity'];
-    if (resultingQuantity is! num || resultingQuantity < 1) {
-      throw const FormatException(
-        'addItemForTesting did not return a valid quantity.',
+      final resultingQuantity = data['quantity'];
+      if (resultingQuantity is! num || resultingQuantity < 1) {
+        throw const FormatException(
+          'addItemForTesting did not return a valid quantity.',
+        );
+      }
+
+      return resultingQuantity.toInt();
+    } on FirebaseFunctionsException catch (error, stackTrace) {
+      Error.throwWithStackTrace(
+        DevelopmentServiceException(
+          operation: 'addItemForTesting',
+          code: error.code,
+          message: error.message,
+          details: error.details,
+        ),
+        stackTrace,
       );
     }
-
-    return resultingQuantity.toInt();
   }
 
   @override
   Future<void> resetUserForTesting() async {
-    final callable = _functions.httpsCallable('resetUserForTesting');
-    final result = await callable.call(<String, dynamic>{
-      'confirm': true,
-    });
+    try {
+      final callable = _functions.httpsCallable('resetUserForTesting');
+      final result = await callable.call(<String, dynamic>{
+        'confirm': true,
+      });
 
-    final data = result.data;
-    if (data is! Map || data['deleted'] != true) {
-      throw const FormatException(
-        'resetUserForTesting returned invalid data.',
+      final data = result.data;
+      if (data is! Map || data['deleted'] != true) {
+        throw const FormatException(
+          'resetUserForTesting returned invalid data.',
+        );
+      }
+    } on FirebaseFunctionsException catch (error, stackTrace) {
+      Error.throwWithStackTrace(
+        DevelopmentServiceException(
+          operation: 'resetUserForTesting',
+          code: error.code,
+          message: error.message,
+          details: error.details,
+        ),
+        stackTrace,
       );
     }
   }
