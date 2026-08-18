@@ -40,13 +40,6 @@ class FirebaseAuthService implements AuthService {
   }
 
   @override
-  Future<AuthResult> skip() async {
-    return const AuthResult.success(
-      AuthCredentials(username: 'user', password: 'password'),
-    );
-  }
-
-  @override
   Future<void> signOut() => _auth.signOut();
 
   AuthResult _successFromUser(User? user, String fallbackEmail) {
