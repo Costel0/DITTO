@@ -137,6 +137,10 @@ function sleepingMultiplierFromConfig(snapshot) {
  * Applies server-authoritative invariants to a bunker snapshot immediately
  * before it is persisted. Every backend mutation of BunkerState should pass
  * through this function.
+ *
+ * Occupation completion is intentionally not resolved here. Busy entries stay
+ * busy even after endsAt until the dedicated occupation-resolution flow handles
+ * their results and moves the Survivor to its next state.
  */
 async function fixStatus({transaction, db, bunker, now = new Date()}) {
   const fixedNow = truncateToSecond(now) || new Date();
@@ -163,17 +167,6 @@ async function fixStatus({transaction, db, bunker, now = new Date()}) {
   )) {
     if (!knownSurvivorIds.has(busySurvivor.survivorId)) continue;
     if (busyBySurvivorId.has(busySurvivor.survivorId)) continue;
-
-    const survivor = survivorById.get(busySurvivor.survivorId);
-    const sleepingFinished =
-      busySurvivor.activity === SLEEPING_ACTIVITY &&
-      busySurvivor.endsAt.getTime() <= fixedNow.getTime();
-
-    if (sleepingFinished) {
-      if (survivor.energy < 0) survivor.energy = 0;
-      idleSurvivors.add(busySurvivor.survivorId);
-      continue;
-    }
 
     idleSurvivors.delete(busySurvivor.survivorId);
     busyBySurvivorId.set(busySurvivor.survivorId, busySurvivor);
