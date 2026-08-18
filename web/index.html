@@ -18,15 +18,6 @@
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
-  <script>
-    // Development-only App Check bypass for local Flutter Web runs.
-    // Firebase requires this value to exist before App Check is initialized.
-    if (window.location.hostname === 'localhost' ||
-        window.location.hostname === '127.0.0.1') {
-      self.FIREBASE_APPCHECK_DEBUG_TOKEN =
-          'dfc578ad-0b6e-42a0-b450-3a6379da61e1';
-    }
-  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
