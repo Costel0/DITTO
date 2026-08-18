@@ -22,6 +22,10 @@ class HubDebugControls extends StatefulWidget {
 
   final SessionController sessionController;
   final Future<void> Function() onResetProfile;
+
+  /// Refresh hook for development mutations that change BunkerState.
+  ///
+  /// Kept under the existing name for compatibility with the current caller.
   final Future<void> Function()? onItemAdded;
   final String resetTooltip;
 
@@ -73,6 +77,12 @@ class _HubDebugControlsState extends State<HubDebugControls> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('DEBUG: Could not add Survivor.')),
       );
+      return;
+    }
+
+    final refreshBunkerState = widget.onItemAdded;
+    if (refreshBunkerState != null) {
+      await refreshBunkerState();
     }
   }
 
