@@ -40,4 +40,55 @@ void main() {
       );
     });
   });
+
+  group('AssetVariantResolver.seededIndex', () {
+    const key =
+        'survivor-a|assets/characters/survivor_01_idle.png';
+
+    test('is stable for the same seed and element key', () {
+      final first = AssetVariantResolver.seededIndex(
+        seed: 12,
+        key: key,
+        candidateCount: 4,
+      );
+      final second = AssetVariantResolver.seededIndex(
+        seed: 12,
+        key: key,
+        candidateCount: 4,
+      );
+
+      expect(second, first);
+      expect(first, inInclusiveRange(0, 3));
+    });
+
+    test('uses the bunker seed when resolving the candidate index', () {
+      expect(
+        AssetVariantResolver.seededIndex(
+          seed: 1,
+          key: key,
+          candidateCount: 4,
+        ),
+        3,
+      );
+      expect(
+        AssetVariantResolver.seededIndex(
+          seed: 2,
+          key: key,
+          candidateCount: 4,
+        ),
+        0,
+      );
+    });
+
+    test('rejects an empty candidate list', () {
+      expect(
+        () => AssetVariantResolver.seededIndex(
+          seed: 1,
+          key: key,
+          candidateCount: 0,
+        ),
+        throwsArgumentError,
+      );
+    });
+  });
 }
