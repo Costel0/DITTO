@@ -49,6 +49,53 @@ class AssetVariantResolver {
     return candidates[_random.nextInt(candidates.length)];
   }
 
+  /// Picks a candidate deterministically from a server/application seed.
+  ///
+  /// The backend never needs to know how many variants exist. A caller can use
+  /// a stable per-element [variantKey] (for example a Survivor instance ID) so
+  /// different elements do not all resolve to the same candidate for one seed.
+  Future<String> pickSeeded(
+    String baseAssetPath, {
+    required int seed,
+    String? variantKey,
+  }) async {
+    final candidates = await candidatesFor(baseAssetPath);
+    final key = '${variantKey ?? ''}|$baseAssetPath';
+    final index = seededIndex(
+      seed: seed,
+      key: key,
+      candidateCount: candidates.length,
+    );
+    return candidates[index];
+  }
+
+  /// Produces a stable candidate index across rebuilds, navigation and app
+  /// restarts. This deliberately avoids Dart's `String.hashCode`, whose exact
+  /// implementation is not part of the persistence contract.
+  static int seededIndex({
+    required int seed,
+    required String key,
+    required int candidateCount,
+  }) {
+    if (candidateCount <= 0) {
+      throw ArgumentError.value(
+        candidateCount,
+        'candidateCount',
+        'must be greater than zero',
+      );
+    }
+
+    return _stableHash('$seed|$key') % candidateCount;
+  }
+
+  static int _stableHash(String value) {
+    var hash = 17;
+    for (final codeUnit in value.codeUnits) {
+      hash = ((hash * 31) + codeUnit) & 0x7fffffff;
+    }
+    return hash;
+  }
+
   /// Pure helper kept public so variant matching can be reused and unit tested
   /// without loading Flutter's runtime asset manifest.
   static List<String> candidatesFromAssetList(
