@@ -121,17 +121,25 @@ class HubCharacterInfo extends StatelessWidget {
                           Row(
                             children: [
                               Expanded(
-                                child: Text(
-                                  _name(context, survivor.duplicateId),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleLarge
-                                      ?.copyWith(
-                                        color: const Color(0xFFE6D8BD),
-                                        fontWeight: FontWeight.w800,
+                                child: Row(
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        _name(context, survivor.duplicateId),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleLarge
+                                            ?.copyWith(
+                                              color: const Color(0xFFE6D8BD),
+                                              fontWeight: FontWeight.w800,
+                                            ),
                                       ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    _EnergyIndicator(energy: survivor.energy),
+                                  ],
                                 ),
                               ),
                               const SizedBox(width: 8),
@@ -182,6 +190,36 @@ class HubCharacterInfo extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _EnergyIndicator extends StatelessWidget {
+  const _EnergyIndicator({required this.energy});
+
+  final int energy;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(
+          Icons.bolt_rounded,
+          size: 20,
+          color: Color(0xFFD7BD89),
+        ),
+        const SizedBox(width: 2),
+        Text(
+          '$energy',
+          style: theme.textTheme.titleMedium?.copyWith(
+            color: const Color(0xFFD8C8A8),
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
     );
   }
 }
