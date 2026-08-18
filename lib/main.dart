@@ -20,18 +20,17 @@ Future<void> main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // Development uses fixed App Check debug tokens so local Web and Android
-  // runs keep working across temporary browser profiles and emulator restarts.
-  // Release builds intentionally do not use these providers.
+  // Development uses App Check debug providers. Web's fixed debug token is set
+  // in web/index.html before Flutter/Firebase loads, as required by the Web SDK.
+  // Android receives its fixed token directly. Release builds intentionally do
+  // not use debug providers.
   if (kDebugMode) {
     await FirebaseAppCheck.instance.activate(
       providerAndroid: const AndroidDebugProvider(
         debugToken: AppCheckDebugConfig.androidToken,
       ),
       providerApple: const AppleDebugProvider(),
-      providerWeb: WebDebugProvider(
-        debugToken: AppCheckDebugConfig.webToken,
-      ),
+      providerWeb: WebDebugProvider(),
     );
   }
 
