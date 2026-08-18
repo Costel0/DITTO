@@ -10,10 +10,14 @@ class HubSceneCharacter {
   const HubSceneCharacter({
     required this.assetPath,
     required this.fallbackIcon,
+    this.variantSeed,
+    this.variantKey,
   });
 
   final String assetPath;
   final IconData fallbackIcon;
+  final int? variantSeed;
+  final String? variantKey;
 }
 
 class HubScrollableScene extends StatefulWidget {
@@ -172,6 +176,8 @@ class _HubScrollableSceneState extends State<HubScrollableScene> {
                   assetPath: character.assetPath,
                   fallbackIcon: character.fallbackIcon,
                   brightness: configuration.characterBrightness,
+                  variantSeed: character.variantSeed,
+                  variantKey: character.variantKey,
                 ),
               ),
             ],
@@ -209,11 +215,15 @@ class _HubCharacterSprite extends StatelessWidget {
     required this.assetPath,
     required this.fallbackIcon,
     required this.brightness,
+    required this.variantSeed,
+    required this.variantKey,
   });
 
   final String assetPath;
   final IconData fallbackIcon;
   final double brightness;
+  final int? variantSeed;
+  final String? variantKey;
 
   @override
   Widget build(BuildContext context) {
@@ -228,6 +238,8 @@ class _HubCharacterSprite extends StatelessWidget {
         ]),
         child: RandomAssetVariantImage(
           baseAssetPath: assetPath,
+          selectionSeed: variantSeed,
+          variantKey: variantKey,
           fit: BoxFit.contain,
           alignment: Alignment.bottomCenter,
           filterQuality: FilterQuality.high,
