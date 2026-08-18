@@ -38,6 +38,19 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
   SessionController get sessionController => widget.sessionController;
 
+  List<Survivor> get _roster =>
+      _bunkerStateController?.state?.survivors ?? sessionController.survivors;
+
+  List<Survivor> get _idleHubSurvivors {
+    final bunkerState = _bunkerStateController?.state;
+    if (bunkerState == null) return const <Survivor>[];
+
+    final idleIds = bunkerState.idleSurvivors.toSet();
+    return bunkerState.survivors
+        .where((survivor) => idleIds.contains(survivor.id))
+        .toList(growable: false);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -68,22 +81,23 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     super.dispose();
   }
 
+  void _clampSelectedSurvivorIndex() {
+    final rosterLength = _roster.length;
+    if (rosterLength == 0) {
+      _selectedSurvivorIndex = 0;
+    } else if (_selectedSurvivorIndex >= rosterLength) {
+      _selectedSurvivorIndex = rosterLength - 1;
+    }
+  }
+
   void _onSessionChanged() {
     if (!mounted) return;
-
-    setState(() {
-      final rosterLength = sessionController.survivors.length;
-      if (rosterLength == 0) {
-        _selectedSurvivorIndex = 0;
-      } else if (_selectedSurvivorIndex >= rosterLength) {
-        _selectedSurvivorIndex = rosterLength - 1;
-      }
-    });
+    setState(_clampSelectedSurvivorIndex);
   }
 
   void _onBunkerStateChanged() {
     if (!mounted) return;
-    setState(() {});
+    setState(_clampSelectedSurvivorIndex);
   }
 
   Future<void> _logout(BuildContext context) async {
@@ -127,15 +141,15 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   }
 
   Map<HubCharacterSlot, HubSceneCharacter> get _hubCharacters {
-    final roster = sessionController.survivors;
+    final idleSurvivors = _idleHubSurvivors;
     final variantSeed = _bunkerStateController?.state?.revision ?? 0;
     final result = <HubCharacterSlot, HubSceneCharacter>{};
-    final visibleCount = roster.length < hubRosterSlotOrder.length
-        ? roster.length
+    final visibleCount = idleSurvivors.length < hubRosterSlotOrder.length
+        ? idleSurvivors.length
         : hubRosterSlotOrder.length;
 
     for (var index = 0; index < visibleCount; index++) {
-      final survivor = roster[index];
+      final survivor = idleSurvivors[index];
       result[hubRosterSlotOrder[index]] = HubSceneCharacter(
         assetPath: survivor.idleAssetPath,
         fallbackIcon: _characterIcon(survivor.duplicateId),
@@ -148,7 +162,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   }
 
   Survivor? get _selectedSurvivor {
-    final roster = sessionController.survivors;
+    final roster = _roster;
     if (roster.isEmpty) return null;
     if (_selectedSurvivorIndex >= roster.length) return roster.last;
     return roster[_selectedSurvivorIndex];
@@ -161,10 +175,13 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   }
 
   void _openCharacterFromSlot(HubCharacterSlot slot) {
-    final rosterIndex = hubRosterSlotOrder.indexOf(slot);
-    if (rosterIndex < 0 || rosterIndex >= sessionController.survivors.length) {
-      return;
-    }
+    final idleIndex = hubRosterSlotOrder.indexOf(slot);
+    final idleSurvivors = _idleHubSurvivors;
+    if (idleIndex < 0 || idleIndex >= idleSurvivors.length) return;
+
+    final selectedId = idleSurvivors[idleIndex].id;
+    final rosterIndex = _roster.indexWhere((survivor) => survivor.id == selectedId);
+    if (rosterIndex < 0) return;
 
     setState(() {
       _selectedSurvivorIndex = rosterIndex;
@@ -174,7 +191,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
   void _changeSelectedSurvivor(int delta) {
     final target = _selectedSurvivorIndex + delta;
-    if (target < 0 || target >= sessionController.survivors.length) return;
+    if (target < 0 || target >= _roster.length) return;
 
     setState(() {
       _selectedSurvivorIndex = target;
@@ -185,7 +202,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final rosterLength = sessionController.survivors.length;
+    final rosterLength = _roster.length;
 
     return Scaffold(
       body: SurvivalBackground(
