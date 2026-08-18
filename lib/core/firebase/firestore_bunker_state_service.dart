@@ -26,12 +26,31 @@ class FirestoreBunkerStateService implements BunkerStateService {
       throw StateError('No bunker state exists for user $userId.');
     }
 
-    final normalized = Map<String, dynamic>.from(data);
-    final updatedAt = normalized['serverUpdatedAt'];
-    if (updatedAt is Timestamp) {
-      normalized['serverUpdatedAt'] = updatedAt.toDate().toUtc().toIso8601String();
-    }
-
+    final normalized = _normalizeFirestoreMap(data);
     return BunkerState.fromJson(normalized);
+  }
+
+  Map<String, dynamic> _normalizeFirestoreMap(Map<String, dynamic> source) {
+    return source.map(
+      (key, value) => MapEntry(key, _normalizeFirestoreValue(value)),
+    );
+  }
+
+  dynamic _normalizeFirestoreValue(dynamic value) {
+    if (value is Timestamp) {
+      return value.toDate().toUtc().toIso8601String();
+    }
+    if (value is Map) {
+      return value.map(
+        (key, nestedValue) => MapEntry(
+          key.toString(),
+          _normalizeFirestoreValue(nestedValue),
+        ),
+      );
+    }
+    if (value is List) {
+      return value.map(_normalizeFirestoreValue).toList(growable: false);
+    }
+    return value;
   }
 }
