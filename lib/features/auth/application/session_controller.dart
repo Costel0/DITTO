@@ -220,8 +220,26 @@ class SessionController extends ChangeNotifier {
         quantity: quantity,
       );
       return true;
-    } catch (error) {
-      _lastDevelopmentError = error.toString();
+    } catch (error, stackTrace) {
+      final platform = kIsWeb ? 'web' : defaultTargetPlatform.name;
+      final lines = <String>[
+        'DITTO development callable failure',
+        'operation: addItemForTesting',
+        'platform: $platform',
+        'userId: $userId',
+        'itemId: $cleanItemId',
+        'quantity: $quantity',
+      ];
+
+      if (error is DevelopmentServiceException) {
+        lines.add('firebaseCode: ${error.code}');
+        lines.add('firebaseMessage: ${error.message ?? '<none>'}');
+        lines.add('firebaseDetails: ${error.details ?? '<none>'}');
+      }
+
+      lines.add('exception: $error');
+      lines.add('stackTrace:\n$stackTrace');
+      _lastDevelopmentError = lines.join('\n');
       return false;
     }
   }
@@ -262,7 +280,6 @@ class SessionController extends ChangeNotifier {
     _profileUsername = null;
     _initialDuplicateId = null;
     _survivors = const <Survivor>[];
-    _lastDevelopmentError = null;
 
     final userId = _credentials?.userId;
     final profileService = _userProfileService;
