@@ -128,6 +128,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
   Map<HubCharacterSlot, HubSceneCharacter> get _hubCharacters {
     final roster = sessionController.survivors;
+    final variantSeed = _bunkerStateController?.state?.revision ?? 0;
     final result = <HubCharacterSlot, HubSceneCharacter>{};
     final visibleCount = roster.length < hubRosterSlotOrder.length
         ? roster.length
@@ -138,6 +139,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       result[hubRosterSlotOrder[index]] = HubSceneCharacter(
         assetPath: survivor.idleAssetPath,
         fallbackIcon: _characterIcon(survivor.duplicateId),
+        variantSeed: variantSeed,
+        variantKey: survivor.id.isNotEmpty ? survivor.id : survivor.duplicateId,
       );
     }
 
