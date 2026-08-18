@@ -22,6 +22,7 @@ class BunkerStateController extends ChangeNotifier {
 
   BunkerState? _state;
   Timer? _pollTimer;
+  Future<void>? _activeRefresh;
   bool _isRefreshing = false;
   bool _isDisposed = false;
   Object? _lastError;
@@ -45,9 +46,33 @@ class BunkerStateController extends ChangeNotifier {
     _pollTimer = null;
   }
 
-  Future<void> refresh() async {
-    if (_isRefreshing || _isDisposed) return;
+  Future<void> refresh() {
+    if (_isDisposed) return Future<void>.value();
 
+    final activeRefresh = _activeRefresh;
+    if (activeRefresh != null) return activeRefresh;
+
+    final refreshFuture = _performRefresh();
+    _activeRefresh = refreshFuture;
+    return refreshFuture;
+  }
+
+  /// Forces a fresh read after a trusted mutation has completed.
+  ///
+  /// If the periodic poll is already reading Firestore, wait for it first and
+  /// then fetch once more. This prevents a mutation from being hidden by a
+  /// concurrent poll that started just before the server write completed.
+  Future<void> refreshAfterMutation() async {
+    final activeRefresh = _activeRefresh;
+    if (activeRefresh != null) {
+      await activeRefresh;
+    }
+    if (_isDisposed) return;
+
+    await refresh();
+  }
+
+  Future<void> _performRefresh() async {
     _isRefreshing = true;
     try {
       final nextState = await _service.fetchBunkerState();
@@ -68,6 +93,7 @@ class BunkerStateController extends ChangeNotifier {
       notifyListeners();
     } finally {
       _isRefreshing = false;
+      _activeRefresh = null;
     }
   }
 
