@@ -106,6 +106,12 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     );
   }
 
+  Future<void> _refreshBunkerAfterDebugMutation() async {
+    final controller = _bunkerStateController;
+    if (controller == null) return;
+    await controller.refreshAfterMutation();
+  }
+
   IconData _characterIcon(String duplicateId) {
     switch (duplicateId) {
       case '02':
@@ -260,6 +266,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                               child: HubDebugControls(
                                 sessionController: sessionController,
                                 onResetProfile: _resetProfileForTesting,
+                                onItemAdded: _refreshBunkerAfterDebugMutation,
                                 resetTooltip: l10n.resetProfileTestTooltip,
                               ),
                             ),
