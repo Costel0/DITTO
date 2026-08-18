@@ -13,13 +13,18 @@ void main() {
     expect(survivor.toMap()['energy'], -25);
   });
 
-  test('missing legacy energy defaults to zero', () {
+  test('missing legacy energy defaults to 50', () {
     final survivor = Survivor.fromMap(<String, dynamic>{
       'id': 's1',
       'duplicateId': '01',
     });
 
-    expect(survivor.energy, 0);
+    expect(survivor.energy, 50);
+  });
+
+  test('constructor defaults energy to 50', () {
+    final survivor = Survivor(duplicateId: '01');
+    expect(survivor.energy, 50);
   });
 
   test('fractional energy is rejected', () {
