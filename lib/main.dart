@@ -11,6 +11,7 @@ import 'core/firebase/firebase_options.dart';
 import 'core/firebase/firestore_survivor_service.dart';
 import 'core/firebase/firestore_user_profile_service.dart';
 import 'features/auth/application/session_controller.dart';
+import 'features/development/domain/app_check_debug_config.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,14 +20,18 @@ Future<void> main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // Development currently uses App Check debug providers. Production builds
-  // intentionally do not fall back to a debug provider; configure real
-  // attestation providers before enabling a release build.
+  // Development uses fixed App Check debug tokens so local Web and Android
+  // runs keep working across temporary browser profiles and emulator restarts.
+  // Release builds intentionally do not use these providers.
   if (kDebugMode) {
     await FirebaseAppCheck.instance.activate(
-      providerAndroid: const AndroidDebugProvider(),
+      providerAndroid: const AndroidDebugProvider(
+        debugToken: AppCheckDebugConfig.androidToken,
+      ),
       providerApple: const AppleDebugProvider(),
-      providerWeb: WebDebugProvider(),
+      providerWeb: WebDebugProvider(
+        debugToken: AppCheckDebugConfig.webToken,
+      ),
     );
   }
 
