@@ -45,6 +45,7 @@ class Survivor {
   Survivor({
     this.id = '',
     required this.duplicateId,
+    this.energy = 0,
     this.statMods = SurvivorStats.zero,
     List<SurvivorHealthRecord> healthHistory =
         const <SurvivorHealthRecord>[],
@@ -57,6 +58,11 @@ class Survivor {
   /// It is different from [duplicateId], which identifies the base archetype.
   final String id;
   final String duplicateId;
+
+  /// Current energy value. Energy is intentionally unbounded at the model
+  /// level and may become negative as a consequence of gameplay.
+  final int energy;
+
   final SurvivorStats statMods;
   final List<SurvivorHealthRecord> healthHistory;
   final List<String> equippedItemIds;
@@ -67,6 +73,7 @@ class Survivor {
   Map<String, dynamic> toMap() => <String, dynamic>{
         'id': id,
         'duplicateId': duplicateId,
+        'energy': energy,
         'statMods': statMods.toMap(),
         'healthHistory': healthHistory
             .map((record) => record.toMap())
@@ -94,9 +101,23 @@ class Survivor {
         ? equippedItemsRaw.whereType<String>().toList(growable: false)
         : const <String>[];
 
+    final energyRaw = map['energy'];
+    final int energy;
+    if (energyRaw == null) {
+      // Compatibility with Survivors created before the energy field existed.
+      energy = 0;
+    } else if (energyRaw is num &&
+        energyRaw.isFinite &&
+        energyRaw == energyRaw.toInt()) {
+      energy = energyRaw.toInt();
+    } else {
+      throw const FormatException('Survivor energy must be an integer.');
+    }
+
     return Survivor(
       id: map['id'] as String? ?? '',
       duplicateId: map['duplicateId'] as String? ?? '',
+      energy: energy,
       statMods: SurvivorStats.fromMap(
         map['statMods'] as Map<String, dynamic>?,
       ),
