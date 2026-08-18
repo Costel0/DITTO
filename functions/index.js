@@ -5,6 +5,7 @@ const {onCall, HttpsError} = require("firebase-functions/v2/https");
 initializeApp();
 
 const REGION = "europe-west1";
+const BUNKER_SCHEMA_VERSION = 3;
 const VALID_DUPLICATE_IDS = new Set(["01", "02", "03", "04"]);
 const CALLABLE_OPTIONS = {
   region: REGION,
@@ -36,10 +37,12 @@ function normalizedSurvivor(source, survivorId, duplicateId) {
   const statMods = source?.statMods && typeof source.statMods === "object"
     ? source.statMods
     : zeroStatMods();
+  const energy = Number.isInteger(source?.energy) ? source.energy : 0;
 
   return {
     id: survivorId,
     duplicateId,
+    energy,
     statMods,
     healthHistory,
     equippedItemIds,
@@ -187,12 +190,12 @@ exports.initializeBunker = onCall(
         updatedAt: now,
       });
       transaction.create(bunkerRef, {
-        schemaVersion: 2,
+        schemaVersion: BUNKER_SCHEMA_VERSION,
         revision: 1,
         serverUpdatedAt: now,
         survivors: [survivor],
         idleSurvivors: [survivorId],
-        busySurvivors: {},
+        busySurvivors: [],
         inventory: {},
       });
 
