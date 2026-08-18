@@ -2,16 +2,18 @@ import 'package:flutter/material.dart';
 
 import '../assets/asset_variant_resolver.dart';
 
-/// Displays one random bundled variant of [baseAssetPath].
+/// Displays one bundled variant of [baseAssetPath].
 ///
 /// Variants are discovered using [AssetVariantResolver] and follow the
-/// `_variant_[x]` naming convention. The selected path remains stable for the
-/// lifetime of this widget state, so regular Flutter rebuilds do not reshuffle
-/// the image.
+/// `_variant_[x]` naming convention. Without [selectionSeed] the widget keeps
+/// the previous random behaviour. With a seed, the same seed + [variantKey]
+/// always resolves to the same asset, even after navigation or an app restart.
 class RandomAssetVariantImage extends StatefulWidget {
   const RandomAssetVariantImage({
     super.key,
     required this.baseAssetPath,
+    this.selectionSeed,
+    this.variantKey,
     this.width,
     this.height,
     this.fit,
@@ -24,6 +26,14 @@ class RandomAssetVariantImage extends StatefulWidget {
   });
 
   final String baseAssetPath;
+
+  /// When present, variant selection is deterministic instead of ephemeral.
+  final int? selectionSeed;
+
+  /// Stable identity used to give different elements independent selections.
+  /// If omitted, [baseAssetPath] is enough to distinguish different assets.
+  final String? variantKey;
+
   final double? width;
   final double? height;
   final BoxFit? fit;
@@ -56,8 +66,9 @@ class _RandomAssetVariantImageState extends State<RandomAssetVariantImage> {
     super.didUpdateWidget(oldWidget);
 
     if (oldWidget.baseAssetPath != widget.baseAssetPath ||
+        oldWidget.selectionSeed != widget.selectionSeed ||
+        oldWidget.variantKey != widget.variantKey ||
         oldWidget.resolver != widget.resolver) {
-      _selectedAssetPath = null;
       _selectVariant();
     }
   }
@@ -65,12 +76,23 @@ class _RandomAssetVariantImageState extends State<RandomAssetVariantImage> {
   Future<void> _selectVariant() async {
     final generation = ++_selectionGeneration;
     final requestedBasePath = widget.baseAssetPath;
+    final requestedSeed = widget.selectionSeed;
+    final requestedVariantKey = widget.variantKey;
     final resolver = widget.resolver ?? assetVariantResolver;
-    final selectedPath = await resolver.pickRandom(requestedBasePath);
+
+    final selectedPath = requestedSeed == null
+        ? await resolver.pickRandom(requestedBasePath)
+        : await resolver.pickSeeded(
+            requestedBasePath,
+            seed: requestedSeed,
+            variantKey: requestedVariantKey,
+          );
 
     if (!mounted ||
         generation != _selectionGeneration ||
-        requestedBasePath != widget.baseAssetPath) {
+        requestedBasePath != widget.baseAssetPath ||
+        requestedSeed != widget.selectionSeed ||
+        requestedVariantKey != widget.variantKey) {
       return;
     }
 
