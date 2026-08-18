@@ -76,6 +76,14 @@ class _HubDebugControlsState extends State<HubDebugControls> {
     }
   }
 
+  String? _firebaseCodeLine(String? error) {
+    if (error == null || error.isEmpty) return null;
+    for (final line in error.split('\n')) {
+      if (line.startsWith('firebaseCode:')) return line;
+    }
+    return null;
+  }
+
   Future<void> _addItem() async {
     if (_isBusy) return;
 
@@ -97,10 +105,7 @@ class _HubDebugControlsState extends State<HubDebugControls> {
         }
         if (!mounted) return;
 
-        final firebaseCode = error
-            ?.split('\n')
-            .where((line) => line.startsWith('firebaseCode:'))
-            .firstOrNull;
+        final firebaseCode = _firebaseCodeLine(error);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             duration: const Duration(seconds: 8),
