@@ -13,21 +13,21 @@ class HubJobs extends StatelessWidget {
     final jobs = <HubJobCard>[
       HubJobCard(
         imageAsset: 'assets/hub/background_work_area_default.png',
-        fallbackIcon: Icons.handyman_outlined,
+        fallbackIcon: Icons.build,
         title: l10n.jobWorkshopTitle,
         description: l10n.jobWorkshopDescription,
         specificInfo: const _WorkshopJobInfo(),
       ),
       HubJobCard(
         imageAsset: 'assets/hub/background_kitchen_default.png',
-        fallbackIcon: Icons.soup_kitchen_outlined,
+        fallbackIcon: Icons.restaurant,
         title: l10n.jobKitchenTitle,
         description: l10n.jobKitchenDescription,
         specificInfo: const _KitchenJobInfo(),
       ),
       HubJobCard(
         imageAsset: 'assets/hub/background_rest_area_default.png',
-        fallbackIcon: Icons.grass_outlined,
+        fallbackIcon: Icons.eco,
         title: l10n.jobGardenTitle,
         description: l10n.jobGardenDescription,
         specificInfo: const _GardenJobInfo(),
@@ -56,7 +56,8 @@ class HubJobs extends StatelessWidget {
               Expanded(
                 child: ListView.separated(
                   itemCount: jobs.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 14),
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(height: 14),
                   itemBuilder: (context, index) => jobs[index],
                 ),
               ),
@@ -101,10 +102,11 @@ class HubJobCard extends StatelessWidget {
           final imageWidth = constraints.maxWidth < 560 ? 112.0 : 176.0;
 
           return Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               SizedBox(
                 width: imageWidth,
+                height: 164,
                 child: _JobImage(
                   assetPath: imageAsset,
                   fallbackIcon: fallbackIcon,
@@ -115,7 +117,6 @@ class HubJobCard extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
                         title,
@@ -182,7 +183,7 @@ class _WorkshopJobInfo extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     return _JobInfoView(
-      icon: Icons.build_circle_outlined,
+      icon: Icons.build,
       label: l10n.jobWorkshopInfoLabel,
       value: l10n.jobWorkshopInfoValue,
     );
@@ -196,7 +197,7 @@ class _KitchenJobInfo extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     return _JobInfoView(
-      icon: Icons.restaurant_outlined,
+      icon: Icons.restaurant,
       label: l10n.jobKitchenInfoLabel,
       value: l10n.jobKitchenInfoValue,
     );
@@ -210,7 +211,7 @@ class _GardenJobInfo extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     return _JobInfoView(
-      icon: Icons.grass_outlined,
+      icon: Icons.eco,
       label: l10n.jobGardenInfoLabel,
       value: l10n.jobGardenInfoValue,
     );
