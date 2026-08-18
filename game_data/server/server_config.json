@@ -1,5 +1,7 @@
 {
   "schemaVersion": 1,
-  "dataVersion": 1,
-  "config": {}
+  "dataVersion": 2,
+  "config": {
+    "sleepingSecondsPerNegativeEnergy": 60
+  }
 }
