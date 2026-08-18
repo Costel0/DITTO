@@ -81,12 +81,6 @@ class SessionController extends ChangeNotifier {
     return result;
   }
 
-  Future<AuthResult> skip() async {
-    final result = await _authService.skip();
-    await _applySuccessfulAuth(result);
-    return result;
-  }
-
   Future<bool> saveInitialProfile({
     required String username,
     required String duplicateId,
