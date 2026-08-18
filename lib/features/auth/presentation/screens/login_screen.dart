@@ -94,13 +94,6 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _loginAsAdmin() async {
     if (!kDebugMode || _isSubmitting) return;
 
-    if (!AdminLoginConfig.isConfigured) {
-      setState(() {
-        _errorMessage = context.l10n.adminLoginNotConfigured;
-      });
-      return;
-    }
-
     setState(() {
       _isSubmitting = true;
       _errorMessage = null;
