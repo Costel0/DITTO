@@ -1,15 +1,35 @@
 import '../../survivors/domain/survivor.dart';
 
+DateTime? _dateAtSecondPrecision(Object? raw) {
+  final parsed = raw is String ? DateTime.tryParse(raw)?.toUtc() : null;
+  if (parsed == null) return null;
+  return DateTime.utc(
+    parsed.year,
+    parsed.month,
+    parsed.day,
+    parsed.hour,
+    parsed.minute,
+    parsed.second,
+  );
+}
+
 class BusySurvivor {
   const BusySurvivor({
     required this.survivorId,
     required this.activity,
+    required this.startedAt,
+    required this.endsAt,
   });
 
   final String survivorId;
   final String activity;
+  final DateTime startedAt;
+  final DateTime endsAt;
 
-  factory BusySurvivor.fromJson(Map<String, dynamic> json) {
+  factory BusySurvivor.fromJson(
+    Map<String, dynamic> json, {
+    DateTime? legacyFallbackDate,
+  }) {
     final survivorId = json['survivorId'];
     final activity = json['activity'];
 
@@ -24,9 +44,35 @@ class BusySurvivor {
       );
     }
 
+    final fallback = legacyFallbackDate == null
+        ? null
+        : DateTime.utc(
+            legacyFallbackDate.year,
+            legacyFallbackDate.month,
+            legacyFallbackDate.day,
+            legacyFallbackDate.hour,
+            legacyFallbackDate.minute,
+            legacyFallbackDate.second,
+          );
+    final startedAt = _dateAtSecondPrecision(json['startedAt']) ?? fallback;
+    final endsAt = _dateAtSecondPrecision(json['endsAt']) ?? fallback;
+
+    if (startedAt == null || endsAt == null) {
+      throw const FormatException(
+        'Busy Survivor startedAt and endsAt must be ISO-8601 timestamps.',
+      );
+    }
+    if (endsAt.isBefore(startedAt)) {
+      throw const FormatException(
+        'Busy Survivor endsAt cannot be before startedAt.',
+      );
+    }
+
     return BusySurvivor(
       survivorId: survivorId.trim(),
       activity: activity.trim(),
+      startedAt: startedAt,
+      endsAt: endsAt,
     );
   }
 }
@@ -50,7 +96,8 @@ class BunkerState {
         busySurvivors = List<BusySurvivor>.unmodifiable(busySurvivors),
         inventory = Map<String, int>.unmodifiable(inventory);
 
-  static const int supportedSchemaVersion = 3;
+  static const int supportedSchemaVersion = 4;
+  static const int previousSchemaVersion = 3;
   static const int legacySchemaVersion = 2;
 
   final int schemaVersion;
@@ -63,7 +110,7 @@ class BunkerState {
   /// IDs of Survivors currently available for new tasks.
   final List<String> idleSurvivors;
 
-  /// Survivors currently occupied and the gameplay activity occupying them.
+  /// Survivors currently occupied, why, and for which exact time window.
   final List<BusySurvivor> busySurvivors;
 
   /// Item ID -> quantity owned.
@@ -86,19 +133,18 @@ class BunkerState {
   factory BunkerState.fromJson(Map<String, dynamic> json) {
     final schemaVersion = _requiredInt(json, 'schemaVersion');
     if (schemaVersion != legacySchemaVersion &&
+        schemaVersion != previousSchemaVersion &&
         schemaVersion != supportedSchemaVersion) {
       throw FormatException(
         'Unsupported bunker state schema version: $schemaVersion',
       );
     }
 
-    final serverUpdatedAtRaw = json['serverUpdatedAt'];
-    if (serverUpdatedAtRaw is! String) {
-      throw const FormatException('serverUpdatedAt must be an ISO-8601 string.');
-    }
-    final serverUpdatedAt = DateTime.tryParse(serverUpdatedAtRaw)?.toUtc();
+    final serverUpdatedAt = _dateAtSecondPrecision(json['serverUpdatedAt']);
     if (serverUpdatedAt == null) {
-      throw const FormatException('serverUpdatedAt is not a valid timestamp.');
+      throw const FormatException(
+        'serverUpdatedAt must be a valid ISO-8601 timestamp.',
+      );
     }
 
     final survivorsRaw = json['survivors'];
@@ -131,6 +177,8 @@ class BunkerState {
     final busySurvivors = _parseBusySurvivors(
       json['busySurvivors'],
       knownSurvivorIds,
+      schemaVersion: schemaVersion,
+      serverUpdatedAt: serverUpdatedAt,
     );
     final busyIds = busySurvivors
         .map((busySurvivor) => busySurvivor.survivorId)
@@ -177,8 +225,14 @@ class BunkerState {
 
   static List<BusySurvivor> _parseBusySurvivors(
     Object? raw,
-    Set<String> knownSurvivorIds,
-  ) {
+    Set<String> knownSurvivorIds, {
+    required int schemaVersion,
+    required DateTime serverUpdatedAt,
+  }) {
+    final legacyFallbackDate = schemaVersion < supportedSchemaVersion
+        ? serverUpdatedAt
+        : null;
+
     if (raw is List) {
       final result = <BusySurvivor>[];
       for (final rawBusySurvivor in raw) {
@@ -189,6 +243,7 @@ class BunkerState {
         }
         final busySurvivor = BusySurvivor.fromJson(
           Map<String, dynamic>.from(rawBusySurvivor),
+          legacyFallbackDate: legacyFallbackDate,
         );
         _validateSurvivorReferences(
           <String>[busySurvivor.survivorId],
@@ -201,8 +256,8 @@ class BunkerState {
     }
 
     // Compatibility with schema v2, where busySurvivors was stored as
-    // activity -> list of Survivor IDs.
-    if (raw is Map) {
+    // activity -> list of Survivor IDs and had no activity timestamps.
+    if (raw is Map && schemaVersion == legacySchemaVersion) {
       final result = <BusySurvivor>[];
       for (final entry in raw.entries) {
         if (entry.key is! String ||
@@ -228,6 +283,8 @@ class BunkerState {
             BusySurvivor(
               survivorId: id,
               activity: (entry.key as String).trim(),
+              startedAt: serverUpdatedAt,
+              endsAt: serverUpdatedAt,
             ),
           );
         }
@@ -236,7 +293,7 @@ class BunkerState {
     }
 
     throw const FormatException(
-      'busySurvivors must be a list of Survivor/activity pairs.',
+      'busySurvivors must be a list of Survivor/activity/time entries.',
     );
   }
 
