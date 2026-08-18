@@ -1,11 +1,14 @@
 const {initializeApp} = require("firebase-admin/app");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {onCall, HttpsError} = require("firebase-functions/v2/https");
+const {
+  fixStatus,
+  normalizedSurvivor,
+} = require("./bunker_status");
 
 initializeApp();
 
 const REGION = "europe-west1";
-const BUNKER_SCHEMA_VERSION = 3;
 const VALID_DUPLICATE_IDS = new Set(["01", "02", "03", "04"]);
 const CALLABLE_OPTIONS = {
   region: REGION,
@@ -14,40 +17,6 @@ const CALLABLE_OPTIONS = {
   timeoutSeconds: 15,
   enforceAppCheck: true,
 };
-
-function zeroStatMods() {
-  return {
-    strength: 0,
-    dexterity: 0,
-    constitution: 0,
-    stealth: 0,
-    care: 0,
-    cunning: 0,
-    charm: 0,
-  };
-}
-
-function normalizedSurvivor(source, survivorId, duplicateId) {
-  const healthHistory = Array.isArray(source?.healthHistory)
-    ? source.healthHistory
-    : [];
-  const equippedItemIds = Array.isArray(source?.equippedItemIds)
-    ? source.equippedItemIds
-    : [];
-  const statMods = source?.statMods && typeof source.statMods === "object"
-    ? source.statMods
-    : zeroStatMods();
-  const energy = Number.isInteger(source?.energy) ? source.energy : 0;
-
-  return {
-    id: survivorId,
-    duplicateId,
-    energy,
-    statMods,
-    healthHistory,
-    equippedItemIds,
-  };
-}
 
 exports.initializeBunker = onCall(
   CALLABLE_OPTIONS,
@@ -169,35 +138,41 @@ exports.initializeBunker = onCall(
         survivorId,
         duplicateId,
       );
-      const now = FieldValue.serverTimestamp();
+      const statusNow = new Date();
+      const metadataNow = FieldValue.serverTimestamp();
+
+      const bunker = await fixStatus({
+        transaction,
+        db,
+        now: statusNow,
+        bunker: {
+          revision: 0,
+          survivors: [survivor],
+          idleSurvivors: [survivorId],
+          busySurvivors: [],
+          inventory: {},
+        },
+      });
 
       const profileData = {
         email,
         username,
         initialDuplicateId: duplicateId,
-        updatedAt: now,
+        updatedAt: metadataNow,
       };
       if (!userSnapshot.exists) {
-        profileData.createdAt = now;
+        profileData.createdAt = metadataNow;
       }
 
       transaction.set(userRef, profileData, {merge: true});
       transaction.set(survivorRef, {
         ...survivor,
         createdAt: reusesLegacySurvivor
-          ? legacyInitialSnapshot.get("createdAt") || now
-          : now,
-        updatedAt: now,
+          ? legacyInitialSnapshot.get("createdAt") || metadataNow
+          : metadataNow,
+        updatedAt: metadataNow,
       });
-      transaction.create(bunkerRef, {
-        schemaVersion: BUNKER_SCHEMA_VERSION,
-        revision: 1,
-        serverUpdatedAt: now,
-        survivors: [survivor],
-        idleSurvivors: [survivorId],
-        busySurvivors: [],
-        inventory: {},
-      });
+      transaction.create(bunkerRef, bunker);
 
       return {
         survivorId,
