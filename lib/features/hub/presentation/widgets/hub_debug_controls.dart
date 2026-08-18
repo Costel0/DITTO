@@ -90,10 +90,14 @@ class _HubDebugControlsState extends State<HubDebugControls> {
       if (!mounted) return;
 
       if (!added) {
+        final error = widget.sessionController.lastDevelopmentError;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
+            duration: const Duration(seconds: 8),
             content: Text(
-              'DEBUG: Could not add item. Verify that /items is synced to Firestore (npm run sync:items:exact).',
+              error == null || error.isEmpty
+                  ? 'DEBUG: Could not add item.'
+                  : 'DEBUG: $error',
             ),
           ),
         );
