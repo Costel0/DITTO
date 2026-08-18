@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../auth/application/session_controller.dart';
 import '../../../development/presentation/debug_add_item_dialog.dart';
@@ -91,13 +92,22 @@ class _HubDebugControlsState extends State<HubDebugControls> {
 
       if (!added) {
         final error = widget.sessionController.lastDevelopmentError;
+        if (error != null && error.isNotEmpty) {
+          await Clipboard.setData(ClipboardData(text: error));
+        }
+        if (!mounted) return;
+
+        final firebaseCode = error
+            ?.split('\n')
+            .where((line) => line.startsWith('firebaseCode:'))
+            .firstOrNull;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             duration: const Duration(seconds: 8),
             content: Text(
               error == null || error.isEmpty
                   ? 'DEBUG: Could not add item.'
-                  : 'DEBUG: $error',
+                  : 'DEBUG: Error copied to clipboard${firebaseCode == null ? '' : ' ($firebaseCode)'}.',
             ),
           ),
         );
