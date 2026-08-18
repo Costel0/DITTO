@@ -63,7 +63,7 @@ test("fixStatus moves negative idle Survivors to sleeping", async () => {
   );
 });
 
-test("fixStatus completes expired sleeping and returns Survivor idle", async () => {
+test("fixStatus leaves completed occupations untouched", async () => {
   const fixed = await fixStatus({
     transaction: fakeTransaction(10),
     db: fakeDb(),
@@ -86,7 +86,13 @@ test("fixStatus completes expired sleeping and returns Survivor idle", async () 
     },
   });
 
-  assert.deepEqual(fixed.idleSurvivors, ["s1"]);
-  assert.deepEqual(fixed.busySurvivors, []);
-  assert.equal(fixed.survivors[0].energy, 0);
+  assert.deepEqual(fixed.idleSurvivors, []);
+  assert.equal(fixed.busySurvivors.length, 1);
+  assert.equal(fixed.busySurvivors[0].survivorId, "s1");
+  assert.equal(fixed.busySurvivors[0].activity, "sleeping");
+  assert.equal(
+    fixed.busySurvivors[0].endsAt.toISOString(),
+    "2026-08-18T12:08:00.000Z",
+  );
+  assert.equal(fixed.survivors[0].energy, -8);
 });
