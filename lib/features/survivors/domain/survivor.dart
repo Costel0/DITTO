@@ -45,7 +45,7 @@ class Survivor {
   Survivor({
     this.id = '',
     required this.duplicateId,
-    this.energy = 0,
+    this.energy = 50,
     this.statMods = SurvivorStats.zero,
     List<SurvivorHealthRecord> healthHistory =
         const <SurvivorHealthRecord>[],
@@ -105,7 +105,7 @@ class Survivor {
     final int energy;
     if (energyRaw == null) {
       // Compatibility with Survivors created before the energy field existed.
-      energy = 0;
+      energy = 50;
     } else if (energyRaw is num &&
         energyRaw.isFinite &&
         energyRaw == energyRaw.toInt()) {
