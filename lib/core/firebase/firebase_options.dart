@@ -41,7 +41,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions web = FirebaseOptions(
     apiKey: 'AIzaSyDXHPcGxm5mCboZDSLE5YZvR_BwHyEbu2U',
-    appId: '1:14378781761:web:31308987893f0a91614ac0',
+    appId: '1:14378781761:web:494fbdafb1e3ee52614ac0',
     messagingSenderId: '14378781761',
     projectId: 'ditto-app-project',
     authDomain: 'ditto-app-project.firebaseapp.com',
