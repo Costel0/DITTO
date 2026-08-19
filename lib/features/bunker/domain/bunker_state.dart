@@ -13,22 +13,34 @@ DateTime? _dateAtSecondPrecision(Object? raw) {
   );
 }
 
+String _legacyLocationForActivity(String activity) {
+  switch (activity) {
+    case 'sleeping':
+      return 'beds';
+    default:
+      return 'unknown';
+  }
+}
+
 class BusySurvivor {
   const BusySurvivor({
     required this.survivorId,
     required this.activity,
+    required this.location,
     required this.startedAt,
     required this.endsAt,
   });
 
   final String survivorId;
   final String activity;
+  final String location;
   final DateTime startedAt;
   final DateTime endsAt;
 
   factory BusySurvivor.fromJson(
     Map<String, dynamic> json, {
     DateTime? legacyFallbackDate,
+    bool allowLegacyLocation = false,
   }) {
     final survivorId = json['survivorId'];
     final activity = json['activity'];
@@ -41,6 +53,19 @@ class BusySurvivor {
     if (activity is! String || activity.trim().isEmpty) {
       throw const FormatException(
         'Busy Survivor activity must be a non-empty string.',
+      );
+    }
+
+    final normalizedActivity = activity.trim();
+    final locationRaw = json['location'];
+    final String location;
+    if (locationRaw is String && locationRaw.trim().isNotEmpty) {
+      location = locationRaw.trim();
+    } else if (allowLegacyLocation) {
+      location = _legacyLocationForActivity(normalizedActivity);
+    } else {
+      throw const FormatException(
+        'Busy Survivor location must be a non-empty string.',
       );
     }
 
@@ -70,7 +95,8 @@ class BusySurvivor {
 
     return BusySurvivor(
       survivorId: survivorId.trim(),
-      activity: activity.trim(),
+      activity: normalizedActivity,
+      location: location,
       startedAt: startedAt,
       endsAt: endsAt,
     );
@@ -96,8 +122,9 @@ class BunkerState {
         busySurvivors = List<BusySurvivor>.unmodifiable(busySurvivors),
         inventory = Map<String, int>.unmodifiable(inventory);
 
-  static const int supportedSchemaVersion = 4;
-  static const int previousSchemaVersion = 3;
+  static const int supportedSchemaVersion = 5;
+  static const int locationSchemaVersion = 5;
+  static const int timestampSchemaVersion = 4;
   static const int legacySchemaVersion = 2;
 
   final int schemaVersion;
@@ -110,7 +137,8 @@ class BunkerState {
   /// IDs of Survivors currently available for new tasks.
   final List<String> idleSurvivors;
 
-  /// Survivors currently occupied, why, and for which exact time window.
+  /// Survivors currently occupied, what they are doing, where, and for which
+  /// exact time window.
   final List<BusySurvivor> busySurvivors;
 
   /// Item ID -> quantity owned.
@@ -132,9 +160,8 @@ class BunkerState {
 
   factory BunkerState.fromJson(Map<String, dynamic> json) {
     final schemaVersion = _requiredInt(json, 'schemaVersion');
-    if (schemaVersion != legacySchemaVersion &&
-        schemaVersion != previousSchemaVersion &&
-        schemaVersion != supportedSchemaVersion) {
+    if (schemaVersion < legacySchemaVersion ||
+        schemaVersion > supportedSchemaVersion) {
       throw FormatException(
         'Unsupported bunker state schema version: $schemaVersion',
       );
@@ -229,9 +256,10 @@ class BunkerState {
     required int schemaVersion,
     required DateTime serverUpdatedAt,
   }) {
-    final legacyFallbackDate = schemaVersion < supportedSchemaVersion
+    final legacyFallbackDate = schemaVersion < timestampSchemaVersion
         ? serverUpdatedAt
         : null;
+    final allowLegacyLocation = schemaVersion < locationSchemaVersion;
 
     if (raw is List) {
       final result = <BusySurvivor>[];
@@ -244,6 +272,7 @@ class BunkerState {
         final busySurvivor = BusySurvivor.fromJson(
           Map<String, dynamic>.from(rawBusySurvivor),
           legacyFallbackDate: legacyFallbackDate,
+          allowLegacyLocation: allowLegacyLocation,
         );
         _validateSurvivorReferences(
           <String>[busySurvivor.survivorId],
@@ -256,7 +285,7 @@ class BunkerState {
     }
 
     // Compatibility with schema v2, where busySurvivors was stored as
-    // activity -> list of Survivor IDs and had no activity timestamps.
+    // activity -> list of Survivor IDs and had no activity timestamps/location.
     if (raw is Map && schemaVersion == legacySchemaVersion) {
       final result = <BusySurvivor>[];
       for (final entry in raw.entries) {
@@ -278,11 +307,13 @@ class BunkerState {
           knownSurvivorIds,
           'busySurvivors',
         );
+        final activity = (entry.key as String).trim();
         for (final id in ids) {
           result.add(
             BusySurvivor(
               survivorId: id,
-              activity: (entry.key as String).trim(),
+              activity: activity,
+              location: _legacyLocationForActivity(activity),
               startedAt: serverUpdatedAt,
               endsAt: serverUpdatedAt,
             ),
@@ -293,7 +324,7 @@ class BunkerState {
     }
 
     throw const FormatException(
-      'busySurvivors must be a list of Survivor/activity/time entries.',
+      'busySurvivors must be a list of Survivor/activity/location/time entries.',
     );
   }
 
