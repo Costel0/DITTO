@@ -19,9 +19,9 @@ extension JobAreaDefinition on JobArea {
   String get cardAssetPath {
     switch (this) {
       case JobArea.workshop:
-        return 'assets/jobs/workshop_card.png';
+        return 'assets/hub/background_work_area_default.png';
       case JobArea.kitchen:
-        return 'assets/jobs/kitchen_card.png';
+        return 'assets/hub/background_kitchen_default.png';
       case JobArea.garden:
         return 'assets/jobs/garden_card.png';
     }
