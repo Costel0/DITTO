@@ -1,17 +1,23 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../../app/navigation/app_routes.dart';
+import '../../../../core/firebase/firebase_functions_job_task_service.dart';
 import '../../../../core/firebase/firestore_bunker_state_service.dart';
 import '../../../../core/localization/l10n.dart';
 import '../../../../core/presentation/survival_background.dart';
 import '../../../auth/application/session_controller.dart';
 import '../../../bunker/application/bunker_state_controller.dart';
+import '../../../bunker/domain/bunker_state.dart';
 import '../../../hub/domain/hub_scene_configuration.dart';
 import '../../../hub/presentation/widgets/hub_character_info.dart';
 import '../../../hub/presentation/widgets/hub_debug_controls.dart';
 import '../../../hub/presentation/widgets/hub_inventory.dart';
 import '../../../hub/presentation/widgets/hub_jobs.dart';
 import '../../../hub/presentation/widgets/hub_scrollable_scene.dart';
+import '../../../jobs/domain/job_area.dart';
+import '../../../jobs/presentation/screens/job_area_screen.dart';
 import '../../../survivors/domain/survivor.dart';
 
 class WelcomeScreen extends StatefulWidget {
@@ -37,6 +43,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   _HubSection _selectedSection = _HubSection.character;
   int _selectedSurvivorIndex = 0;
   BunkerStateController? _bunkerStateController;
+  final FirebaseFunctionsJobTaskService _jobTaskService =
+      FirebaseFunctionsJobTaskService();
 
   SessionController get sessionController => widget.sessionController;
 
@@ -128,6 +136,31 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     await controller.refreshAfterMutation();
   }
 
+  void _selectSection(_HubSection section) {
+    setState(() => _selectedSection = section);
+    final controller = _bunkerStateController;
+    if (section == _HubSection.jobs && controller != null) {
+      unawaited(controller.refresh());
+    }
+  }
+
+  void _openJobArea(JobArea area) {
+    final controller = _bunkerStateController;
+    if (controller == null) return;
+
+    unawaited(
+      Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => JobAreaScreen(
+            area: area,
+            bunkerStateController: controller,
+            taskService: _jobTaskService,
+          ),
+        ),
+      ),
+    );
+  }
+
   IconData _characterIcon(String duplicateId) {
     switch (duplicateId) {
       case '02':
@@ -205,6 +238,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final rosterLength = _roster.length;
+    final bunkerController = _bunkerStateController;
 
     return Scaffold(
       body: SurvivalBackground(
@@ -254,11 +288,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                                   ),
                                   _HubSectionBar(
                                     selectedSection: _selectedSection,
-                                    onSelected: (section) {
-                                      setState(
-                                        () => _selectedSection = section,
-                                      );
-                                    },
+                                    onSelected: _selectSection,
                                   ),
                                   Expanded(
                                     child: _HubSectionView(
@@ -266,7 +296,13 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                                       survivor: _selectedSurvivor,
                                       inventory: _inventory,
                                       inventoryLoadError:
-                                          _bunkerStateController?.lastError,
+                                          bunkerController?.lastError,
+                                      bunkerState: bunkerController?.state,
+                                      bunkerIsRefreshing:
+                                          bunkerController?.isRefreshing ?? false,
+                                      bunkerLoadError:
+                                          bunkerController?.lastError,
+                                      onOpenJobArea: _openJobArea,
                                       onPreviousSurvivor:
                                           _selectedSurvivorIndex > 0
                                               ? () =>
@@ -541,6 +577,10 @@ class _HubSectionView extends StatelessWidget {
     required this.survivor,
     required this.inventory,
     required this.inventoryLoadError,
+    required this.bunkerState,
+    required this.bunkerIsRefreshing,
+    required this.bunkerLoadError,
+    required this.onOpenJobArea,
     required this.onPreviousSurvivor,
     required this.onNextSurvivor,
   });
@@ -549,6 +589,10 @@ class _HubSectionView extends StatelessWidget {
   final Survivor? survivor;
   final Map<String, int>? inventory;
   final Object? inventoryLoadError;
+  final BunkerState? bunkerState;
+  final bool bunkerIsRefreshing;
+  final Object? bunkerLoadError;
+  final ValueChanged<JobArea> onOpenJobArea;
   final VoidCallback? onPreviousSurvivor;
   final VoidCallback? onNextSurvivor;
 
@@ -574,8 +618,12 @@ class _HubSectionView extends StatelessWidget {
           loadError: inventoryLoadError,
         );
       case _HubSection.jobs:
-        return const HubJobs(
-          key: ValueKey(_HubSection.jobs),
+        return HubJobs(
+          key: const ValueKey(_HubSection.jobs),
+          bunkerState: bunkerState,
+          isRefreshing: bunkerIsRefreshing,
+          loadError: bunkerLoadError,
+          onOpenArea: onOpenJobArea,
         );
       case _HubSection.expeditions:
         return _HubSectionContent(
