@@ -72,6 +72,7 @@
   "jobAvailableTasksTitle": "Available tasks",
   "jobNoAvailableTasks": "There are no available tasks in this area yet.",
   "jobChooseSurvivorTitle": "Choose who will perform the task",
+  "jobChooseSurvivorDescription": "Only available survivors are shown. Check their energy before assigning them.",
   "jobNoIdleSurvivors": "There are no available survivors who can start this task.",
   "jobEnergyLabel": "Energy",
   "jobTaskStarted": "Task started by",
