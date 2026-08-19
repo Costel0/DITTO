@@ -32,6 +32,56 @@ function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+function validateJobTasks(data, filename) {
+  if (!isPlainObject(data.tasks)) {
+    throw new Error(`${filename}.tasks must be an object.`);
+  }
+
+  for (const [taskId, task] of Object.entries(data.tasks)) {
+    if (!taskId.trim() || !isPlainObject(task)) {
+      throw new Error(`${filename} contains an invalid task entry.`);
+    }
+    if (typeof task.activity !== "string" || !task.activity.trim()) {
+      throw new Error(`${filename}.${taskId}.activity must be a string.`);
+    }
+    if (typeof task.location !== "string" || !task.location.trim()) {
+      throw new Error(`${filename}.${taskId}.location must be a string.`);
+    }
+    if (
+      typeof task.durationSeconds !== "number" ||
+      !Number.isFinite(task.durationSeconds) ||
+      task.durationSeconds <= 0
+    ) {
+      throw new Error(
+        `${filename}.${taskId}.durationSeconds must be a positive number.`,
+      );
+    }
+
+    if (!isPlainObject(task.completion)) {
+      throw new Error(`${filename}.${taskId}.completion must be an object.`);
+    }
+    if (!Number.isInteger(task.completion.energyDelta)) {
+      throw new Error(
+        `${filename}.${taskId}.completion.energyDelta must be an integer.`,
+      );
+    }
+    if (!isPlainObject(task.completion.inventoryDelta)) {
+      throw new Error(
+        `${filename}.${taskId}.completion.inventoryDelta must be an object.`,
+      );
+    }
+    for (const [itemId, quantityDelta] of Object.entries(
+      task.completion.inventoryDelta,
+    )) {
+      if (!itemId.trim() || !Number.isInteger(quantityDelta)) {
+        throw new Error(
+          `${filename}.${taskId} contains an invalid inventory delta.`,
+        );
+      }
+    }
+  }
+}
+
 function projectIdFromFirebaseRc() {
   const firebaseRcPath = path.resolve(__dirname, "../../.firebaserc");
   if (!fs.existsSync(firebaseRcPath)) return null;
@@ -104,6 +154,9 @@ function loadServerData() {
     }
     if (!Number.isInteger(data.dataVersion) || data.dataVersion < 1) {
       throw new Error(`${filename}.dataVersion must be a positive integer.`);
+    }
+    if (documentId === "jobTasks") {
+      validateJobTasks(data, filename);
     }
 
     documents.set(documentId, {filename, data});
