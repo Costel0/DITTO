@@ -74,26 +74,26 @@ class BunkerStateController extends ChangeNotifier {
 
   Future<void> _performRefresh() async {
     _isRefreshing = true;
+    notifyListeners();
+
     try {
       final nextState = await _service.fetchBunkerState();
       if (_isDisposed) return;
 
-      final hadError = _lastError != null;
       _lastError = null;
       final currentRevision = _state?.revision;
       if (currentRevision == null || nextState.revision > currentRevision) {
         _state = nextState;
-        notifyListeners();
-      } else if (hadError) {
-        notifyListeners();
       }
     } catch (error) {
       if (_isDisposed) return;
       _lastError = error;
-      notifyListeners();
     } finally {
       _isRefreshing = false;
       _activeRefresh = null;
+      if (!_isDisposed) {
+        notifyListeners();
+      }
     }
   }
 
