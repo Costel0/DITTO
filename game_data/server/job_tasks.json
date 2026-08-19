@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "dataVersion": 1,
+  "tasks": {
+    "clear_garden": {
+      "activity": "clear_garden",
+      "location": "garden",
+      "durationSeconds": 300,
+      "completion": {
+        "energyDelta": 0,
+        "inventoryDelta": {}
+      }
+    }
+  }
+}
