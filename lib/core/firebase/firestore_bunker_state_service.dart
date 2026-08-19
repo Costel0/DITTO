@@ -34,7 +34,7 @@ class FirestoreBunkerStateService implements BunkerStateService {
     // same server-authoritative and idempotent Cloud Function.
     if (kDebugMode && _hasLocallyExpiredOccupation(state)) {
       final callable = _functions.httpsCallable('resolveCompletedOccupations');
-      await callable.call<void>();
+      await callable.call();
       state = await _fetchState();
     }
 
