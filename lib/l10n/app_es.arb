@@ -72,6 +72,7 @@
   "jobAvailableTasksTitle": "Tareas disponibles",
   "jobNoAvailableTasks": "Todavía no hay tareas disponibles en esta zona.",
   "jobChooseSurvivorTitle": "Elige quién realizará la tarea",
+  "jobNoIdleSurvivors": "No hay ningún superviviente disponible para empezar esta tarea.",
   "jobEnergyLabel": "Energía",
   "jobTaskStarted": "Tarea iniciada por",
   "jobTaskStartError": "No se ha podido iniciar la tarea. Actualiza el estado e inténtalo de nuevo.",
