@@ -1,7 +1,8 @@
 {
   "schemaVersion": 1,
-  "dataVersion": 2,
+  "dataVersion": 3,
   "config": {
-    "sleepingSecondsPerNegativeEnergy": 60
+    "sleepingSecondsPerNegativeEnergy": 60,
+    "clearGardenDurationSeconds": 300
   }
 }
