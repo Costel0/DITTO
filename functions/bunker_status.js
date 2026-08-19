@@ -97,13 +97,17 @@ function normalizedBusySurvivors(source, fallbackDate = new Date()) {
           entry.location.trim().length > 0
           ? entry.location.trim()
           : legacyLocationForActivity(activity);
-        return {
+        const normalized = {
           survivorId: entry.survivorId.trim(),
           activity,
           location,
           startedAt: truncateToSecond(entry.startedAt) || fallback,
           endsAt: truncateToSecond(entry.endsAt) || fallback,
         };
+        if (typeof entry.taskId === "string" && entry.taskId.trim().length > 0) {
+          normalized.taskId = entry.taskId.trim();
+        }
+        return normalized;
       });
   }
 
