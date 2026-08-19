@@ -47,12 +47,13 @@ test("fixStatus moves negative idle Survivors to sleeping", async () => {
     },
   });
 
-  assert.equal(fixed.schemaVersion, 4);
+  assert.equal(fixed.schemaVersion, 5);
   assert.equal(fixed.revision, 8);
   assert.deepEqual(fixed.idleSurvivors, []);
   assert.equal(fixed.busySurvivors.length, 1);
   assert.equal(fixed.busySurvivors[0].survivorId, "s1");
   assert.equal(fixed.busySurvivors[0].activity, "sleeping");
+  assert.equal(fixed.busySurvivors[0].location, "beds");
   assert.equal(
     fixed.busySurvivors[0].startedAt.toISOString(),
     "2026-08-18T12:00:00.000Z",
@@ -90,6 +91,7 @@ test("fixStatus leaves completed occupations untouched", async () => {
   assert.equal(fixed.busySurvivors.length, 1);
   assert.equal(fixed.busySurvivors[0].survivorId, "s1");
   assert.equal(fixed.busySurvivors[0].activity, "sleeping");
+  assert.equal(fixed.busySurvivors[0].location, "beds");
   assert.equal(
     fixed.busySurvivors[0].endsAt.toISOString(),
     "2026-08-18T12:08:00.000Z",
