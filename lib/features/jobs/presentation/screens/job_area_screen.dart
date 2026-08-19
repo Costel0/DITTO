@@ -117,7 +117,10 @@ class _JobAreaScreenState extends State<JobAreaScreen> {
                   leading: CircleAvatar(
                     backgroundColor: const Color(0xFF2A261E),
                     child: Text(
-                      survivorDisplayName(context, survivor).characters.first,
+                      survivorDisplayName(context, survivor).isEmpty
+                          ? '?'
+                          : survivorDisplayName(context, survivor)
+                              .substring(0, 1),
                     ),
                   ),
                   title: Text(
