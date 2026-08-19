@@ -70,6 +70,10 @@ class Survivor {
   String get idleAssetPath =>
       'assets/characters/survivor_${duplicateId}_idle.png';
 
+  /// Square portrait used by compact reusable Survivor profile views.
+  String get profileAssetPath =>
+      'assets/characters/survivor_${duplicateId}_profile.png';
+
   Map<String, dynamic> toMap() => <String, dynamic>{
         'id': id,
         'duplicateId': duplicateId,
