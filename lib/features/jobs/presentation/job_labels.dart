@@ -1,0 +1,67 @@
+import 'package:flutter/material.dart';
+
+import '../../../core/localization/l10n.dart';
+import '../../survivors/domain/survivor.dart';
+import '../domain/job_area.dart';
+
+String jobAreaTitle(BuildContext context, JobArea area) {
+  final l10n = context.l10n;
+  switch (area) {
+    case JobArea.workshop:
+      return l10n.jobWorkshopTitle;
+    case JobArea.kitchen:
+      return l10n.jobKitchenTitle;
+    case JobArea.garden:
+      return l10n.jobGardenTitle;
+  }
+}
+
+String jobAreaDescription(BuildContext context, JobArea area) {
+  final l10n = context.l10n;
+  switch (area) {
+    case JobArea.workshop:
+      return l10n.jobWorkshopDescription;
+    case JobArea.kitchen:
+      return l10n.jobKitchenDescription;
+    case JobArea.garden:
+      return l10n.jobGardenDescription;
+  }
+}
+
+IconData jobAreaIcon(JobArea area) {
+  switch (area) {
+    case JobArea.workshop:
+      return Icons.handyman_outlined;
+    case JobArea.kitchen:
+      return Icons.soup_kitchen_outlined;
+    case JobArea.garden:
+      return Icons.grass_outlined;
+  }
+}
+
+String jobActivityLabel(BuildContext context, String activity) {
+  switch (activity) {
+    case 'clear_garden':
+      return context.l10n.jobClearGardenTitle;
+    case 'sleeping':
+      return context.l10n.jobSleepingTitle;
+    default:
+      return activity;
+  }
+}
+
+String survivorDisplayName(BuildContext context, Survivor survivor) {
+  final l10n = context.l10n;
+  switch (survivor.duplicateId) {
+    case '01':
+      return l10n.characterName1;
+    case '02':
+      return l10n.characterName2;
+    case '03':
+      return l10n.characterName3;
+    case '04':
+      return l10n.characterName4;
+    default:
+      return survivor.duplicateId;
+  }
+}
