@@ -1,7 +1,9 @@
-const BUNKER_SCHEMA_VERSION = 4;
+const BUNKER_SCHEMA_VERSION = 5;
 const DEFAULT_SURVIVOR_ENERGY = 50;
 const DEFAULT_SLEEPING_SECONDS_PER_NEGATIVE_ENERGY = 60;
 const SLEEPING_ACTIVITY = "sleeping";
+const SLEEPING_LOCATION = "beds";
+const UNKNOWN_LOCATION = "unknown";
 
 function zeroStatMods() {
   return {
@@ -72,6 +74,10 @@ function truncateToSecond(value) {
   return new Date(Math.floor(date.getTime() / 1000) * 1000);
 }
 
+function legacyLocationForActivity(activity) {
+  return activity === SLEEPING_ACTIVITY ? SLEEPING_LOCATION : UNKNOWN_LOCATION;
+}
+
 function normalizedBusySurvivors(source, fallbackDate = new Date()) {
   const fallback = truncateToSecond(fallbackDate) || new Date(0);
 
@@ -85,27 +91,37 @@ function normalizedBusySurvivors(source, fallbackDate = new Date()) {
         typeof entry.activity === "string" &&
         entry.activity.trim().length > 0,
       )
-      .map((entry) => ({
-        survivorId: entry.survivorId.trim(),
-        activity: entry.activity.trim(),
-        startedAt: truncateToSecond(entry.startedAt) || fallback,
-        endsAt: truncateToSecond(entry.endsAt) || fallback,
-      }));
+      .map((entry) => {
+        const activity = entry.activity.trim();
+        const location = typeof entry.location === "string" &&
+          entry.location.trim().length > 0
+          ? entry.location.trim()
+          : legacyLocationForActivity(activity);
+        return {
+          survivorId: entry.survivorId.trim(),
+          activity,
+          location,
+          startedAt: truncateToSecond(entry.startedAt) || fallback,
+          endsAt: truncateToSecond(entry.endsAt) || fallback,
+        };
+      });
   }
 
   // Compatibility migration for schema v2:
   // activity -> [survivorId, ...]
   if (source && typeof source === "object") {
     const result = [];
-    for (const [activity, survivorIds] of Object.entries(source)) {
-      if (!Array.isArray(survivorIds) || activity.trim().length === 0) continue;
+    for (const [activityRaw, survivorIds] of Object.entries(source)) {
+      const activity = activityRaw.trim();
+      if (!Array.isArray(survivorIds) || activity.length === 0) continue;
       for (const survivorId of survivorIds) {
         if (typeof survivorId !== "string" || survivorId.trim().length === 0) {
           continue;
         }
         result.push({
           survivorId: survivorId.trim(),
-          activity: activity.trim(),
+          activity,
+          location: legacyLocationForActivity(activity),
           startedAt: fallback,
           endsAt: fallback,
         });
@@ -186,6 +202,7 @@ async function fixStatus({transaction, db, bunker, now = new Date()}) {
     busyBySurvivorId.set(survivorId, {
       survivorId,
       activity: SLEEPING_ACTIVITY,
+      location: SLEEPING_LOCATION,
       startedAt: fixedNow,
       endsAt: new Date(fixedNow.getTime() + durationSeconds * 1000),
     });
@@ -211,6 +228,7 @@ module.exports = {
   DEFAULT_SURVIVOR_ENERGY,
   DEFAULT_SLEEPING_SECONDS_PER_NEGATIVE_ENERGY,
   SLEEPING_ACTIVITY,
+  SLEEPING_LOCATION,
   fixStatus,
   normalizedBunkerSurvivors,
   normalizedBusySurvivors,
