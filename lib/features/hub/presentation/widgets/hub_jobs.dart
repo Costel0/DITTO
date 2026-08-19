@@ -1,37 +1,32 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/localization/l10n.dart';
+import '../../../bunker/domain/bunker_state.dart';
+import '../../../jobs/domain/job_area.dart';
+import '../../../jobs/presentation/job_labels.dart';
 
 class HubJobs extends StatelessWidget {
-  const HubJobs({super.key});
+  const HubJobs({
+    super.key,
+    required this.bunkerState,
+    required this.isRefreshing,
+    required this.loadError,
+    required this.onOpenArea,
+  });
+
+  final BunkerState? bunkerState;
+  final bool isRefreshing;
+  final Object? loadError;
+  final ValueChanged<JobArea> onOpenArea;
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final theme = Theme.of(context);
-
-    final jobs = <HubJobCard>[
-      HubJobCard(
-        imageAsset: 'assets/hub/background_work_area_default.png',
-        fallbackIcon: Icons.build,
-        title: l10n.jobWorkshopTitle,
-        description: l10n.jobWorkshopDescription,
-        specificInfo: const _WorkshopJobInfo(),
-      ),
-      HubJobCard(
-        imageAsset: 'assets/hub/background_kitchen_default.png',
-        fallbackIcon: Icons.restaurant,
-        title: l10n.jobKitchenTitle,
-        description: l10n.jobKitchenDescription,
-        specificInfo: const _KitchenJobInfo(),
-      ),
-      HubJobCard(
-        imageAsset: 'assets/hub/background_rest_area_default.png',
-        fallbackIcon: Icons.eco,
-        title: l10n.jobGardenTitle,
-        description: l10n.jobGardenDescription,
-        specificInfo: const _GardenJobInfo(),
-      ),
+    const areas = <JobArea>[
+      JobArea.workshop,
+      JobArea.kitchen,
+      JobArea.garden,
     ];
 
     return Container(
@@ -45,20 +40,54 @@ class HubJobs extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                l10n.hubJobsTitle,
-                style: theme.textTheme.titleLarge?.copyWith(
-                  color: const Color(0xFFE6D8BD),
-                  fontWeight: FontWeight.w800,
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      l10n.hubJobsTitle,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        color: const Color(0xFFE6D8BD),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  if (isRefreshing)
+                    const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                ],
               ),
               const SizedBox(height: 12),
+              if (bunkerState == null && loadError != null) ...[
+                Text(
+                  l10n.hubJobsLoadError,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: const Color(0xFFB08C75),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
               Expanded(
                 child: ListView.separated(
-                  itemCount: jobs.length,
+                  itemCount: areas.length,
                   separatorBuilder: (context, index) =>
                       const SizedBox(height: 14),
-                  itemBuilder: (context, index) => jobs[index],
+                  itemBuilder: (context, index) {
+                    final area = areas[index];
+                    return HubJobCard(
+                      imageAsset: area.cardAssetPath,
+                      fallbackIcon: jobAreaIcon(area),
+                      title: jobAreaTitle(context, area),
+                      description: jobAreaDescription(context, area),
+                      specificInfo: _ActiveJobInfo(
+                        area: area,
+                        bunkerState: bunkerState,
+                      ),
+                      onTap: () => onOpenArea(area),
+                    );
+                  },
                 ),
               ),
             ],
@@ -77,6 +106,7 @@ class HubJobCard extends StatelessWidget {
     required this.title,
     required this.description,
     required this.specificInfo,
+    required this.onTap,
   });
 
   final String imageAsset;
@@ -84,64 +114,81 @@ class HubJobCard extends StatelessWidget {
   final String title;
   final String description;
   final Widget specificInfo;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Container(
-      constraints: const BoxConstraints(minHeight: 164),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1B1A16),
-        borderRadius: BorderRadius.circular(7),
-        border: Border.all(color: const Color(0xFF4E4537)),
-      ),
+    return Material(
+      color: const Color(0xFF1B1A16),
+      borderRadius: BorderRadius.circular(7),
       clipBehavior: Clip.antiAlias,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final imageWidth = constraints.maxWidth < 560 ? 112.0 : 176.0;
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 164),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(7),
+            border: Border.all(color: const Color(0xFF4E4537)),
+          ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final imageWidth = constraints.maxWidth < 560 ? 112.0 : 176.0;
 
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                width: imageWidth,
-                height: 164,
-                child: _JobImage(
-                  assetPath: imageAsset,
-                  fallbackIcon: fallbackIcon,
-                ),
-              ),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          color: const Color(0xFFE4D5B8),
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        description,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: const Color(0xFFA79E8E),
-                          height: 1.4,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      specificInfo,
-                    ],
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: imageWidth,
+                    height: 164,
+                    child: _JobImage(
+                      assetPath: imageAsset,
+                      fallbackIcon: fallbackIcon,
+                    ),
                   ),
-                ),
-              ),
-            ],
-          );
-        },
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  title,
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    color: const Color(0xFFE4D5B8),
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                              const Icon(
+                                Icons.chevron_right_rounded,
+                                color: Color(0xFF9B8762),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            description,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: const Color(0xFFA79E8E),
+                              height: 1.4,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          specificInfo,
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
       ),
     );
   }
@@ -176,98 +223,156 @@ class _JobImage extends StatelessWidget {
   }
 }
 
-class _WorkshopJobInfo extends StatelessWidget {
-  const _WorkshopJobInfo();
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    return _JobInfoView(
-      icon: Icons.build,
-      label: l10n.jobWorkshopInfoLabel,
-      value: l10n.jobWorkshopInfoValue,
-    );
-  }
-}
-
-class _KitchenJobInfo extends StatelessWidget {
-  const _KitchenJobInfo();
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    return _JobInfoView(
-      icon: Icons.restaurant,
-      label: l10n.jobKitchenInfoLabel,
-      value: l10n.jobKitchenInfoValue,
-    );
-  }
-}
-
-class _GardenJobInfo extends StatelessWidget {
-  const _GardenJobInfo();
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    return _JobInfoView(
-      icon: Icons.eco,
-      label: l10n.jobGardenInfoLabel,
-      value: l10n.jobGardenInfoValue,
-    );
-  }
-}
-
-class _JobInfoView extends StatelessWidget {
-  const _JobInfoView({
-    required this.icon,
-    required this.label,
-    required this.value,
+class _ActiveJobInfo extends StatelessWidget {
+  const _ActiveJobInfo({
+    required this.area,
+    required this.bunkerState,
   });
 
-  final IconData icon;
-  final String label;
-  final String value;
+  final JobArea area;
+  final BunkerState? bunkerState;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final bunker = bunkerState;
+    if (bunker == null) {
+      return _JobInfoFrame(
+        child: Text(
+          context.l10n.hubJobsLoading,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: const Color(0xFF8F8677),
+              ),
+        ),
+      );
+    }
 
+    final active = bunker.busySurvivors
+        .where((busy) => busy.location == area.id)
+        .toList(growable: false)
+      ..sort((a, b) => a.endsAt.compareTo(b.endsAt));
+
+    if (active.isEmpty) {
+      return _JobInfoFrame(
+        child: Row(
+          children: [
+            const Icon(
+              Icons.hourglass_empty_rounded,
+              size: 17,
+              color: Color(0xFFC0A46F),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                context.l10n.jobNoActiveTasks,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: const Color(0xFF8F8677),
+                    ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return _JobInfoFrame(
+      child: Column(
+        children: [
+          for (var index = 0; index < active.length; index++) ...[
+            _BusySurvivorRow(
+              busy: active[index],
+              bunkerState: bunker,
+            ),
+            if (index + 1 < active.length)
+              const Divider(height: 14, color: Color(0xFF443D31)),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _JobInfoFrame extends StatelessWidget {
+  const _JobInfoFrame({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
       decoration: BoxDecoration(
         color: const Color(0xFF25221B),
         borderRadius: BorderRadius.circular(5),
         border: Border.all(color: const Color(0xFF443D31)),
       ),
-      child: Row(
-        children: [
-          Icon(icon, size: 17, color: const Color(0xFFC0A46F)),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Text(
-              label,
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: const Color(0xFFBDB3A1),
-                fontWeight: FontWeight.w700,
+      child: child,
+    );
+  }
+}
+
+class _BusySurvivorRow extends StatelessWidget {
+  const _BusySurvivorRow({
+    required this.busy,
+    required this.bunkerState,
+  });
+
+  final BusySurvivor busy;
+  final BunkerState bunkerState;
+
+  String _formatDateTime(BuildContext context, DateTime value) {
+    final local = value.toLocal();
+    final material = MaterialLocalizations.of(context);
+    final date = material.formatShortDate(local);
+    final time = material.formatTimeOfDay(
+      TimeOfDay.fromDateTime(local),
+      alwaysUse24HourFormat: true,
+    );
+    return '$date $time';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final survivor = bunkerState.survivorById(busy.survivorId);
+    final survivorName = survivor == null
+        ? busy.survivorId
+        : survivorDisplayName(context, survivor);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(
+          Icons.person_outline_rounded,
+          size: 18,
+          color: Color(0xFFC0A46F),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '$survivorName · ${jobActivityLabel(context, busy.activity)}',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: const Color(0xFFBDB3A1),
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              value,
-              textAlign: TextAlign.end,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: const Color(0xFF8F8677),
+              const SizedBox(height: 3),
+              Text(
+                '${context.l10n.jobStartsLabel}: '
+                '${_formatDateTime(context, busy.startedAt)}  ·  '
+                '${context.l10n.jobEndsLabel}: '
+                '${_formatDateTime(context, busy.endsAt)}',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: const Color(0xFF8F8677),
+                ),
               ),
-            ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
