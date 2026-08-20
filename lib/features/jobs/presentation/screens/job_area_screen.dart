@@ -67,6 +67,15 @@ class _JobAreaScreenState extends State<JobAreaScreen> {
     }
   }
 
+  bool _canPayTaskCost(JobTaskStartInfo startInfo) {
+    final inventory = widget.bunkerStateController.state?.inventory;
+    if (inventory == null) return false;
+
+    return startInfo.costInventory.entries.every(
+      (entry) => (inventory[entry.key] ?? 0) >= entry.value,
+    );
+  }
+
   Future<void> _startTask(JobTaskDefinition task) async {
     final bunker = widget.bunkerStateController.state;
     if (bunker == null) {
@@ -82,41 +91,66 @@ class _JobAreaScreenState extends State<JobAreaScreen> {
       return;
     }
 
+    final JobTaskStartInfo startInfo;
+    try {
+      startInfo = await widget.taskService.fetchStartInfo(taskId: task.id);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.l10n.jobTaskStartError)),
+      );
+      return;
+    }
+    if (!mounted) return;
+
+    final completedTaskIds = current.completedTaskIds.toSet();
+    final missingPrerequisite = startInfo.requiredTaskIds.any(
+      (requiredId) => !completedTaskIds.contains(requiredId),
+    );
+    if (missingPrerequisite || !_canPayTaskCost(startInfo)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.l10n.jobTaskStartError)),
+      );
+      return;
+    }
+
     final available = current.idleSurvivors
         .map(current.survivorById)
         .whereType<Survivor>()
         .where((survivor) => survivor.energy >= 0)
         .toList(growable: false);
-    if (available.isEmpty) {
+    if (available.length < startInfo.minSurvivors) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(context.l10n.jobNoIdleSurvivors)),
       );
       return;
     }
 
-    final selected = await showDialog<Survivor>(
+    final selected = await showDialog<List<Survivor>>(
       context: context,
       barrierColor: const Color(0xB8000000),
       builder: (dialogContext) => _SurvivorTaskDialog(
         survivors: available,
+        minSurvivors: startInfo.minSurvivors,
+        maxSurvivors: startInfo.maxSurvivors,
       ),
     );
-    if (selected == null || !mounted) return;
+    if (selected == null || selected.isEmpty || !mounted) return;
 
     setState(() => _startingTaskId = task.id);
     try {
       await widget.taskService.startTask(
         taskId: task.id,
-        survivorId: selected.id,
+        survivorIds: selected.map((survivor) => survivor.id).toList(),
       );
       await widget.bunkerStateController.refreshAfterMutation();
       if (!mounted) return;
+      final names = selected
+          .map((survivor) => survivorDisplayName(context, survivor))
+          .join(', ');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            '${context.l10n.jobTaskStarted}: '
-            '${survivorDisplayName(context, selected)}',
-          ),
+          content: Text('${context.l10n.jobTaskStarted}: $names'),
         ),
       );
     } catch (_) {
@@ -351,10 +385,44 @@ class _JobAreaContent extends StatelessWidget {
   }
 }
 
-class _SurvivorTaskDialog extends StatelessWidget {
-  const _SurvivorTaskDialog({required this.survivors});
+class _SurvivorTaskDialog extends StatefulWidget {
+  const _SurvivorTaskDialog({
+    required this.survivors,
+    required this.minSurvivors,
+    required this.maxSurvivors,
+  });
 
   final List<Survivor> survivors;
+  final int minSurvivors;
+  final int maxSurvivors;
+
+  @override
+  State<_SurvivorTaskDialog> createState() => _SurvivorTaskDialogState();
+}
+
+class _SurvivorTaskDialogState extends State<_SurvivorTaskDialog> {
+  final Set<String> _selectedIds = <String>{};
+
+  bool get _canConfirm =>
+      _selectedIds.length >= widget.minSurvivors &&
+      _selectedIds.length <= widget.maxSurvivors;
+
+  void _toggle(Survivor survivor) {
+    setState(() {
+      if (_selectedIds.remove(survivor.id)) return;
+      if (_selectedIds.length < widget.maxSurvivors) {
+        _selectedIds.add(survivor.id);
+      }
+    });
+  }
+
+  void _confirm() {
+    if (!_canConfirm) return;
+    final selected = widget.survivors
+        .where((survivor) => _selectedIds.contains(survivor.id))
+        .toList(growable: false);
+    Navigator.of(context).pop(selected);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -421,6 +489,15 @@ class _SurvivorTaskDialog extends StatelessWidget {
                                 height: 1.4,
                               ),
                             ),
+                            const SizedBox(height: 6),
+                            Text(
+                              '${_selectedIds.length} / '
+                              '${widget.minSurvivors}-${widget.maxSurvivors}',
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                color: const Color(0xFFC7A970),
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -437,11 +514,30 @@ class _SurvivorTaskDialog extends StatelessWidget {
                   child: ListView.separated(
                     shrinkWrap: true,
                     padding: const EdgeInsets.all(14),
-                    itemCount: survivors.length,
+                    itemCount: widget.survivors.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemBuilder: (context, index) => _SurvivorChoice(
-                      survivor: survivors[index],
-                      onTap: () => Navigator.of(context).pop(survivors[index]),
+                    itemBuilder: (context, index) {
+                      final survivor = widget.survivors[index];
+                      final selected = _selectedIds.contains(survivor.id);
+                      final enabled =
+                          selected || _selectedIds.length < widget.maxSurvivors;
+                      return _SurvivorChoice(
+                        survivor: survivor,
+                        selected: selected,
+                        enabled: enabled,
+                        onTap: () => _toggle(survivor),
+                      );
+                    },
+                  ),
+                ),
+                const Divider(height: 1, color: Color(0xFF4A4134)),
+                Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: _canConfirm ? _confirm : null,
+                      child: Text(context.l10n.jobTaskStartButton),
                     ),
                   ),
                 ),
@@ -457,85 +553,98 @@ class _SurvivorTaskDialog extends StatelessWidget {
 class _SurvivorChoice extends StatelessWidget {
   const _SurvivorChoice({
     required this.survivor,
+    required this.selected,
+    required this.enabled,
     required this.onTap,
   });
 
   final Survivor survivor;
+  final bool selected;
+  final bool enabled;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Material(
-      color: const Color(0xFF211F19),
-      borderRadius: BorderRadius.circular(8),
-      child: InkWell(
-        onTap: onTap,
+    return Opacity(
+      opacity: enabled ? 1 : 0.45,
+      child: Material(
+        color: selected ? const Color(0xFF2B281F) : const Color(0xFF211F19),
         borderRadius: BorderRadius.circular(8),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: const Color(0xFF443D31)),
-          ),
-          child: Row(
-            children: [
-              SurvivorProfilePhoto(
-                survivor: survivor,
-                size: 72,
+        child: InkWell(
+          onTap: enabled ? onTap : null,
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: selected
+                    ? const Color(0xFFC6AA74)
+                    : const Color(0xFF443D31),
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      survivorDisplayName(context, survivor),
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        color: const Color(0xFFE5D6BA),
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 9,
-                        vertical: 5,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF2B281F),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: const Color(0xFF4A4234)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.bolt_rounded,
-                            size: 16,
-                            color: Color(0xFFC8A968),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${context.l10n.jobEnergyLabel}: ${survivor.energy}',
-                            style: theme.textTheme.labelMedium?.copyWith(
-                              color: const Color(0xFFB9AF9D),
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+            ),
+            child: Row(
+              children: [
+                SurvivorProfilePhoto(
+                  survivor: survivor,
+                  size: 72,
                 ),
-              ),
-              const SizedBox(width: 12),
-              const Icon(
-                Icons.chevron_right_rounded,
-                color: Color(0xFFC6AA74),
-              ),
-            ],
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        survivorDisplayName(context, survivor),
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: const Color(0xFFE5D6BA),
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 9,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF2B281F),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: const Color(0xFF4A4234)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.bolt_rounded,
+                              size: 16,
+                              color: Color(0xFFC8A968),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${context.l10n.jobEnergyLabel}: ${survivor.energy}',
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                color: const Color(0xFFB9AF9D),
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Icon(
+                  selected
+                      ? Icons.check_circle_rounded
+                      : Icons.add_circle_outline_rounded,
+                  color: const Color(0xFFC6AA74),
+                ),
+              ],
+            ),
           ),
         ),
       ),
