@@ -33,12 +33,17 @@ class FirestoreBunkerStateService implements BunkerStateService {
     // by trusted backend infrastructure, but the resolver itself remains the
     // same server-authoritative and idempotent Cloud Function.
     if (kDebugMode && _hasLocallyExpiredOccupation(state)) {
-      final callable = _functions.httpsCallable('resolveCompletedOccupations');
-      await callable.call();
-      state = await _fetchState();
+      state = await resolveCompletedOccupations();
     }
 
     return state;
+  }
+
+  @override
+  Future<BunkerState> resolveCompletedOccupations() async {
+    final callable = _functions.httpsCallable('resolveCompletedOccupations');
+    await callable.call();
+    return _fetchState();
   }
 
   Future<BunkerState> _fetchState() async {
