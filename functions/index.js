@@ -1,3 +1,4 @@
+const {randomUUID} = require("node:crypto");
 const {initializeApp} = require("firebase-admin/app");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {onCall, HttpsError} = require("firebase-functions/v2/https");
@@ -10,6 +11,9 @@ const {
 } = require("./bunker_status");
 const {
   applyTaskCompletionEffects,
+  applyTaskStartCost,
+  missingRequiredTaskIds,
+  selectTaskOutcome,
   taskDefinitionFromSnapshot,
 } = require("./job_tasks");
 
@@ -44,6 +48,56 @@ function requiredTaskDefinition(snapshot, taskId) {
   }
 }
 
+function normalizedRequestedSurvivorIds(data) {
+  const raw = Array.isArray(data?.survivorIds)
+    ? data.survivorIds
+    : typeof data?.survivorId === "string"
+      ? [data.survivorId]
+      : [];
+
+  const survivorIds = raw.map((value) =>
+    typeof value === "string" ? value.trim() : "",
+  );
+  if (
+    survivorIds.length === 0 ||
+    survivorIds.some((id) => !id) ||
+    new Set(survivorIds).size !== survivorIds.length
+  ) {
+    throw new HttpsError(
+      "invalid-argument",
+      "survivorIds must contain unique non-empty Survivor IDs.",
+    );
+  }
+  return survivorIds;
+}
+
+function occupationGroupKey(entry) {
+  if (entry.activity === SLEEPING_ACTIVITY) {
+    return `sleeping:${entry.survivorId}:${entry.endsAt.getTime()}`;
+  }
+  if (entry.executionId) return `execution:${entry.executionId}`;
+
+  const taskId = entry.taskId || entry.activity;
+  return [
+    "legacy",
+    entry.survivorId,
+    taskId,
+    entry.startedAt.getTime(),
+    entry.endsAt.getTime(),
+  ].join(":");
+}
+
+function groupedOccupations(busySurvivors) {
+  const groups = new Map();
+  for (const entry of busySurvivors) {
+    const key = occupationGroupKey(entry);
+    const group = groups.get(key) || [];
+    group.push(entry);
+    groups.set(key, group);
+  }
+  return groups;
+}
+
 async function resolveCompletedOccupationsForUser(db, uid) {
   const bunkerRef = db
     .collection("users")
@@ -67,11 +121,12 @@ async function resolveCompletedOccupationsForUser(db, uid) {
       bunker.busySurvivors,
       now,
     );
-    const completed = busySurvivors.filter(
-      (entry) => entry.endsAt.getTime() <= now.getTime(),
+    const groups = groupedOccupations(busySurvivors);
+    const completedGroups = [...groups.entries()].filter(([, entries]) =>
+      entries.every((entry) => entry.endsAt.getTime() <= now.getTime()),
     );
 
-    if (completed.length === 0) {
+    if (completedGroups.length === 0) {
       return {
         resolvedCount: 0,
         revision: Number.isInteger(bunker.revision) ? bunker.revision : 0,
@@ -87,18 +142,27 @@ async function resolveCompletedOccupationsForUser(db, uid) {
         ? bunker.idleSurvivors.filter((id) => typeof id === "string")
         : [],
     );
-    const resolvedSurvivorIds = [];
+    const completedTaskIds = new Set(
+      Array.isArray(bunker.completedTaskIds)
+        ? bunker.completedTaskIds.filter((id) => typeof id === "string")
+        : [],
+    );
+    const resolvedGroupKeys = new Set();
+    const resolvedSurvivorIds = new Set();
+    const resolvedExecutions = [];
 
-    for (const completedOccupation of completed) {
-      const survivorId = completedOccupation.survivorId;
+    for (const [groupKey, entries] of completedGroups) {
+      const first = entries[0];
+      const participantIds = entries.map((entry) => entry.survivorId);
 
-      if (completedOccupation.activity === SLEEPING_ACTIVITY) {
+      if (first.activity === SLEEPING_ACTIVITY) {
+        const participantSet = new Set(participantIds);
         const survivors = Array.isArray(workingBunker.survivors)
           ? workingBunker.survivors.map((survivor) => {
-            if (survivor?.id !== survivorId) return survivor;
+            if (!participantSet.has(survivor?.id)) return survivor;
             return {
               ...survivor,
-              energy: 0,
+              energy: 100,
             };
           })
           : [];
@@ -106,27 +170,49 @@ async function resolveCompletedOccupationsForUser(db, uid) {
           ...workingBunker,
           survivors,
         };
+        resolvedExecutions.push({
+          executionId: null,
+          taskId: SLEEPING_ACTIVITY,
+          outcome: "rested",
+          survivorIds: participantIds,
+        });
       } else {
-        const taskId = completedOccupation.taskId ||
-          completedOccupation.activity;
+        const taskId = first.taskId || first.activity;
         const task = requiredTaskDefinition(taskCatalogSnapshot, taskId);
+        const outcome = selectTaskOutcome(
+          task,
+          first.executionId || groupKey,
+        );
         workingBunker = applyTaskCompletionEffects(
           workingBunker,
-          survivorId,
+          participantIds,
           task,
+          outcome.id,
         );
+        if (task.storable) {
+          completedTaskIds.add(task.id);
+        }
+        resolvedExecutions.push({
+          executionId: first.executionId || null,
+          taskId: task.id,
+          outcome: outcome.id,
+          survivorIds: participantIds,
+        });
       }
 
-      idleSurvivors.add(survivorId);
-      resolvedSurvivorIds.push(survivorId);
+      for (const survivorId of participantIds) {
+        idleSurvivors.add(survivorId);
+        resolvedSurvivorIds.add(survivorId);
+      }
+      resolvedGroupKeys.add(groupKey);
     }
 
-    const completedSurvivorIds = new Set(resolvedSurvivorIds);
     workingBunker = {
       ...workingBunker,
+      completedTaskIds: [...completedTaskIds],
       idleSurvivors: [...idleSurvivors],
       busySurvivors: busySurvivors.filter(
-        (entry) => !completedSurvivorIds.has(entry.survivorId),
+        (entry) => !resolvedGroupKeys.has(occupationGroupKey(entry)),
       ),
     };
 
@@ -139,8 +225,9 @@ async function resolveCompletedOccupationsForUser(db, uid) {
     transaction.set(bunkerRef, fixed);
 
     return {
-      resolvedCount: resolvedSurvivorIds.length,
-      resolvedSurvivorIds,
+      resolvedCount: resolvedExecutions.length,
+      resolvedSurvivorIds: [...resolvedSurvivorIds],
+      resolvedExecutions,
       revision: fixed.revision,
     };
   });
@@ -278,6 +365,7 @@ exports.initializeBunker = onCall(
           survivors: [survivor],
           idleSurvivors: [survivorId],
           busySurvivors: [],
+          completedTaskIds: [],
           inventory: {},
         },
       });
@@ -310,6 +398,40 @@ exports.initializeBunker = onCall(
   },
 );
 
+exports.getJobTaskStartInfo = onCall(
+  CALLABLE_OPTIONS,
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError(
+        "unauthenticated",
+        "Authentication is required to inspect a job task.",
+      );
+    }
+
+    const taskId = typeof request.data?.taskId === "string"
+      ? request.data.taskId.trim()
+      : "";
+    if (!taskId) {
+      throw new HttpsError("invalid-argument", "Invalid task ID.");
+    }
+
+    const snapshot = await getFirestore()
+      .collection("serverData")
+      .doc("jobTasks")
+      .get();
+    const task = requiredTaskDefinition(snapshot, taskId);
+
+    return {
+      taskId: task.id,
+      minSurvivors: task.survivorRequirements.min,
+      maxSurvivors: task.survivorRequirements.max,
+      costInventory: task.cost.inventory,
+      requiredTaskIds: task.requiredTaskIds,
+      storable: task.storable,
+    };
+  },
+);
+
 exports.startJobTask = onCall(
   CALLABLE_OPTIONS,
   async (request) => {
@@ -323,15 +445,14 @@ exports.startJobTask = onCall(
     const taskId = typeof request.data?.taskId === "string"
       ? request.data.taskId.trim()
       : "";
-    const survivorId = typeof request.data?.survivorId === "string"
-      ? request.data.survivorId.trim()
-      : "";
+    const survivorIds = normalizedRequestedSurvivorIds(request.data);
 
-    if (!taskId || survivorId.length === 0) {
-      throw new HttpsError("invalid-argument", "Invalid task or Survivor ID.");
+    if (!taskId) {
+      throw new HttpsError("invalid-argument", "Invalid task ID.");
     }
 
     const db = getFirestore();
+    const executionId = randomUUID();
     const bunkerRef = db
       .collection("users")
       .doc(request.auth.uid)
@@ -349,47 +470,96 @@ exports.startJobTask = onCall(
       }
 
       const task = requiredTaskDefinition(taskCatalogSnapshot, taskId);
-      const bunker = bunkerSnapshot.data() || {};
-      const survivors = Array.isArray(bunker.survivors) ? bunker.survivors : [];
-      const survivor = survivors.find((entry) => entry?.id === survivorId);
-      if (!survivor) {
-        throw new HttpsError("not-found", "Survivor does not exist in bunker.");
+      if (
+        survivorIds.length < task.survivorRequirements.min ||
+        survivorIds.length > task.survivorRequirements.max
+      ) {
+        throw new HttpsError(
+          "failed-precondition",
+          `Task ${task.id} requires between ` +
+            `${task.survivorRequirements.min} and ` +
+            `${task.survivorRequirements.max} Survivors.`,
+        );
       }
 
+      const bunker = bunkerSnapshot.data() || {};
+      const missingPrerequisites = missingRequiredTaskIds(bunker, task);
+      if (missingPrerequisites.length > 0) {
+        throw new HttpsError(
+          "failed-precondition",
+          `Missing required tasks: ${missingPrerequisites.join(", ")}.`,
+        );
+      }
+
+      const survivors = Array.isArray(bunker.survivors) ? bunker.survivors : [];
+      const survivorById = new Map(
+        survivors
+          .filter((entry) => typeof entry?.id === "string")
+          .map((entry) => [entry.id, entry]),
+      );
       const idleSurvivors = Array.isArray(bunker.idleSurvivors)
         ? bunker.idleSurvivors.filter((id) => typeof id === "string")
         : [];
-      if (!idleSurvivors.includes(survivorId)) {
-        throw new HttpsError("failed-precondition", "Survivor is not idle.");
+      const idleSet = new Set(idleSurvivors);
+
+      for (const survivorId of survivorIds) {
+        const survivor = survivorById.get(survivorId);
+        if (!survivor) {
+          throw new HttpsError(
+            "not-found",
+            `Survivor ${survivorId} does not exist in bunker.`,
+          );
+        }
+        if (!idleSet.has(survivorId)) {
+          throw new HttpsError(
+            "failed-precondition",
+            `Survivor ${survivorId} is not idle.`,
+          );
+        }
+        if (Number.isInteger(survivor.energy) && survivor.energy < 0) {
+          throw new HttpsError(
+            "failed-precondition",
+            `Survivor ${survivorId} must recover before starting a task.`,
+          );
+        }
       }
-      if (Number.isInteger(survivor.energy) && survivor.energy < 0) {
+
+      let workingBunker;
+      try {
+        workingBunker = applyTaskStartCost(bunker, task);
+      } catch (error) {
         throw new HttpsError(
           "failed-precondition",
-          "Survivor must recover before starting a task.",
+          error instanceof Error ? error.message : "Task cost cannot be paid.",
         );
       }
 
       const now = truncateToSecond(new Date()) || new Date();
+      const endsAt = new Date(now.getTime() + task.durationSeconds * 1000);
       const busySurvivors = normalizedBusySurvivors(
         bunker.busySurvivors,
         now,
       );
-      busySurvivors.push({
-        survivorId,
-        taskId: task.id,
-        activity: task.activity,
-        location: task.location,
-        startedAt: now,
-        endsAt: new Date(now.getTime() + task.durationSeconds * 1000),
-      });
+      for (const survivorId of survivorIds) {
+        busySurvivors.push({
+          survivorId,
+          executionId,
+          taskId: task.id,
+          activity: task.activity,
+          location: task.location,
+          startedAt: now,
+          endsAt,
+        });
+      }
 
+      const selectedSet = new Set(survivorIds);
       const fixed = await fixStatus({
         transaction,
         db,
         now,
         bunker: {
-          ...bunker,
-          idleSurvivors: idleSurvivors.filter((id) => id !== survivorId),
+          ...workingBunker,
+          idleSurvivors: idleSurvivors.filter((id) => !selectedSet.has(id)),
           busySurvivors,
         },
       });
@@ -397,6 +567,8 @@ exports.startJobTask = onCall(
 
       return {
         started: true,
+        executionId,
+        survivorIds,
         revision: fixed.revision,
       };
     });
