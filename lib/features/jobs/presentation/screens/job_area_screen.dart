@@ -30,13 +30,18 @@ class JobAreaScreen extends StatefulWidget {
 }
 
 class _JobAreaScreenState extends State<JobAreaScreen> {
+  final Map<String, JobTaskStartInfo> _startInfoByTaskId =
+      <String, JobTaskStartInfo>{};
   String? _startingTaskId;
+  bool _isLoadingTaskInfo = true;
+  Object? _taskInfoError;
 
   @override
   void initState() {
     super.initState();
     widget.bunkerStateController.addListener(_onBunkerChanged);
     unawaited(widget.bunkerStateController.refresh());
+    unawaited(_loadTaskStartInfo());
   }
 
   @override
@@ -47,6 +52,29 @@ class _JobAreaScreenState extends State<JobAreaScreen> {
 
   void _onBunkerChanged() {
     if (mounted) setState(() {});
+  }
+
+  Future<void> _loadTaskStartInfo() async {
+    final loaded = <String, JobTaskStartInfo>{};
+    Object? firstError;
+
+    for (final task in jobTasksForArea(widget.area)) {
+      try {
+        loaded[task.id] =
+            await widget.taskService.fetchStartInfo(taskId: task.id);
+      } catch (error) {
+        firstError ??= error;
+      }
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _startInfoByTaskId
+        ..clear()
+        ..addAll(loaded);
+      _taskInfoError = firstError;
+      _isLoadingTaskInfo = false;
+    });
   }
 
   String _taskTitle(BuildContext context, JobTaskDefinition task) =>
@@ -84,17 +112,13 @@ class _JobAreaScreenState extends State<JobAreaScreen> {
     );
     if (alreadyActive) return;
 
-    final JobTaskStartInfo startInfo;
-    try {
-      startInfo = await widget.taskService.fetchStartInfo(taskId: task.id);
-    } catch (_) {
-      if (!mounted) return;
+    final startInfo = _startInfoByTaskId[task.id];
+    if (startInfo == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(context.l10n.jobTaskStartError)),
       );
       return;
     }
-    if (!mounted) return;
 
     final completedTaskIds = current.completedTaskIds.toSet();
     final missingPrerequisite = startInfo.requiredTaskIds.any(
@@ -165,9 +189,12 @@ class _JobAreaScreenState extends State<JobAreaScreen> {
             .map((busy) => busy.taskId ?? busy.activity)
             .toSet() ??
         <String>{};
-    final tasks = jobTasksForArea(area)
-        .where((task) => !completedTaskIds.contains(task.id))
-        .toList(growable: false);
+    final tasks = jobTasksForArea(area).where((task) {
+      if (completedTaskIds.contains(task.id)) return false;
+      final startInfo = _startInfoByTaskId[task.id];
+      if (startInfo == null) return false;
+      return startInfo.requiredTaskIds.every(completedTaskIds.contains);
+    }).toList(growable: false);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -222,6 +249,8 @@ class _JobAreaScreenState extends State<JobAreaScreen> {
                                         tasks: tasks,
                                         activeTaskIds: activeTaskIds,
                                         startingTaskId: _startingTaskId,
+                                        taskInfoLoading: _isLoadingTaskInfo,
+                                        taskInfoError: _taskInfoError,
                                         taskTitle: (task) =>
                                             _taskTitle(context, task),
                                         taskDescription: (task) =>
@@ -326,6 +355,8 @@ class _JobAreaContent extends StatelessWidget {
     required this.tasks,
     required this.activeTaskIds,
     required this.startingTaskId,
+    required this.taskInfoLoading,
+    required this.taskInfoError,
     required this.taskTitle,
     required this.taskDescription,
     required this.onStartTask,
@@ -335,6 +366,8 @@ class _JobAreaContent extends StatelessWidget {
   final List<JobTaskDefinition> tasks;
   final Set<String> activeTaskIds;
   final String? startingTaskId;
+  final bool taskInfoLoading;
+  final Object? taskInfoError;
   final String Function(JobTaskDefinition task) taskTitle;
   final String Function(JobTaskDefinition task) taskDescription;
   final ValueChanged<JobTaskDefinition> onStartTask;
@@ -370,7 +403,11 @@ class _JobAreaContent extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
-        if (tasks.isEmpty)
+        if (taskInfoLoading)
+          _EmptyTasks(message: context.l10n.hubJobsLoading)
+        else if (tasks.isEmpty && taskInfoError != null)
+          _EmptyTasks(message: context.l10n.hubJobsLoadError)
+        else if (tasks.isEmpty)
           _EmptyTasks(message: context.l10n.jobNoAvailableTasks)
         else
           for (final task in tasks) ...[
