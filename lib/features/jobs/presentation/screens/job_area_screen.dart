@@ -49,23 +49,11 @@ class _JobAreaScreenState extends State<JobAreaScreen> {
     if (mounted) setState(() {});
   }
 
-  String _taskTitle(BuildContext context, JobTaskDefinition task) {
-    switch (task.id) {
-      case 'prepare_garden':
-        return context.l10n.jobClearGardenTitle;
-      default:
-        return task.id;
-    }
-  }
+  String _taskTitle(BuildContext context, JobTaskDefinition task) =>
+      jobTaskTitle(context, task.id);
 
-  String _taskDescription(BuildContext context, JobTaskDefinition task) {
-    switch (task.id) {
-      case 'prepare_garden':
-        return context.l10n.jobClearGardenDescription;
-      default:
-        return '';
-    }
-  }
+  String _taskDescription(BuildContext context, JobTaskDefinition task) =>
+      jobTaskDescription(context, task.id);
 
   bool _canPayTaskCost(JobTaskStartInfo startInfo) {
     final inventory = widget.bunkerStateController.state?.inventory;
