@@ -11,14 +11,27 @@ class FirebaseFunctionsJobTaskService implements JobTaskService {
   final FirebaseFunctions _functions;
 
   @override
+  Future<JobTaskStartInfo> fetchStartInfo({required String taskId}) async {
+    final callable = _functions.httpsCallable('getJobTaskStartInfo');
+    final result = await callable.call(<String, dynamic>{
+      'taskId': taskId.trim(),
+    });
+    final data = result.data;
+    if (data is! Map) {
+      throw const FormatException('Invalid task start info response.');
+    }
+    return JobTaskStartInfo.fromMap(Map<String, dynamic>.from(data));
+  }
+
+  @override
   Future<void> startTask({
     required String taskId,
-    required String survivorId,
+    required List<String> survivorIds,
   }) async {
     final callable = _functions.httpsCallable('startJobTask');
     await callable.call(<String, dynamic>{
       'taskId': taskId.trim(),
-      'survivorId': survivorId.trim(),
+      'survivorIds': survivorIds.map((id) => id.trim()).toList(growable: false),
     });
   }
 }
