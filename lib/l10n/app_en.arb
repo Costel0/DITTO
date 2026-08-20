@@ -78,6 +78,7 @@
   "jobTaskStarted": "Task started by",
   "jobTaskStartError": "The task could not be started. Refresh the status and try again.",
   "jobTaskStartButton": "Start",
+  "jobTaskInProgress": "In progress",
   "jobStartsLabel": "Start",
   "jobEndsLabel": "End",
   "jobSleepingTitle": "Sleeping",
