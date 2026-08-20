@@ -78,6 +78,7 @@
   "jobTaskStarted": "Tarea iniciada por",
   "jobTaskStartError": "No se ha podido iniciar la tarea. Actualiza el estado e inténtalo de nuevo.",
   "jobTaskStartButton": "Empezar",
+  "jobTaskInProgress": "En progreso",
   "jobStartsLabel": "Inicio",
   "jobEndsLabel": "Fin",
   "jobSleepingTitle": "Durmiendo",
