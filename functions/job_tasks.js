@@ -43,7 +43,7 @@ function normalizedInventoryMap(value, label, {positiveOnly = false} = {}) {
   return normalized;
 }
 
-function normalizedCompletion(value, label) {
+function normalizedEffects(value, label) {
   const raw = value == null ? {} : value;
   if (!isPlainObject(raw)) {
     throw new Error(`${label} must be an object.`);
@@ -84,39 +84,23 @@ function normalizedSurvivorRequirements(value, taskId) {
   return {min, max};
 }
 
-function normalizedOutcomes(rawTask, taskId) {
-  // Backwards compatibility with the first server task format.
-  if (rawTask.outcomes == null) {
-    return [
-      {
-        id: "default",
-        probability: 1,
-        completion: normalizedCompletion(
-          rawTask.completion,
-          `Task ${taskId} completion`,
-        ),
-      },
-    ];
+function normalizedRandomOutcomes(value, taskId, resultId) {
+  if (value == null) return [];
+  if (!isPlainObject(value)) {
+    throw new Error(
+      `Task ${taskId} result ${resultId} randomOutcomes must be an object.`,
+    );
   }
 
-  if (!isPlainObject(rawTask.outcomes)) {
-    throw new Error(`Task ${taskId} outcomes must be an object.`);
-  }
-  if (!isPlainObject(rawTask.outcomeEffects)) {
-    throw new Error(`Task ${taskId} outcomeEffects must be an object.`);
-  }
-
-  const entries = Object.entries(rawTask.outcomes);
-  if (entries.length === 0) {
-    throw new Error(`Task ${taskId} must define at least one outcome.`);
-  }
-
-  let probabilityTotal = 0;
-  const outcomes = entries.map(([outcomeIdRaw, probability]) => {
+  return Object.entries(value).map(([outcomeIdRaw, rawOutcome]) => {
     const outcomeId = outcomeIdRaw.trim();
-    if (!outcomeId) {
-      throw new Error(`Task ${taskId} contains an empty outcome ID.`);
+    if (!outcomeId || !isPlainObject(rawOutcome)) {
+      throw new Error(
+        `Task ${taskId} result ${resultId} contains an invalid random outcome.`,
+      );
     }
+
+    const probability = rawOutcome.probability;
     if (
       typeof probability !== "number" ||
       !Number.isFinite(probability) ||
@@ -124,41 +108,171 @@ function normalizedOutcomes(rawTask, taskId) {
       probability > 1
     ) {
       throw new Error(
-        `Task ${taskId} outcome ${outcomeId} probability must be 0..1.`,
-      );
-    }
-
-    probabilityTotal += probability;
-    if (!Object.prototype.hasOwnProperty.call(rawTask.outcomeEffects, outcomeId)) {
-      throw new Error(
-        `Task ${taskId} outcome ${outcomeId} is missing outcomeEffects.`,
+        `Task ${taskId} result ${resultId} random outcome ${outcomeId} ` +
+          "probability must be 0..1.",
       );
     }
 
     return {
       id: outcomeId,
       probability,
-      completion: normalizedCompletion(
-        rawTask.outcomeEffects[outcomeId],
-        `Task ${taskId} outcomeEffects.${outcomeId}`,
+      effects: normalizedEffects(
+        rawOutcome.effects,
+        `Task ${taskId} results.${resultId}.randomOutcomes.${outcomeId}.effects`,
       ),
     };
   });
+}
 
-  for (const outcomeIdRaw of Object.keys(rawTask.outcomeEffects)) {
-    const outcomeId = outcomeIdRaw.trim();
-    if (!Object.prototype.hasOwnProperty.call(rawTask.outcomes, outcomeId)) {
+function normalizedResults(rawTask, taskId) {
+  // Backwards compatibility with the previous format where `outcomes` were
+  // mutually exclusive top-level results and `outcomeEffects` held effects.
+  if (rawTask.results == null && rawTask.outcomes != null) {
+    if (!isPlainObject(rawTask.outcomes) || !isPlainObject(rawTask.outcomeEffects)) {
+      throw new Error(`Task ${taskId} has an invalid legacy outcomes format.`);
+    }
+
+    const results = {};
+    for (const [resultIdRaw, probability] of Object.entries(rawTask.outcomes)) {
+      const resultId = resultIdRaw.trim();
+      if (!resultId) {
+        throw new Error(`Task ${taskId} contains an empty result ID.`);
+      }
+      results[resultId] = {
+        guaranteedOutcomes: normalizedEffects(
+          rawTask.outcomeEffects[resultId],
+          `Task ${taskId} outcomeEffects.${resultId}`,
+        ),
+        randomOutcomes: [],
+      };
+    }
+
+    return {
+      resolver: {
+        type: "random",
+        probabilities: {...rawTask.outcomes},
+      },
+      results,
+    };
+  }
+
+  if (!isPlainObject(rawTask.results) || Object.keys(rawTask.results).length === 0) {
+    throw new Error(`Task ${taskId} results must contain at least one result.`);
+  }
+
+  const results = {};
+  for (const [resultIdRaw, rawResult] of Object.entries(rawTask.results)) {
+    const resultId = resultIdRaw.trim();
+    if (!resultId || !isPlainObject(rawResult)) {
+      throw new Error(`Task ${taskId} contains an invalid result entry.`);
+    }
+
+    results[resultId] = {
+      guaranteedOutcomes: normalizedEffects(
+        rawResult.guaranteedOutcomes,
+        `Task ${taskId} results.${resultId}.guaranteedOutcomes`,
+      ),
+      randomOutcomes: normalizedRandomOutcomes(
+        rawResult.randomOutcomes,
+        taskId,
+        resultId,
+      ),
+    };
+  }
+
+  const rawResolver = rawTask.resultResolver;
+  if (!isPlainObject(rawResolver)) {
+    throw new Error(`Task ${taskId} resultResolver must be an object.`);
+  }
+
+  const type = typeof rawResolver.type === "string"
+    ? rawResolver.type.trim()
+    : "";
+  const allowedTypes = new Set(["fixed", "random", "server", "combat"]);
+  if (!allowedTypes.has(type)) {
+    throw new Error(
+      `Task ${taskId} resultResolver.type must be fixed, random, server or combat.`,
+    );
+  }
+
+  const resultIds = new Set(Object.keys(results));
+  if (type === "fixed") {
+    const resultId = typeof rawResolver.resultId === "string"
+      ? rawResolver.resultId.trim()
+      : "";
+    if (!resultIds.has(resultId)) {
       throw new Error(
-        `Task ${taskId} has effects for unknown outcome ${outcomeId}.`,
+        `Task ${taskId} fixed resultResolver references unknown result ${resultId}.`,
       );
     }
+    return {
+      resolver: {type, resultId},
+      results,
+    };
   }
 
-  if (Math.abs(probabilityTotal - 1) > 1e-9) {
-    throw new Error(`Task ${taskId} outcome probabilities must add up to 1.`);
+  if (type === "random") {
+    if (!isPlainObject(rawResolver.probabilities)) {
+      throw new Error(
+        `Task ${taskId} random resultResolver.probabilities must be an object.`,
+      );
+    }
+
+    let total = 0;
+    const probabilities = {};
+    for (const [resultIdRaw, probability] of Object.entries(
+      rawResolver.probabilities,
+    )) {
+      const resultId = resultIdRaw.trim();
+      if (!resultIds.has(resultId)) {
+        throw new Error(
+          `Task ${taskId} resultResolver references unknown result ${resultId}.`,
+        );
+      }
+      if (
+        typeof probability !== "number" ||
+        !Number.isFinite(probability) ||
+        probability < 0 ||
+        probability > 1
+      ) {
+        throw new Error(
+          `Task ${taskId} result probability ${resultId} must be 0..1.`,
+        );
+      }
+      probabilities[resultId] = probability;
+      total += probability;
+    }
+
+    for (const resultId of resultIds) {
+      if (!Object.prototype.hasOwnProperty.call(probabilities, resultId)) {
+        throw new Error(
+          `Task ${taskId} random resolver is missing result ${resultId}.`,
+        );
+      }
+    }
+    if (Math.abs(total - 1) > 1e-9) {
+      throw new Error(`Task ${taskId} result probabilities must add up to 1.`);
+    }
+
+    return {
+      resolver: {type, probabilities},
+      results,
+    };
   }
 
-  return outcomes;
+  const handler = typeof rawResolver.handler === "string"
+    ? rawResolver.handler.trim()
+    : "";
+  if (!handler) {
+    throw new Error(
+      `Task ${taskId} ${type} resultResolver must define a handler.`,
+    );
+  }
+
+  return {
+    resolver: {type, handler},
+    results,
+  };
 }
 
 function taskDefinitionFromSnapshot(snapshot, taskId) {
@@ -207,6 +321,8 @@ function taskDefinitionFromSnapshot(snapshot, taskId) {
     throw new Error(`Task ${normalizedTaskId} cost must be an object.`);
   }
 
+  const resultDefinition = normalizedResults(rawTask, normalizedTaskId);
+
   return {
     id: normalizedTaskId,
     activity,
@@ -225,7 +341,8 @@ function taskDefinitionFromSnapshot(snapshot, taskId) {
         {positiveOnly: true},
       ),
     },
-    outcomes: normalizedOutcomes(rawTask, normalizedTaskId),
+    resultResolver: resultDefinition.resolver,
+    results: resultDefinition.results,
   };
 }
 
@@ -275,49 +392,60 @@ function applyTaskStartCost(bunker, task) {
 
 function deterministicUnitInterval(seed) {
   const digest = createHash("sha256").update(seed).digest();
-  const high = digest.readUInt32BE(0);
-  const low = digest.readUInt32BE(4);
-  return (high * 0x100000000 + low) / 0x10000000000000000;
+  return digest.readUIntBE(0, 6) / 0x1000000000000;
 }
 
-function selectTaskOutcome(task, executionId) {
-  const seed = `${task.id}:${executionId}`;
-  const roll = deterministicUnitInterval(seed);
-  let cumulative = 0;
-
-  for (const outcome of task.outcomes) {
-    cumulative += outcome.probability;
-    if (roll < cumulative) return outcome;
+function selectTaskResult(task, executionId, externallyResolvedResultId = null) {
+  if (externallyResolvedResultId != null) {
+    const resultId = String(externallyResolvedResultId).trim();
+    const result = task.results[resultId];
+    if (!result) {
+      throw new Error(`Task ${task.id} does not define result ${resultId}.`);
+    }
+    return {id: resultId, ...result};
   }
 
-  // Floating point rounding can only reach this path by a tiny margin.
-  return task.outcomes[task.outcomes.length - 1];
+  if (task.resultResolver.type === "fixed") {
+    const resultId = task.resultResolver.resultId;
+    return {id: resultId, ...task.results[resultId]};
+  }
+
+  if (task.resultResolver.type === "random") {
+    const roll = deterministicUnitInterval(`${task.id}:${executionId}:result`);
+    let cumulative = 0;
+
+    for (const [resultId, probability] of Object.entries(
+      task.resultResolver.probabilities,
+    )) {
+      cumulative += probability;
+      if (roll < cumulative) {
+        return {id: resultId, ...task.results[resultId]};
+      }
+    }
+
+    const fallbackId = Object.keys(task.results).at(-1);
+    return {id: fallbackId, ...task.results[fallbackId]};
+  }
+
+  throw new Error(
+    `Task ${task.id} requires ${task.resultResolver.type} result handler ` +
+      `${task.resultResolver.handler}; generic resolution cannot decide it yet.`,
+  );
 }
 
-function applyTaskCompletionEffects(bunker, survivorIds, task, outcomeId) {
-  const participantIds = Array.isArray(survivorIds)
-    ? survivorIds
-    : [survivorIds];
-  if (participantIds.length === 0 || new Set(participantIds).size !== participantIds.length) {
-    throw new Error(`Task ${task.id} requires unique Survivor participants.`);
-  }
-
-  const outcome = task.outcomes.find((entry) => entry.id === outcomeId);
-  if (!outcome) {
-    throw new Error(`Task ${task.id} does not define outcome ${outcomeId}.`);
-  }
-
+function applyEffects(bunker, participantIds, effects) {
   const participantSet = new Set(participantIds);
   const survivors = Array.isArray(bunker.survivors)
     ? bunker.survivors.map((survivor) => ({...survivor}))
     : [];
+
   const knownParticipantIds = new Set(
     survivors
       .filter((survivor) => participantSet.has(survivor?.id))
       .map((survivor) => survivor.id),
   );
   if (knownParticipantIds.size !== participantSet.size) {
-    throw new Error(`Task ${task.id} references an unknown Survivor.`);
+    throw new Error("Task effects reference an unknown Survivor.");
   }
 
   for (let index = 0; index < survivors.length; index += 1) {
@@ -327,7 +455,7 @@ function applyTaskCompletionEffects(bunker, survivorIds, task, outcomeId) {
     const currentEnergy = Number.isInteger(survivor.energy) ? survivor.energy : 0;
     survivors[index] = {
       ...survivor,
-      energy: currentEnergy + outcome.completion.energyDelta,
+      energy: currentEnergy + effects.energyDelta,
     };
   }
 
@@ -336,8 +464,57 @@ function applyTaskCompletionEffects(bunker, survivorIds, task, outcomeId) {
     survivors,
     inventory: applyInventoryDelta(
       bunker.inventory,
-      outcome.completion.inventoryDelta,
+      effects.inventoryDelta,
     ),
+  };
+}
+
+function applyTaskCompletionEffects(
+  bunker,
+  survivorIds,
+  task,
+  resultId,
+  executionId,
+) {
+  const participantIds = Array.isArray(survivorIds)
+    ? survivorIds
+    : [survivorIds];
+  if (
+    participantIds.length === 0 ||
+    new Set(participantIds).size !== participantIds.length
+  ) {
+    throw new Error(`Task ${task.id} requires unique Survivor participants.`);
+  }
+
+  const result = task.results[resultId];
+  if (!result) {
+    throw new Error(`Task ${task.id} does not define result ${resultId}.`);
+  }
+
+  let workingBunker = applyEffects(
+    bunker,
+    participantIds,
+    result.guaranteedOutcomes,
+  );
+  const triggeredRandomOutcomeIds = [];
+
+  for (const randomOutcome of result.randomOutcomes) {
+    const roll = deterministicUnitInterval(
+      `${task.id}:${executionId}:${resultId}:outcome:${randomOutcome.id}`,
+    );
+    if (roll >= randomOutcome.probability) continue;
+
+    workingBunker = applyEffects(
+      workingBunker,
+      participantIds,
+      randomOutcome.effects,
+    );
+    triggeredRandomOutcomeIds.push(randomOutcome.id);
+  }
+
+  return {
+    bunker: workingBunker,
+    triggeredRandomOutcomeIds,
   };
 }
 
@@ -345,6 +522,6 @@ module.exports = {
   applyTaskCompletionEffects,
   applyTaskStartCost,
   missingRequiredTaskIds,
-  selectTaskOutcome,
+  selectTaskResult,
   taskDefinitionFromSnapshot,
 };
