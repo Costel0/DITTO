@@ -56,6 +56,12 @@ try {
   Write-Host "Firebase:   $projectId"
 
   Invoke-NativeStep `
+    -Title 'Generate Flutter localizations' `
+    -Command 'flutter' `
+    -Arguments @('gen-l10n') `
+    -WorkingDirectory $repoRoot
+
+  Invoke-NativeStep `
     -Title 'Build Flutter web release' `
     -Command 'flutter' `
     -Arguments @('build', 'web', '--release') `
