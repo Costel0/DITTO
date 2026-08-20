@@ -96,6 +96,8 @@
   "jobGardenInfoValue": "No active crops",
   "jobClearGardenTitle": "Clear the garden",
   "jobClearGardenDescription": "Remove debris and clean the area so the garden is ready for future crops.",
+  "jobUpgradeGardenTitle": "Upgrade the garden",
+  "jobUpgradeGardenDescription": "Expand and improve the garden to increase its growing potential.",
   "hubExpeditionsTitle": "Expeditions",
   "hubExpeditionsDescription": "Prepare new runs, review routes, and manage expeditions beyond the shelter.",
   "itemDetailQuantity": "Quantity",
