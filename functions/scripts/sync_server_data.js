@@ -32,12 +32,57 @@ function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+function validateStringList(value, label) {
+  if (!Array.isArray(value)) {
+    throw new Error(`${label} must be a list.`);
+  }
+  const normalized = value.map((entry) => {
+    if (typeof entry !== "string" || !entry.trim()) {
+      throw new Error(`${label} must contain non-empty strings.`);
+    }
+    return entry.trim();
+  });
+  if (new Set(normalized).size !== normalized.length) {
+    throw new Error(`${label} cannot contain duplicates.`);
+  }
+  return normalized;
+}
+
+function validateInventoryMap(value, label, {positiveOnly = false} = {}) {
+  if (!isPlainObject(value)) {
+    throw new Error(`${label} must be an object.`);
+  }
+  for (const [itemId, quantity] of Object.entries(value)) {
+    if (!itemId.trim() || !Number.isInteger(quantity)) {
+      throw new Error(`${label} contains an invalid item quantity.`);
+    }
+    if (positiveOnly && quantity <= 0) {
+      throw new Error(`${label} quantities must be positive integers.`);
+    }
+  }
+}
+
+function validateCompletion(value, label) {
+  if (!isPlainObject(value)) {
+    throw new Error(`${label} must be an object.`);
+  }
+  if (!Number.isInteger(value.energyDelta)) {
+    throw new Error(`${label}.energyDelta must be an integer.`);
+  }
+  validateInventoryMap(value.inventoryDelta, `${label}.inventoryDelta`);
+}
+
 function validateJobTasks(data, filename) {
   if (!isPlainObject(data.tasks)) {
     throw new Error(`${filename}.tasks must be an object.`);
   }
 
-  for (const [taskId, task] of Object.entries(data.tasks)) {
+  const taskEntries = Object.entries(data.tasks);
+  const taskIds = new Set(taskEntries.map(([taskId]) => taskId));
+  const storableByTaskId = new Map();
+  const requirementsByTaskId = new Map();
+
+  for (const [taskId, task] of taskEntries) {
     if (!taskId.trim() || !isPlainObject(task)) {
       throw new Error(`${filename} contains an invalid task entry.`);
     }
@@ -56,26 +101,107 @@ function validateJobTasks(data, filename) {
         `${filename}.${taskId}.durationSeconds must be a positive number.`,
       );
     }
+    if (typeof task.storable !== "boolean") {
+      throw new Error(`${filename}.${taskId}.storable must be a boolean.`);
+    }
+    storableByTaskId.set(taskId, task.storable);
 
-    if (!isPlainObject(task.completion)) {
-      throw new Error(`${filename}.${taskId}.completion must be an object.`);
-    }
-    if (!Number.isInteger(task.completion.energyDelta)) {
+    if (!isPlainObject(task.survivorRequirements)) {
       throw new Error(
-        `${filename}.${taskId}.completion.energyDelta must be an integer.`,
+        `${filename}.${taskId}.survivorRequirements must be an object.`,
       );
     }
-    if (!isPlainObject(task.completion.inventoryDelta)) {
+    const {min, max} = task.survivorRequirements;
+    if (!Number.isInteger(min) || min < 1) {
       throw new Error(
-        `${filename}.${taskId}.completion.inventoryDelta must be an object.`,
+        `${filename}.${taskId}.survivorRequirements.min must be >= 1.`,
       );
     }
-    for (const [itemId, quantityDelta] of Object.entries(
-      task.completion.inventoryDelta,
-    )) {
-      if (!itemId.trim() || !Number.isInteger(quantityDelta)) {
+    if (!Number.isInteger(max) || max < min) {
+      throw new Error(
+        `${filename}.${taskId}.survivorRequirements.max must be >= min.`,
+      );
+    }
+
+    const requiredTaskIds = validateStringList(
+      task.requiredTaskIds,
+      `${filename}.${taskId}.requiredTaskIds`,
+    );
+    if (requiredTaskIds.includes(taskId)) {
+      throw new Error(`${filename}.${taskId} cannot require itself.`);
+    }
+    requirementsByTaskId.set(taskId, requiredTaskIds);
+
+    if (!isPlainObject(task.cost)) {
+      throw new Error(`${filename}.${taskId}.cost must be an object.`);
+    }
+    validateInventoryMap(
+      task.cost.inventory,
+      `${filename}.${taskId}.cost.inventory`,
+      {positiveOnly: true},
+    );
+
+    if (!isPlainObject(task.outcomes) || Object.keys(task.outcomes).length === 0) {
+      throw new Error(
+        `${filename}.${taskId}.outcomes must contain at least one outcome.`,
+      );
+    }
+    if (!isPlainObject(task.outcomeEffects)) {
+      throw new Error(`${filename}.${taskId}.outcomeEffects must be an object.`);
+    }
+
+    let totalProbability = 0;
+    for (const [outcomeId, probability] of Object.entries(task.outcomes)) {
+      if (!outcomeId.trim()) {
+        throw new Error(`${filename}.${taskId} contains an empty outcome ID.`);
+      }
+      if (
+        typeof probability !== "number" ||
+        !Number.isFinite(probability) ||
+        probability < 0 ||
+        probability > 1
+      ) {
         throw new Error(
-          `${filename}.${taskId} contains an invalid inventory delta.`,
+          `${filename}.${taskId}.outcomes.${outcomeId} must be 0..1.`,
+        );
+      }
+      totalProbability += probability;
+      if (!Object.prototype.hasOwnProperty.call(task.outcomeEffects, outcomeId)) {
+        throw new Error(
+          `${filename}.${taskId}.${outcomeId} is missing outcomeEffects.`,
+        );
+      }
+      validateCompletion(
+        task.outcomeEffects[outcomeId],
+        `${filename}.${taskId}.outcomeEffects.${outcomeId}`,
+      );
+    }
+
+    if (Math.abs(totalProbability - 1) > 1e-9) {
+      throw new Error(
+        `${filename}.${taskId} outcome probabilities must add up to 1.`,
+      );
+    }
+
+    for (const outcomeId of Object.keys(task.outcomeEffects)) {
+      if (!Object.prototype.hasOwnProperty.call(task.outcomes, outcomeId)) {
+        throw new Error(
+          `${filename}.${taskId} has effects for unknown outcome ${outcomeId}.`,
+        );
+      }
+    }
+  }
+
+  for (const [taskId, requiredTaskIds] of requirementsByTaskId) {
+    for (const requiredTaskId of requiredTaskIds) {
+      if (!taskIds.has(requiredTaskId)) {
+        throw new Error(
+          `${filename}.${taskId} requires unknown task ${requiredTaskId}.`,
+        );
+      }
+      if (!storableByTaskId.get(requiredTaskId)) {
+        throw new Error(
+          `${filename}.${taskId} requires non-storable task ${requiredTaskId}.`,
         );
       }
     }
