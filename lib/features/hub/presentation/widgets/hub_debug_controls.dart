@@ -35,10 +35,15 @@ class HubDebugControls extends StatefulWidget {
 
 class _HubDebugControlsState extends State<HubDebugControls> {
   bool _isResetting = false;
+  bool _isResettingTaskTree = false;
   bool _isAddingSurvivor = false;
   bool _isAddingItem = false;
 
-  bool get _isBusy => _isResetting || _isAddingSurvivor || _isAddingItem;
+  bool get _isBusy =>
+      _isResetting ||
+      _isResettingTaskTree ||
+      _isAddingSurvivor ||
+      _isAddingItem;
 
   String? get _nextMissingDuplicateId {
     final ownedIds = widget.sessionController.survivors
@@ -58,6 +63,35 @@ class _HubDebugControlsState extends State<HubDebugControls> {
       await widget.onResetProfile();
     } finally {
       if (mounted) setState(() => _isResetting = false);
+    }
+  }
+
+  Future<void> _resetTaskTree() async {
+    if (_isBusy) return;
+    setState(() => _isResettingTaskTree = true);
+
+    try {
+      final reset = await widget.sessionController.resetTaskTreeForTesting();
+      if (!mounted) return;
+
+      if (!reset) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('DEBUG: Could not reset task tree.')),
+        );
+        return;
+      }
+
+      final refreshBunkerState = widget.onItemAdded;
+      if (refreshBunkerState != null) {
+        await refreshBunkerState();
+      }
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('DEBUG: Task tree reset.')),
+      );
+    } finally {
+      if (mounted) setState(() => _isResettingTaskTree = false);
     }
   }
 
@@ -168,6 +202,22 @@ class _HubDebugControlsState extends State<HubDebugControls> {
               : const Icon(
                   Icons.restart_alt_rounded,
                   size: 20,
+                  color: Color(0xFF817866),
+                ),
+        ),
+        IconButton(
+          tooltip: 'DEBUG: Reset task tree',
+          visualDensity: VisualDensity.compact,
+          onPressed: _isBusy ? null : _resetTaskTree,
+          icon: _isResettingTaskTree
+              ? const SizedBox(
+                  width: 17,
+                  height: 17,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(
+                  Icons.account_tree_outlined,
+                  size: 19,
                   color: Color(0xFF817866),
                 ),
         ),
