@@ -13,7 +13,7 @@ const {
   applyTaskCompletionEffects,
   applyTaskStartCost,
   missingRequiredTaskIds,
-  selectTaskOutcome,
+  selectTaskResult,
   taskDefinitionFromSnapshot,
 } = require("./job_tasks");
 
@@ -173,29 +173,31 @@ async function resolveCompletedOccupationsForUser(db, uid) {
         resolvedExecutions.push({
           executionId: null,
           taskId: SLEEPING_ACTIVITY,
-          outcome: "rested",
+          result: "rested",
+          triggeredRandomOutcomeIds: [],
           survivorIds: participantIds,
         });
       } else {
         const taskId = first.taskId || first.activity;
         const task = requiredTaskDefinition(taskCatalogSnapshot, taskId);
-        const outcome = selectTaskOutcome(
-          task,
-          first.executionId || groupKey,
-        );
-        workingBunker = applyTaskCompletionEffects(
+        const executionSeed = first.executionId || groupKey;
+        const result = selectTaskResult(task, executionSeed);
+        const completion = applyTaskCompletionEffects(
           workingBunker,
           participantIds,
           task,
-          outcome.id,
+          result.id,
+          executionSeed,
         );
+        workingBunker = completion.bunker;
         if (task.storable) {
           completedTaskIds.add(task.id);
         }
         resolvedExecutions.push({
           executionId: first.executionId || null,
           taskId: task.id,
-          outcome: outcome.id,
+          result: result.id,
+          triggeredRandomOutcomeIds: completion.triggeredRandomOutcomeIds,
           survivorIds: participantIds,
         });
       }
@@ -483,6 +485,18 @@ exports.startJobTask = onCall(
       }
 
       const bunker = bunkerSnapshot.data() || {};
+      const completedTaskIds = new Set(
+        Array.isArray(bunker.completedTaskIds)
+          ? bunker.completedTaskIds.filter((id) => typeof id === "string")
+          : [],
+      );
+      if (task.storable && completedTaskIds.has(task.id)) {
+        throw new HttpsError(
+          "failed-precondition",
+          `Task ${task.id} has already been completed.`,
+        );
+      }
+
       const missingPrerequisites = missingRequiredTaskIds(bunker, task);
       if (missingPrerequisites.length > 0) {
         throw new HttpsError(
