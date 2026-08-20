@@ -166,7 +166,12 @@ class _JobAreaScreenState extends State<JobAreaScreen> {
   @override
   Widget build(BuildContext context) {
     final area = widget.area;
-    final tasks = jobTasksForArea(area);
+    final completedTaskIds =
+        widget.bunkerStateController.state?.completedTaskIds.toSet() ??
+            <String>{};
+    final tasks = jobTasksForArea(area)
+        .where((task) => !completedTaskIds.contains(task.id))
+        .toList(growable: false);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
