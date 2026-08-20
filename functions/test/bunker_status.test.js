@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const {
   fixStatus,
+  normalizedBusySurvivors,
   normalizedSurvivor,
 } = require("../bunker_status");
 
@@ -47,9 +48,10 @@ test("fixStatus moves negative idle Survivors to sleeping", async () => {
     },
   });
 
-  assert.equal(fixed.schemaVersion, 5);
+  assert.equal(fixed.schemaVersion, 6);
   assert.equal(fixed.revision, 8);
   assert.deepEqual(fixed.idleSurvivors, []);
+  assert.deepEqual(fixed.completedTaskIds, []);
   assert.equal(fixed.busySurvivors.length, 1);
   assert.equal(fixed.busySurvivors[0].survivorId, "s1");
   assert.equal(fixed.busySurvivors[0].activity, "sleeping");
@@ -62,6 +64,23 @@ test("fixStatus moves negative idle Survivors to sleeping", async () => {
     fixed.busySurvivors[0].endsAt.toISOString(),
     "2026-08-18T12:00:30.000Z",
   );
+});
+
+test("normalizedBusySurvivors preserves task and execution IDs", () => {
+  const [busy] = normalizedBusySurvivors([
+    {
+      survivorId: "s1",
+      taskId: "clear_garden",
+      executionId: "exec-1",
+      activity: "clear_garden",
+      location: "garden",
+      startedAt: new Date("2026-08-18T12:00:00Z"),
+      endsAt: new Date("2026-08-18T12:05:00Z"),
+    },
+  ]);
+
+  assert.equal(busy.taskId, "clear_garden");
+  assert.equal(busy.executionId, "exec-1");
 });
 
 test("fixStatus leaves completed occupations untouched", async () => {
@@ -83,11 +102,13 @@ test("fixStatus leaves completed occupations untouched", async () => {
           endsAt: new Date("2026-08-18T12:08:00Z"),
         },
       ],
+      completedTaskIds: ["clear_garden", "clear_garden"],
       inventory: {},
     },
   });
 
   assert.deepEqual(fixed.idleSurvivors, []);
+  assert.deepEqual(fixed.completedTaskIds, ["clear_garden"]);
   assert.equal(fixed.busySurvivors.length, 1);
   assert.equal(fixed.busySurvivors[0].survivorId, "s1");
   assert.equal(fixed.busySurvivors[0].activity, "sleeping");
