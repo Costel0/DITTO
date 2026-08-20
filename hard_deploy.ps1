@@ -107,6 +107,12 @@ try {
     -WorkingDirectory $functionsDir
 
   Invoke-NativeStep `
+    -Title 'Generate Flutter localizations' `
+    -Command 'flutter' `
+    -Arguments @('gen-l10n') `
+    -WorkingDirectory $repoRoot
+
+  Invoke-NativeStep `
     -Title 'Run Flutter tests' `
     -Command 'flutter' `
     -Arguments @('test') `
