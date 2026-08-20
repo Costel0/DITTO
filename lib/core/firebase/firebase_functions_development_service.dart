@@ -176,6 +176,34 @@ class FirebaseFunctionsDevelopmentService implements DevelopmentService {
   }
 
   @override
+  Future<void> resetTaskTreeForTesting() async {
+    const operation = 'resetTaskTreeForTesting';
+    await _refreshSecurityTokens(operation);
+
+    try {
+      final callable = _functions.httpsCallable(operation);
+      final result = await callable.call(<String, dynamic>{});
+
+      final data = result.data;
+      if (data is! Map || data['reset'] != true) {
+        throw const FormatException(
+          'resetTaskTreeForTesting returned invalid data.',
+        );
+      }
+    } on FirebaseFunctionsException catch (error, stackTrace) {
+      Error.throwWithStackTrace(
+        DevelopmentServiceException(
+          operation: operation,
+          code: error.code,
+          message: error.message,
+          details: error.details,
+        ),
+        stackTrace,
+      );
+    }
+  }
+
+  @override
   Future<void> resetUserForTesting() async {
     const operation = 'resetUserForTesting';
     await _refreshSecurityTokens(operation);
