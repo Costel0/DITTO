@@ -11,20 +11,20 @@ Se sincroniza con `/serverData/jobTasks`. La app no puede leer este documento di
 ```json
 {
   "schemaVersion": 3,
-  "dataVersion": 3,
+  "dataVersion": 4,
   "tasks": {}
 }
 ```
 
 - `schemaVersion`: versión del formato del archivo.
-- `dataVersion`: versión del contenido/configuración.
+- `dataVersion`: versión del contenido/configuración. Súbela cuando cambies o añadas contenido manteniendo el mismo esquema.
 - `tasks`: mapa `taskId -> definición de tarea`.
 
 ## Estructura básica de una tarea
 
 ```json
-"clear_garden": {
-  "activity": "clear_garden",
+"prepare_garden": {
+  "activity": "prepare_garden",
   "location": "garden",
   "durationSeconds": 300,
   "storable": true,
@@ -46,7 +46,7 @@ Se sincroniza con `/serverData/jobTasks`. La app no puede leer este documento di
 
 ### Identidad y duración
 
-- La clave del objeto (`clear_garden`) es el ID único de la tarea.
+- La clave del objeto (`prepare_garden`) es el ID único de la tarea.
 - `activity`: actividad que se guarda en la ocupación del Survivor.
 - `location`: zona donde sucede.
 - `durationSeconds`: duración total en segundos.
@@ -272,6 +272,19 @@ Cada resultado general tiene dos grupos de efectos:
   }
 }
 ```
+
+## Añadir una nueva task
+
+La lógica autoritativa y el balance pertenecen a `job_tasks.json`; Flutter solo mantiene el registro visual de las tasks que debe enseñar.
+
+Al añadir una task nueva:
+
+1. Añádela a `game_data/server/job_tasks.json` y aumenta `dataVersion`.
+2. Registra su `id` y `JobArea` en `lib/features/jobs/domain/job_task.dart`.
+3. Añade su título y descripción en `lib/features/jobs/presentation/job_labels.dart`.
+4. Añade las traducciones correspondientes en `lib/l10n/app_es.arb` y `lib/l10n/app_en.arb`.
+
+No hace falta tocar `job_area_screen.dart`, `hub_jobs.dart`, Functions ni los tests genéricos mientras la nueva task use estructuras ya soportadas por el esquema actual. Solo hace falta cambiar backend si introduces un nuevo tipo de resolver, efecto o campo con lógica nueva.
 
 ## Después de modificarlo
 
