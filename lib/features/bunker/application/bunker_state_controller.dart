@@ -23,6 +23,7 @@ class BunkerStateController extends ChangeNotifier {
   BunkerState? _state;
   Timer? _pollTimer;
   Future<void>? _activeRefresh;
+  Future<void>? _activeCompletionResolution;
   bool _isRefreshing = false;
   bool _isDisposed = false;
   Object? _lastError;
@@ -72,6 +73,21 @@ class BunkerStateController extends ChangeNotifier {
     await refresh();
   }
 
+  /// Requests the trusted backend resolver and adopts the resulting snapshot.
+  ///
+  /// Multiple countdowns can expire together, so concurrent requests are
+  /// deliberately coalesced into one in-flight resolution.
+  Future<void> resolveCompletedOccupations() {
+    if (_isDisposed) return Future<void>.value();
+
+    final activeResolution = _activeCompletionResolution;
+    if (activeResolution != null) return activeResolution;
+
+    final resolutionFuture = _performCompletionResolution();
+    _activeCompletionResolution = resolutionFuture;
+    return resolutionFuture;
+  }
+
   Future<void> _performRefresh() async {
     _isRefreshing = true;
     notifyListeners();
@@ -81,10 +97,7 @@ class BunkerStateController extends ChangeNotifier {
       if (_isDisposed) return;
 
       _lastError = null;
-      final currentRevision = _state?.revision;
-      if (currentRevision == null || nextState.revision > currentRevision) {
-        _state = nextState;
-      }
+      _acceptState(nextState);
     } catch (error) {
       if (_isDisposed) return;
       _lastError = error;
@@ -94,6 +107,41 @@ class BunkerStateController extends ChangeNotifier {
       if (!_isDisposed) {
         notifyListeners();
       }
+    }
+  }
+
+  Future<void> _performCompletionResolution() async {
+    final activeRefresh = _activeRefresh;
+    if (activeRefresh != null) {
+      await activeRefresh;
+    }
+    if (_isDisposed) return;
+
+    _isRefreshing = true;
+    notifyListeners();
+
+    try {
+      final nextState = await _service.resolveCompletedOccupations();
+      if (_isDisposed) return;
+
+      _lastError = null;
+      _acceptState(nextState);
+    } catch (error) {
+      if (_isDisposed) return;
+      _lastError = error;
+    } finally {
+      _isRefreshing = false;
+      _activeCompletionResolution = null;
+      if (!_isDisposed) {
+        notifyListeners();
+      }
+    }
+  }
+
+  void _acceptState(BunkerState nextState) {
+    final currentRevision = _state?.revision;
+    if (currentRevision == null || nextState.revision > currentRevision) {
+      _state = nextState;
     }
   }
 
