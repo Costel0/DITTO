@@ -22,6 +22,12 @@ String _legacyLocationForActivity(String activity) {
   }
 }
 
+String? _optionalNonEmptyString(Object? raw) {
+  if (raw is! String) return null;
+  final normalized = raw.trim();
+  return normalized.isEmpty ? null : normalized;
+}
+
 class BusySurvivor {
   const BusySurvivor({
     required this.survivorId,
@@ -29,6 +35,8 @@ class BusySurvivor {
     required this.location,
     required this.startedAt,
     required this.endsAt,
+    this.taskId,
+    this.executionId,
   });
 
   final String survivorId;
@@ -36,6 +44,12 @@ class BusySurvivor {
   final String location;
   final DateTime startedAt;
   final DateTime endsAt;
+
+  /// Server task ID. Sleeping and legacy occupations may not have one.
+  final String? taskId;
+
+  /// Shared by every Survivor assigned to the same task execution.
+  final String? executionId;
 
   factory BusySurvivor.fromJson(
     Map<String, dynamic> json, {
@@ -99,6 +113,8 @@ class BusySurvivor {
       location: location,
       startedAt: startedAt,
       endsAt: endsAt,
+      taskId: _optionalNonEmptyString(json['taskId']),
+      executionId: _optionalNonEmptyString(json['executionId']),
     );
   }
 }
@@ -116,13 +132,16 @@ class BunkerState {
     required List<Survivor> survivors,
     required List<String> idleSurvivors,
     required List<BusySurvivor> busySurvivors,
+    required List<String> completedTaskIds,
     required Map<String, int> inventory,
   })  : survivors = List<Survivor>.unmodifiable(survivors),
         idleSurvivors = List<String>.unmodifiable(idleSurvivors),
         busySurvivors = List<BusySurvivor>.unmodifiable(busySurvivors),
+        completedTaskIds = List<String>.unmodifiable(completedTaskIds),
         inventory = Map<String, int>.unmodifiable(inventory);
 
-  static const int supportedSchemaVersion = 5;
+  static const int supportedSchemaVersion = 6;
+  static const int completedTasksSchemaVersion = 6;
   static const int locationSchemaVersion = 5;
   static const int timestampSchemaVersion = 4;
   static const int legacySchemaVersion = 2;
@@ -140,6 +159,9 @@ class BunkerState {
   /// Survivors currently occupied, what they are doing, where, and for which
   /// exact time window.
   final List<BusySurvivor> busySurvivors;
+
+  /// IDs of storable tasks that have been completed at least once.
+  final List<String> completedTaskIds;
 
   /// Item ID -> quantity owned.
   final Map<String, int> inventory;
@@ -221,6 +243,10 @@ class BunkerState {
       );
     }
 
+    final completedTaskIds = schemaVersion >= completedTasksSchemaVersion
+        ? _uniqueNonEmptyStringList(json, 'completedTaskIds')
+        : const <String>[];
+
     final inventoryRaw = json['inventory'];
     if (inventoryRaw is! Map) {
       throw const FormatException('inventory must be an object.');
@@ -246,6 +272,7 @@ class BunkerState {
       survivors: survivors,
       idleSurvivors: idleSurvivors,
       busySurvivors: busySurvivors,
+      completedTaskIds: completedTaskIds,
       inventory: inventory,
     );
   }
@@ -334,6 +361,20 @@ class BunkerState {
       throw FormatException('$key must be a list of strings.');
     }
     return raw.cast<String>().toList(growable: false);
+  }
+
+  static List<String> _uniqueNonEmptyStringList(
+    Map<String, dynamic> json,
+    String key,
+  ) {
+    final values = _stringList(json, key).map((value) => value.trim()).toList();
+    if (values.any((value) => value.isEmpty)) {
+      throw FormatException('$key cannot contain empty strings.');
+    }
+    if (values.toSet().length != values.length) {
+      throw FormatException('$key cannot contain duplicates.');
+    }
+    return values;
   }
 
   static void _validateSurvivorReferences(
