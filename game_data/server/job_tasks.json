@@ -1,6 +1,6 @@
 {
   "schemaVersion": 3,
-  "dataVersion": 3,
+  "dataVersion": 4,
   "tasks": {
     "prepare_garden": {
       "activity": "prepare_garden",
