@@ -62,7 +62,7 @@ function validateInventoryMap(value, label, {positiveOnly = false} = {}) {
   }
 }
 
-function validateCompletion(value, label) {
+function validateEffects(value, label) {
   if (!isPlainObject(value)) {
     throw new Error(`${label} must be an object.`);
   }
@@ -70,6 +70,112 @@ function validateCompletion(value, label) {
     throw new Error(`${label}.energyDelta must be an integer.`);
   }
   validateInventoryMap(value.inventoryDelta, `${label}.inventoryDelta`);
+}
+
+function validateTaskResults(task, filename, taskId) {
+  const label = `${filename}.${taskId}`;
+  if (!isPlainObject(task.results) || Object.keys(task.results).length === 0) {
+    throw new Error(`${label}.results must contain at least one result.`);
+  }
+
+  const resultIds = new Set(Object.keys(task.results));
+  for (const [resultId, result] of Object.entries(task.results)) {
+    if (!resultId.trim() || !isPlainObject(result)) {
+      throw new Error(`${label}.results contains an invalid result.`);
+    }
+
+    validateEffects(
+      result.guaranteedOutcomes,
+      `${label}.results.${resultId}.guaranteedOutcomes`,
+    );
+
+    if (!isPlainObject(result.randomOutcomes)) {
+      throw new Error(
+        `${label}.results.${resultId}.randomOutcomes must be an object.`,
+      );
+    }
+    for (const [outcomeId, outcome] of Object.entries(result.randomOutcomes)) {
+      const outcomeLabel =
+        `${label}.results.${resultId}.randomOutcomes.${outcomeId}`;
+      if (!outcomeId.trim() || !isPlainObject(outcome)) {
+        throw new Error(`${outcomeLabel} must be an object.`);
+      }
+      if (
+        typeof outcome.probability !== "number" ||
+        !Number.isFinite(outcome.probability) ||
+        outcome.probability < 0 ||
+        outcome.probability > 1
+      ) {
+        throw new Error(`${outcomeLabel}.probability must be 0..1.`);
+      }
+      validateEffects(outcome.effects, `${outcomeLabel}.effects`);
+    }
+  }
+
+  if (!isPlainObject(task.resultResolver)) {
+    throw new Error(`${label}.resultResolver must be an object.`);
+  }
+  const type = task.resultResolver.type;
+  if (!["fixed", "random", "server", "combat"].includes(type)) {
+    throw new Error(
+      `${label}.resultResolver.type must be fixed, random, server or combat.`,
+    );
+  }
+
+  if (type === "fixed") {
+    if (
+      typeof task.resultResolver.resultId !== "string" ||
+      !resultIds.has(task.resultResolver.resultId.trim())
+    ) {
+      throw new Error(`${label}.resultResolver.resultId is not a known result.`);
+    }
+    return;
+  }
+
+  if (type === "random") {
+    const probabilities = task.resultResolver.probabilities;
+    if (!isPlainObject(probabilities)) {
+      throw new Error(`${label}.resultResolver.probabilities must be an object.`);
+    }
+
+    const probabilityIds = new Set(Object.keys(probabilities));
+    if (
+      probabilityIds.size !== resultIds.size ||
+      [...resultIds].some((resultId) => !probabilityIds.has(resultId))
+    ) {
+      throw new Error(
+        `${label}.resultResolver.probabilities must define every result exactly once.`,
+      );
+    }
+
+    let total = 0;
+    for (const [resultId, probability] of Object.entries(probabilities)) {
+      if (
+        typeof probability !== "number" ||
+        !Number.isFinite(probability) ||
+        probability < 0 ||
+        probability > 1
+      ) {
+        throw new Error(
+          `${label}.resultResolver.probabilities.${resultId} must be 0..1.`,
+        );
+      }
+      total += probability;
+    }
+    if (Math.abs(total - 1) > 1e-9) {
+      throw new Error(`${label} result probabilities must add up to 1.`);
+    }
+    return;
+  }
+
+  if (
+    typeof task.resultResolver.handler !== "string" ||
+    !task.resultResolver.handler.trim()
+  ) {
+    throw new Error(
+      `${label}.${type} resultResolver must define a non-empty handler.`,
+    );
+  }
 }
 
 function validateJobTasks(data, filename) {
@@ -141,55 +247,7 @@ function validateJobTasks(data, filename) {
       {positiveOnly: true},
     );
 
-    if (!isPlainObject(task.outcomes) || Object.keys(task.outcomes).length === 0) {
-      throw new Error(
-        `${filename}.${taskId}.outcomes must contain at least one outcome.`,
-      );
-    }
-    if (!isPlainObject(task.outcomeEffects)) {
-      throw new Error(`${filename}.${taskId}.outcomeEffects must be an object.`);
-    }
-
-    let totalProbability = 0;
-    for (const [outcomeId, probability] of Object.entries(task.outcomes)) {
-      if (!outcomeId.trim()) {
-        throw new Error(`${filename}.${taskId} contains an empty outcome ID.`);
-      }
-      if (
-        typeof probability !== "number" ||
-        !Number.isFinite(probability) ||
-        probability < 0 ||
-        probability > 1
-      ) {
-        throw new Error(
-          `${filename}.${taskId}.outcomes.${outcomeId} must be 0..1.`,
-        );
-      }
-      totalProbability += probability;
-      if (!Object.prototype.hasOwnProperty.call(task.outcomeEffects, outcomeId)) {
-        throw new Error(
-          `${filename}.${taskId}.${outcomeId} is missing outcomeEffects.`,
-        );
-      }
-      validateCompletion(
-        task.outcomeEffects[outcomeId],
-        `${filename}.${taskId}.outcomeEffects.${outcomeId}`,
-      );
-    }
-
-    if (Math.abs(totalProbability - 1) > 1e-9) {
-      throw new Error(
-        `${filename}.${taskId} outcome probabilities must add up to 1.`,
-      );
-    }
-
-    for (const outcomeId of Object.keys(task.outcomeEffects)) {
-      if (!Object.prototype.hasOwnProperty.call(task.outcomes, outcomeId)) {
-        throw new Error(
-          `${filename}.${taskId} has effects for unknown outcome ${outcomeId}.`,
-        );
-      }
-    }
+    validateTaskResults(task, filename, taskId);
   }
 
   for (const [taskId, requiredTaskIds] of requirementsByTaskId) {
