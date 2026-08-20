@@ -10,17 +10,21 @@ class JobTaskDefinition {
   final JobArea area;
 }
 
-const clearGardenTask = JobTaskDefinition(
+const prepareGardenTask = JobTaskDefinition(
   id: 'prepare_garden',
   area: JobArea.garden,
 );
 
-List<JobTaskDefinition> jobTasksForArea(JobArea area) {
-  switch (area) {
-    case JobArea.workshop:
-    case JobArea.kitchen:
-      return const <JobTaskDefinition>[];
-    case JobArea.garden:
-      return const <JobTaskDefinition>[clearGardenTask];
-  }
-}
+const upgradeGardenTask = JobTaskDefinition(
+  id: 'upgrade_garden',
+  area: JobArea.garden,
+);
+
+const jobTasks = <JobTaskDefinition>[
+  prepareGardenTask,
+  upgradeGardenTask,
+];
+
+List<JobTaskDefinition> jobTasksForArea(JobArea area) => jobTasks
+    .where((task) => task.area == area)
+    .toList(growable: false);
