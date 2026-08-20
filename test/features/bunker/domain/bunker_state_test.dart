@@ -17,6 +17,46 @@ void main() {
     };
   }
 
+  test('parses schema v6 task execution and completed task registry', () {
+    final state = BunkerState.fromJson(<String, dynamic>{
+      'schemaVersion': 6,
+      'revision': 9,
+      'serverUpdatedAt': '2026-08-20T09:00:00Z',
+      'survivors': <dynamic>[
+        survivor(id: 's1', duplicateId: '01', energy: 20),
+        survivor(id: 's2', duplicateId: '02', energy: 30),
+      ],
+      'idleSurvivors': <String>[],
+      'busySurvivors': <dynamic>[
+        <String, dynamic>{
+          'survivorId': 's1',
+          'taskId': 'clear_garden',
+          'executionId': 'execution-1',
+          'activity': 'clear_garden',
+          'location': 'garden',
+          'startedAt': '2026-08-20T09:00:00Z',
+          'endsAt': '2026-08-20T09:05:00Z',
+        },
+        <String, dynamic>{
+          'survivorId': 's2',
+          'taskId': 'clear_garden',
+          'executionId': 'execution-1',
+          'activity': 'clear_garden',
+          'location': 'garden',
+          'startedAt': '2026-08-20T09:00:00Z',
+          'endsAt': '2026-08-20T09:05:00Z',
+        },
+      ],
+      'completedTaskIds': <String>['prepare_garden'],
+      'inventory': <String, int>{},
+    });
+
+    expect(state.completedTaskIds, <String>['prepare_garden']);
+    expect(state.busySurvivors.length, 2);
+    expect(state.busySurvivors.first.taskId, 'clear_garden');
+    expect(state.busySurvivors.first.executionId, 'execution-1');
+  });
+
   test('parses schema v5 busy survivor location and timestamps', () {
     final state = BunkerState.fromJson(<String, dynamic>{
       'schemaVersion': 5,
@@ -45,6 +85,7 @@ void main() {
     expect(busy.location, 'garden');
     expect(busy.startedAt, DateTime.utc(2026, 8, 19, 12, 0, 1));
     expect(busy.endsAt, DateTime.utc(2026, 8, 19, 12, 10, 5));
+    expect(state.completedTaskIds, isEmpty);
   });
 
   test('reads schema v4 busy survivor without location', () {
