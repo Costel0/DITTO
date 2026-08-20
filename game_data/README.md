@@ -1,5 +1,13 @@
 # Game data
 
+## Guías rápidas
+
+- [`README_ITEMS.md`](README_ITEMS.md): estructura y uso de `items.json`.
+- [`server/README_JOB_TASKS.md`](server/README_JOB_TASKS.md): estructura de `job_tasks.json`, Survivors, costes, resultados y outcomes.
+- [`server/README_LOOT_TABLES.md`](server/README_LOOT_TABLES.md): estado y propósito de `loot_tables.json`.
+- [`server/README_SERVER_CONFIG.md`](server/README_SERVER_CONFIG.md): parámetros de `server_config.json`.
+- [`README_WORKFLOW.md`](README_WORKFLOW.md): comandos que hay que ejecutar después de modificar cualquier JSON de `game_data`.
+
 `items.json` is the versioned source used to publish the shared public item catalog to Firestore.
 
 The Flutter app does not bundle item definitions. It only bundles optional artwork at `assets/items/item_[ID].png`. Runtime item metadata is read from the shared `/items/{itemId}` Firestore collection.
