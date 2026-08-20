@@ -14,53 +14,59 @@ function snapshotWithTasks(tasks) {
   };
 }
 
-function rawExampleTask(overrides = {}) {
-  return {
-    activity: "clear_garden",
-    location: "garden",
-    durationSeconds: 300,
-    storable: true,
-    survivorRequirements: {min: 1, max: 3},
-    requiredTaskIds: [],
-    cost: {inventory: {scrap_metal: 2}},
-    resultResolver: {
-      type: "random",
-      probabilities: {
-        success: 0.8,
-        failure: 0.2,
-      },
-    },
-    results: {
-      success: {
-        guaranteedOutcomes: {
-          energyDelta: -5,
-          inventoryDelta: {field_ration: 2},
+function exampleTask() {
+  return taskDefinitionFromSnapshot(
+    snapshotWithTasks({
+      clear_garden: {
+        activity: "clear_garden",
+        location: "garden",
+        durationSeconds: 300,
+        storable: true,
+        survivorRequirements: {
+          min: 1,
+          max: 3,
         },
-        randomOutcomes: {
-          minor_accident: {
-            probability: 0.02,
-            effects: {
+        requiredTaskIds: ["prepare_garden"],
+        cost: {
+          inventory: {
+            scrap_metal: 2,
+          },
+        },
+        resultResolver: {
+          type: "random",
+          probabilities: {
+            success: 0.75,
+            failure: 0.25,
+          },
+        },
+        results: {
+          success: {
+            guaranteedOutcomes: {
               energyDelta: -4,
+              inventoryDelta: {
+                field_ration: 2,
+              },
+            },
+            randomOutcomes: {
+              accident: {
+                probability: 0.02,
+                effects: {
+                  energyDelta: -3,
+                  inventoryDelta: {},
+                },
+              },
+            },
+          },
+          failure: {
+            guaranteedOutcomes: {
+              energyDelta: -2,
               inventoryDelta: {},
             },
+            randomOutcomes: {},
           },
         },
       },
-      failure: {
-        guaranteedOutcomes: {
-          energyDelta: -3,
-          inventoryDelta: {},
-        },
-        randomOutcomes: {},
-      },
-    },
-    ...overrides,
-  };
-}
-
-function exampleTask(overrides = {}) {
-  return taskDefinitionFromSnapshot(
-    snapshotWithTasks({clear_garden: rawExampleTask(overrides)}),
+    }),
     "clear_garden",
   );
 }
@@ -69,26 +75,57 @@ test("taskDefinitionFromSnapshot normalizes nested result definitions", () => {
   const task = exampleTask();
 
   assert.equal(task.id, "clear_garden");
+  assert.equal(task.durationSeconds, 300);
   assert.equal(task.storable, true);
   assert.deepEqual(task.survivorRequirements, {min: 1, max: 3});
+  assert.deepEqual(task.requiredTaskIds, ["prepare_garden"]);
   assert.deepEqual(task.cost.inventory, {scrap_metal: 2});
   assert.equal(task.resultResolver.type, "random");
   assert.deepEqual(task.resultResolver.probabilities, {
-    success: 0.8,
-    failure: 0.2,
+    success: 0.75,
+    failure: 0.25,
   });
-  assert.equal(task.results.success.guaranteedOutcomes.energyDelta, -5);
-  assert.equal(task.results.success.randomOutcomes[0].id, "minor_accident");
+  assert.equal(task.results.success.randomOutcomes[0].id, "accident");
   assert.equal(task.results.success.randomOutcomes[0].probability, 0.02);
+});
+
+test("first completion-only task format remains readable", () => {
+  const task = taskDefinitionFromSnapshot(
+    snapshotWithTasks({
+      legacy: {
+        activity: "legacy",
+        location: "garden",
+        durationSeconds: 10,
+        completion: {
+          energyDelta: -1,
+          inventoryDelta: {scrap_metal: 1},
+        },
+      },
+    }),
+    "legacy",
+  );
+
+  assert.equal(task.storable, false);
+  assert.deepEqual(task.survivorRequirements, {min: 1, max: 1});
+  assert.deepEqual(task.resultResolver, {type: "fixed", resultId: "default"});
+  assert.deepEqual(task.results.default.guaranteedOutcomes, {
+    energyDelta: -1,
+    inventoryDelta: {scrap_metal: 1},
+  });
+  assert.deepEqual(task.results.default.randomOutcomes, []);
 });
 
 test("legacy mutually exclusive outcomes remain readable", () => {
   const task = taskDefinitionFromSnapshot(
     snapshotWithTasks({
       legacy: {
+        activity: "legacy",
         location: "garden",
         durationSeconds: 10,
-        outcomes: {success: 0.75, failure: 0.25},
+        outcomes: {
+          success: 0.7,
+          failure: 0.3,
+        },
         outcomeEffects: {
           success: {energyDelta: -1, inventoryDelta: {scrap_metal: 1}},
           failure: {energyDelta: -2, inventoryDelta: {}},
@@ -99,6 +136,10 @@ test("legacy mutually exclusive outcomes remain readable", () => {
   );
 
   assert.equal(task.resultResolver.type, "random");
+  assert.deepEqual(task.resultResolver.probabilities, {
+    success: 0.7,
+    failure: 0.3,
+  });
   assert.equal(task.results.success.guaranteedOutcomes.energyDelta, -1);
   assert.deepEqual(task.results.success.randomOutcomes, []);
 });
@@ -109,9 +150,22 @@ test("taskDefinitionFromSnapshot returns null for unknown tasks", () => {
 });
 
 test("fixed result selection returns configured result", () => {
-  const task = exampleTask({
-    resultResolver: {type: "fixed", resultId: "success"},
-  });
+  const task = taskDefinitionFromSnapshot(
+    snapshotWithTasks({
+      fixed: {
+        location: "garden",
+        durationSeconds: 10,
+        resultResolver: {type: "fixed", resultId: "success"},
+        results: {
+          success: {
+            guaranteedOutcomes: {energyDelta: 0, inventoryDelta: {}},
+            randomOutcomes: {},
+          },
+        },
+      },
+    }),
+    "fixed",
+  );
 
   assert.equal(selectTaskResult(task, "execution-1").id, "success");
 });
@@ -126,85 +180,109 @@ test("random result selection is deterministic per execution", () => {
 });
 
 test("server/combat result resolvers require an external result", () => {
-  const task = exampleTask({
-    resultResolver: {type: "combat", handler: "combat_v1"},
-  });
+  const task = taskDefinitionFromSnapshot(
+    snapshotWithTasks({
+      server_task: {
+        location: "garden",
+        durationSeconds: 10,
+        resultResolver: {type: "server", handler: "server_v1"},
+        results: {
+          success: {
+            guaranteedOutcomes: {energyDelta: 0, inventoryDelta: {}},
+            randomOutcomes: {},
+          },
+          failure: {
+            guaranteedOutcomes: {energyDelta: 0, inventoryDelta: {}},
+            randomOutcomes: {},
+          },
+        },
+      },
+    }),
+    "server_task",
+  );
 
   assert.throws(
     () => selectTaskResult(task, "execution-1"),
-    /generic resolution cannot decide/,
+    /generic resolution cannot decide it yet/,
   );
-  assert.equal(
-    selectTaskResult(task, "execution-1", "failure").id,
-    "failure",
-  );
+  assert.equal(selectTaskResult(task, "execution-1", "success").id, "success");
 });
 
 test("guaranteed and probabilistic effects are evaluated separately", () => {
-  const task = exampleTask({
-    resultResolver: {type: "fixed", resultId: "success"},
-    results: {
-      success: {
-        guaranteedOutcomes: {
-          energyDelta: -5,
-          inventoryDelta: {field_ration: 2},
-        },
-        randomOutcomes: {
-          guaranteed_test_event: {
-            probability: 1,
-            effects: {
-              energyDelta: -4,
-              inventoryDelta: {scrap_metal: 1},
+  const task = taskDefinitionFromSnapshot(
+    snapshotWithTasks({
+      risky: {
+        location: "garden",
+        durationSeconds: 10,
+        resultResolver: {type: "fixed", resultId: "success"},
+        results: {
+          success: {
+            guaranteedOutcomes: {
+              energyDelta: -5,
+              inventoryDelta: {scrap_metal: 2},
             },
-          },
-          impossible_test_event: {
-            probability: 0,
-            effects: {
-              energyDelta: -99,
-              inventoryDelta: {},
+            randomOutcomes: {
+              guaranteed_extra: {
+                probability: 1,
+                effects: {
+                  energyDelta: -2,
+                  inventoryDelta: {field_ration: 1},
+                },
+              },
+              impossible: {
+                probability: 0,
+                effects: {
+                  energyDelta: -50,
+                  inventoryDelta: {field_ration: 99},
+                },
+              },
             },
           },
         },
       },
+    }),
+    "risky",
+  );
+
+  const result = applyTaskCompletionEffects(
+    {
+      survivors: [
+        {id: "s1", energy: 20},
+        {id: "s2", energy: 10},
+      ],
+      inventory: {},
     },
-  });
-
-  const bunker = {
-    survivors: [
-      {id: "s1", energy: 20},
-      {id: "s2", energy: 30},
-    ],
-    inventory: {},
-  };
-
-  const completion = applyTaskCompletionEffects(
-    bunker,
     ["s1", "s2"],
     task,
     "success",
     "execution-1",
   );
 
-  assert.deepEqual(completion.triggeredRandomOutcomeIds, [
-    "guaranteed_test_event",
-  ]);
-  assert.equal(completion.bunker.survivors[0].energy, 11);
-  assert.equal(completion.bunker.survivors[1].energy, 21);
-  assert.deepEqual(completion.bunker.inventory, {
-    field_ration: 2,
-    scrap_metal: 1,
+  assert.equal(result.bunker.survivors[0].energy, 13);
+  assert.equal(result.bunker.survivors[1].energy, 3);
+  assert.deepEqual(result.bunker.inventory, {
+    scrap_metal: 2,
+    field_ration: 1,
   });
+  assert.deepEqual(result.triggeredRandomOutcomeIds, ["guaranteed_extra"]);
 });
 
 test("task start cost is paid once from bunker inventory", () => {
   const task = exampleTask();
   const bunker = {
-    inventory: {scrap_metal: 5},
+    inventory: {
+      scrap_metal: 5,
+      field_ration: 1,
+    },
   };
 
   const result = applyTaskStartCost(bunker, task);
-  assert.deepEqual(result.inventory, {scrap_metal: 3});
-  assert.deepEqual(bunker.inventory, {scrap_metal: 5});
+
+  assert.deepEqual(result.inventory, {
+    scrap_metal: 3,
+    field_ration: 1,
+  });
+  assert.equal(bunker.inventory.scrap_metal, 5);
 });
 
 test("task start cost rejects insufficient inventory", () => {
@@ -216,10 +294,15 @@ test("task start cost rejects insufficient inventory", () => {
 });
 
 test("missingRequiredTaskIds checks stored task history", () => {
-  const task = exampleTask({requiredTaskIds: ["first", "second"]});
-
+  const task = exampleTask();
+  assert.deepEqual(missingRequiredTaskIds({completedTaskIds: []}, task), [
+    "prepare_garden",
+  ]);
   assert.deepEqual(
-    missingRequiredTaskIds({completedTaskIds: ["first"]}, task),
-    ["second"],
+    missingRequiredTaskIds(
+      {completedTaskIds: ["prepare_garden"]},
+      task,
+    ),
+    [],
   );
 });
