@@ -114,12 +114,12 @@ try {
     -Arguments @('test') `
     -WorkingDirectory $repoRoot
 
-  # Treat analyzer info messages as deployment blockers too. This keeps the
-  # deployment command stricter than a normal local `flutter analyze`.
+  # Normal flutter analyze blocks on errors/warnings but does not turn purely
+  # stylistic info-level lints into deployment failures.
   Invoke-NativeStep `
-    -Title 'Run strict Flutter analyzer' `
+    -Title 'Run Flutter analyzer' `
     -Command 'flutter' `
-    -Arguments @('analyze', '--fatal-infos') `
+    -Arguments @('analyze') `
     -WorkingDirectory $repoRoot
 
   if (-not $SkipHosting) {
