@@ -232,6 +232,14 @@ class _ActiveJobInfo extends StatelessWidget {
   final JobArea area;
   final BunkerState? bunkerState;
 
+  String _groupKey(BusySurvivor busy) {
+    final executionId = busy.executionId;
+    if (executionId != null) return 'execution:$executionId';
+    return 'single:${busy.survivorId}:${busy.activity}:'
+        '${busy.startedAt.millisecondsSinceEpoch}:'
+        '${busy.endsAt.millisecondsSinceEpoch}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final bunker = bunkerState;
@@ -248,8 +256,7 @@ class _ActiveJobInfo extends StatelessWidget {
 
     final active = bunker.busySurvivors
         .where((busy) => busy.location == area.id)
-        .toList(growable: false)
-      ..sort((a, b) => a.endsAt.compareTo(b.endsAt));
+        .toList(growable: false);
 
     if (active.isEmpty) {
       return _JobInfoFrame(
@@ -274,15 +281,22 @@ class _ActiveJobInfo extends StatelessWidget {
       );
     }
 
+    final grouped = <String, List<BusySurvivor>>{};
+    for (final busy in active) {
+      grouped.putIfAbsent(_groupKey(busy), () => <BusySurvivor>[]).add(busy);
+    }
+    final executions = grouped.values.toList(growable: false)
+      ..sort((a, b) => a.first.endsAt.compareTo(b.first.endsAt));
+
     return _JobInfoFrame(
       child: Column(
         children: [
-          for (var index = 0; index < active.length; index++) ...[
-            _BusySurvivorRow(
-              busy: active[index],
+          for (var index = 0; index < executions.length; index++) ...[
+            _BusyExecutionRow(
+              busySurvivors: executions[index],
               bunkerState: bunker,
             ),
-            if (index + 1 < active.length)
+            if (index + 1 < executions.length)
               const Divider(height: 14, color: Color(0xFF443D31)),
           ],
         ],
@@ -311,13 +325,13 @@ class _JobInfoFrame extends StatelessWidget {
   }
 }
 
-class _BusySurvivorRow extends StatelessWidget {
-  const _BusySurvivorRow({
-    required this.busy,
+class _BusyExecutionRow extends StatelessWidget {
+  const _BusyExecutionRow({
+    required this.busySurvivors,
     required this.bunkerState,
   });
 
-  final BusySurvivor busy;
+  final List<BusySurvivor> busySurvivors;
   final BunkerState bunkerState;
 
   String _formatDateTime(BuildContext context, DateTime value) {
@@ -334,18 +348,23 @@ class _BusySurvivorRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final survivor = bunkerState.survivorById(busy.survivorId);
-    final survivorName = survivor == null
-        ? busy.survivorId
-        : survivorDisplayName(context, survivor);
+    final first = busySurvivors.first;
+    final survivorNames = busySurvivors.map((busy) {
+      final survivor = bunkerState.survivorById(busy.survivorId);
+      return survivor == null
+          ? busy.survivorId
+          : survivorDisplayName(context, survivor);
+    }).join(', ');
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Icon(
-          Icons.person_outline_rounded,
+        Icon(
+          busySurvivors.length > 1
+              ? Icons.groups_2_outlined
+              : Icons.person_outline_rounded,
           size: 18,
-          color: Color(0xFFC0A46F),
+          color: const Color(0xFFC0A46F),
         ),
         const SizedBox(width: 8),
         Expanded(
@@ -353,7 +372,7 @@ class _BusySurvivorRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '$survivorName · ${jobActivityLabel(context, busy.activity)}',
+                '$survivorNames · ${jobActivityLabel(context, first.activity)}',
                 style: theme.textTheme.labelMedium?.copyWith(
                   color: const Color(0xFFBDB3A1),
                   fontWeight: FontWeight.w700,
@@ -362,9 +381,9 @@ class _BusySurvivorRow extends StatelessWidget {
               const SizedBox(height: 3),
               Text(
                 '${context.l10n.jobStartsLabel}: '
-                '${_formatDateTime(context, busy.startedAt)}  ·  '
+                '${_formatDateTime(context, first.startedAt)}  ·  '
                 '${context.l10n.jobEndsLabel}: '
-                '${_formatDateTime(context, busy.endsAt)}',
+                '${_formatDateTime(context, first.endsAt)}',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: const Color(0xFF8F8677),
                 ),
