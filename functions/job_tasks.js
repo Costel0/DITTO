@@ -125,6 +125,30 @@ function normalizedRandomOutcomes(value, taskId, resultId) {
 }
 
 function normalizedResults(rawTask, taskId) {
+  // Backwards compatibility with the first task format, where completion was
+  // a single guaranteed effect block and there was no explicit result layer.
+  if (
+    rawTask.results == null &&
+    rawTask.outcomes == null &&
+    rawTask.completion != null
+  ) {
+    return {
+      resolver: {
+        type: "fixed",
+        resultId: "default",
+      },
+      results: {
+        default: {
+          guaranteedOutcomes: normalizedEffects(
+            rawTask.completion,
+            `Task ${taskId} completion`,
+          ),
+          randomOutcomes: [],
+        },
+      },
+    };
+  }
+
   // Backwards compatibility with the previous format where `outcomes` were
   // mutually exclusive top-level results and `outcomeEffects` held effects.
   if (rawTask.results == null && rawTask.outcomes != null) {
