@@ -14,12 +14,14 @@ class HubJobs extends StatelessWidget {
     required this.isRefreshing,
     required this.loadError,
     required this.onOpenArea,
+    required this.onResolveCompletedOccupations,
   });
 
   final BunkerState? bunkerState;
   final bool isRefreshing;
   final Object? loadError;
   final ValueChanged<JobArea> onOpenArea;
+  final Future<void> Function() onResolveCompletedOccupations;
 
   @override
   Widget build(BuildContext context) {
@@ -86,6 +88,8 @@ class HubJobs extends StatelessWidget {
                       specificInfo: _ActiveJobInfo(
                         area: area,
                         bunkerState: bunkerState,
+                        onResolveCompletedOccupations:
+                            onResolveCompletedOccupations,
                       ),
                       onTap: () => onOpenArea(area),
                     );
@@ -229,10 +233,12 @@ class _ActiveJobInfo extends StatelessWidget {
   const _ActiveJobInfo({
     required this.area,
     required this.bunkerState,
+    required this.onResolveCompletedOccupations,
   });
 
   final JobArea area;
   final BunkerState? bunkerState;
+  final Future<void> Function() onResolveCompletedOccupations;
 
   String _groupKey(BusySurvivor busy) {
     final executionId = busy.executionId;
@@ -297,6 +303,7 @@ class _ActiveJobInfo extends StatelessWidget {
             _BusyExecutionRow(
               busySurvivors: executions[index],
               bunkerState: bunker,
+              onResolveCompletedOccupations: onResolveCompletedOccupations,
             ),
             if (index + 1 < executions.length)
               const Divider(height: 14, color: Color(0xFF443D31)),
@@ -331,10 +338,12 @@ class _BusyExecutionRow extends StatelessWidget {
   const _BusyExecutionRow({
     required this.busySurvivors,
     required this.bunkerState,
+    required this.onResolveCompletedOccupations,
   });
 
   final List<BusySurvivor> busySurvivors;
   final BunkerState bunkerState;
+  final Future<void> Function() onResolveCompletedOccupations;
 
   String _formatDateTime(BuildContext context, DateTime value) {
     final local = value.toLocal();
@@ -394,16 +403,23 @@ class _BusyExecutionRow extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 18),
-        _JobCountdown(endsAt: first.endsAt),
+        _JobCountdown(
+          endsAt: first.endsAt,
+          onFinished: onResolveCompletedOccupations,
+        ),
       ],
     );
   }
 }
 
 class _JobCountdown extends StatefulWidget {
-  const _JobCountdown({required this.endsAt});
+  const _JobCountdown({
+    required this.endsAt,
+    required this.onFinished,
+  });
 
   final DateTime endsAt;
+  final Future<void> Function() onFinished;
 
   @override
   State<_JobCountdown> createState() => _JobCountdownState();
@@ -411,7 +427,9 @@ class _JobCountdown extends StatefulWidget {
 
 class _JobCountdownState extends State<_JobCountdown> {
   Timer? _timer;
+  Timer? _completionTimer;
   Duration _remaining = Duration.zero;
+  bool _completionScheduled = false;
 
   @override
   void initState() {
@@ -430,19 +448,35 @@ class _JobCountdownState extends State<_JobCountdown> {
   @override
   void dispose() {
     _timer?.cancel();
+    _completionTimer?.cancel();
     super.dispose();
   }
 
   void _restartTimer() {
     _timer?.cancel();
+    _completionTimer?.cancel();
+    _completionScheduled = false;
     _updateRemaining();
-    if (_remaining == Duration.zero) return;
+    if (_remaining == Duration.zero) {
+      _scheduleCompletion();
+      return;
+    }
 
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       _updateRemaining();
       if (_remaining == Duration.zero) {
         _timer?.cancel();
+        _scheduleCompletion();
       }
+    });
+  }
+
+  void _scheduleCompletion() {
+    if (_completionScheduled) return;
+    _completionScheduled = true;
+    _completionTimer = Timer(const Duration(seconds: 1), () {
+      if (!mounted) return;
+      unawaited(widget.onFinished());
     });
   }
 
