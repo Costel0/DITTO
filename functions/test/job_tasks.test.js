@@ -17,8 +17,8 @@ function snapshotWithTasks(tasks) {
 function exampleTask() {
   return taskDefinitionFromSnapshot(
     snapshotWithTasks({
-      clear_garden: {
-        activity: "clear_garden",
+      prepare_garden: {
+        activity: "prepare_garden",
         location: "garden",
         durationSeconds: 300,
         storable: true,
@@ -67,14 +67,14 @@ function exampleTask() {
         },
       },
     }),
-    "clear_garden",
+    "prepare_garden",
   );
 }
 
 test("taskDefinitionFromSnapshot normalizes nested result definitions", () => {
   const task = exampleTask();
 
-  assert.equal(task.id, "clear_garden");
+  assert.equal(task.id, "prepare_garden");
   assert.equal(task.durationSeconds, 300);
   assert.equal(task.storable, true);
   assert.deepEqual(task.survivorRequirements, {min: 1, max: 3});

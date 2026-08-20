@@ -5,14 +5,14 @@ const {resetTaskTreeStateForTesting} = require("../development_state");
 test("resetTaskTreeStateForTesting clears completed jobs and cancels active jobs", () => {
   const now = new Date("2026-08-20T10:00:00Z");
   const bunker = {
-    completedTaskIds: ["clear_garden", "repair_door"],
+    completedTaskIds: ["prepare_garden", "repair_door"],
     idleSurvivors: ["s3"],
     busySurvivors: [
       {
         survivorId: "s1",
-        taskId: "clear_garden",
+        taskId: "prepare_garden",
         executionId: "exec-1",
-        activity: "clear_garden",
+        activity: "prepare_garden",
         location: "garden",
         startedAt: now,
         endsAt: new Date(now.getTime() + 300000),

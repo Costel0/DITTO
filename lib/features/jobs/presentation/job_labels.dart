@@ -41,7 +41,7 @@ IconData jobAreaIcon(JobArea area) {
 
 String jobActivityLabel(BuildContext context, String activity) {
   switch (activity) {
-    case 'clear_garden':
+    case 'prepare_garden':
       return context.l10n.jobClearGardenTitle;
     case 'sleeping':
       return context.l10n.jobSleepingTitle;

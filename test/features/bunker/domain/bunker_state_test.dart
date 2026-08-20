@@ -30,18 +30,18 @@ void main() {
       'busySurvivors': <dynamic>[
         <String, dynamic>{
           'survivorId': 's1',
-          'taskId': 'clear_garden',
+          'taskId': 'prepare_garden',
           'executionId': 'execution-1',
-          'activity': 'clear_garden',
+          'activity': 'prepare_garden',
           'location': 'garden',
           'startedAt': '2026-08-20T09:00:00Z',
           'endsAt': '2026-08-20T09:05:00Z',
         },
         <String, dynamic>{
           'survivorId': 's2',
-          'taskId': 'clear_garden',
+          'taskId': 'prepare_garden',
           'executionId': 'execution-1',
-          'activity': 'clear_garden',
+          'activity': 'prepare_garden',
           'location': 'garden',
           'startedAt': '2026-08-20T09:00:00Z',
           'endsAt': '2026-08-20T09:05:00Z',
@@ -53,7 +53,7 @@ void main() {
 
     expect(state.completedTaskIds, <String>['prepare_garden']);
     expect(state.busySurvivors.length, 2);
-    expect(state.busySurvivors.first.taskId, 'clear_garden');
+    expect(state.busySurvivors.first.taskId, 'prepare_garden');
     expect(state.busySurvivors.first.executionId, 'execution-1');
   });
 
@@ -70,7 +70,7 @@ void main() {
       'busySurvivors': <dynamic>[
         <String, dynamic>{
           'survivorId': 's2',
-          'activity': 'clear_garden',
+          'activity': 'prepare_garden',
           'location': 'garden',
           'startedAt': '2026-08-19T12:00:01.845Z',
           'endsAt': '2026-08-19T12:10:05.999Z',
@@ -81,7 +81,7 @@ void main() {
 
     final busy = state.busySurvivors.single;
     expect(busy.survivorId, 's2');
-    expect(busy.activity, 'clear_garden');
+    expect(busy.activity, 'prepare_garden');
     expect(busy.location, 'garden');
     expect(busy.startedAt, DateTime.utc(2026, 8, 19, 12, 0, 1));
     expect(busy.endsAt, DateTime.utc(2026, 8, 19, 12, 10, 5));
@@ -199,7 +199,7 @@ void main() {
         'busySurvivors': <dynamic>[
           <String, dynamic>{
             'survivorId': 's1',
-            'activity': 'clear_garden',
+            'activity': 'prepare_garden',
             'startedAt': '2026-08-19T12:00:00Z',
             'endsAt': '2026-08-19T12:05:00Z',
           },
@@ -223,7 +223,7 @@ void main() {
         'busySurvivors': <dynamic>[
           <String, dynamic>{
             'survivorId': 's1',
-            'activity': 'clear_garden',
+            'activity': 'prepare_garden',
             'location': 'garden',
             'startedAt': '2026-08-19T12:00:00Z',
             'endsAt': '2026-08-19T12:05:00Z',

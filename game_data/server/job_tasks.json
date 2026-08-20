@@ -2,14 +2,14 @@
   "schemaVersion": 3,
   "dataVersion": 3,
   "tasks": {
-    "clear_garden": {
-      "activity": "clear_garden",
+    "prepare_garden": {
+      "activity": "prepare_garden",
       "location": "garden",
       "durationSeconds": 300,
       "storable": true,
       "survivorRequirements": {
         "min": 1,
-        "max": 3
+        "max": 1
       },
       "requiredTaskIds": [],
       "cost": {
@@ -22,7 +22,34 @@
       "results": {
         "success": {
           "guaranteedOutcomes": {
-            "energyDelta": 0,
+            "energyDelta": 5,
+            "inventoryDelta": {}
+          },
+          "randomOutcomes": {}
+        }
+      }
+    },
+    "upgrade_garden": {
+      "activity": "upgrade_garden",
+      "location": "garden",
+      "durationSeconds": 300,
+      "storable": true,
+      "survivorRequirements": {
+        "min": 1,
+        "max": 3
+      },
+      "requiredTaskIds": ["prepare_garden"],
+      "cost": {
+        "inventory": {}
+      },
+      "resultResolver": {
+        "type": "fixed",
+        "resultId": "success"
+      },
+      "results": {
+        "success": {
+          "guaranteedOutcomes": {
+            "energyDelta": 5,
             "inventoryDelta": {}
           },
           "randomOutcomes": {}

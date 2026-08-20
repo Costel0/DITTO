@@ -51,7 +51,7 @@ class _JobAreaScreenState extends State<JobAreaScreen> {
 
   String _taskTitle(BuildContext context, JobTaskDefinition task) {
     switch (task.id) {
-      case 'clear_garden':
+      case 'prepare_garden':
         return context.l10n.jobClearGardenTitle;
       default:
         return task.id;
@@ -60,7 +60,7 @@ class _JobAreaScreenState extends State<JobAreaScreen> {
 
   String _taskDescription(BuildContext context, JobTaskDefinition task) {
     switch (task.id) {
-      case 'clear_garden':
+      case 'prepare_garden':
         return context.l10n.jobClearGardenDescription;
       default:
         return '';

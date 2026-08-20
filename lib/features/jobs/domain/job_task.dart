@@ -11,7 +11,7 @@ class JobTaskDefinition {
 }
 
 const clearGardenTask = JobTaskDefinition(
-  id: 'clear_garden',
+  id: 'prepare_garden',
   area: JobArea.garden,
 );
 
