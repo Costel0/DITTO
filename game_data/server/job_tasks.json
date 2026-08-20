@@ -1,14 +1,28 @@
 {
-  "schemaVersion": 1,
-  "dataVersion": 1,
+  "schemaVersion": 2,
+  "dataVersion": 2,
   "tasks": {
     "clear_garden": {
       "activity": "clear_garden",
       "location": "garden",
       "durationSeconds": 300,
-      "completion": {
-        "energyDelta": 0,
-        "inventoryDelta": {}
+      "storable": true,
+      "survivorRequirements": {
+        "min": 1,
+        "max": 3
+      },
+      "requiredTaskIds": [],
+      "cost": {
+        "inventory": {}
+      },
+      "outcomes": {
+        "success": 1.0
+      },
+      "outcomeEffects": {
+        "success": {
+          "energyDelta": 0,
+          "inventoryDelta": {}
+        }
       }
     }
   }
