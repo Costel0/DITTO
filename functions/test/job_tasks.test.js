@@ -17,8 +17,8 @@ function snapshotWithTasks(tasks) {
 function exampleTask() {
   return taskDefinitionFromSnapshot(
     snapshotWithTasks({
-      prepare_garden: {
-        activity: "prepare_garden",
+      example_task: {
+        activity: "example_task",
         location: "garden",
         durationSeconds: 300,
         storable: true,
@@ -26,7 +26,7 @@ function exampleTask() {
           min: 1,
           max: 3,
         },
-        requiredTaskIds: ["prepare_garden"],
+        requiredTaskIds: ["required_task"],
         cost: {
           inventory: {
             scrap_metal: 2,
@@ -67,18 +67,18 @@ function exampleTask() {
         },
       },
     }),
-    "prepare_garden",
+    "example_task",
   );
 }
 
 test("taskDefinitionFromSnapshot normalizes nested result definitions", () => {
   const task = exampleTask();
 
-  assert.equal(task.id, "prepare_garden");
+  assert.equal(task.id, "example_task");
   assert.equal(task.durationSeconds, 300);
   assert.equal(task.storable, true);
   assert.deepEqual(task.survivorRequirements, {min: 1, max: 3});
-  assert.deepEqual(task.requiredTaskIds, ["prepare_garden"]);
+  assert.deepEqual(task.requiredTaskIds, ["required_task"]);
   assert.deepEqual(task.cost.inventory, {scrap_metal: 2});
   assert.equal(task.resultResolver.type, "random");
   assert.deepEqual(task.resultResolver.probabilities, {
@@ -296,11 +296,11 @@ test("task start cost rejects insufficient inventory", () => {
 test("missingRequiredTaskIds checks stored task history", () => {
   const task = exampleTask();
   assert.deepEqual(missingRequiredTaskIds({completedTaskIds: []}, task), [
-    "prepare_garden",
+    "required_task",
   ]);
   assert.deepEqual(
     missingRequiredTaskIds(
-      {completedTaskIds: ["prepare_garden"]},
+      {completedTaskIds: ["required_task"]},
       task,
     ),
     [],
