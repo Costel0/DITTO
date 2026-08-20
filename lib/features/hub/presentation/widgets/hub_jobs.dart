@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../../core/localization/l10n.dart';
@@ -357,7 +359,7 @@ class _BusyExecutionRow extends StatelessWidget {
     }).join(', ');
 
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Icon(
           busySurvivors.length > 1
@@ -391,7 +393,100 @@ class _BusyExecutionRow extends StatelessWidget {
             ],
           ),
         ),
+        const SizedBox(width: 18),
+        _JobCountdown(endsAt: first.endsAt),
       ],
+    );
+  }
+}
+
+class _JobCountdown extends StatefulWidget {
+  const _JobCountdown({required this.endsAt});
+
+  final DateTime endsAt;
+
+  @override
+  State<_JobCountdown> createState() => _JobCountdownState();
+}
+
+class _JobCountdownState extends State<_JobCountdown> {
+  Timer? _timer;
+  Duration _remaining = Duration.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    _restartTimer();
+  }
+
+  @override
+  void didUpdateWidget(covariant _JobCountdown oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.endsAt != widget.endsAt) {
+      _restartTimer();
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  void _restartTimer() {
+    _timer?.cancel();
+    _updateRemaining();
+    if (_remaining == Duration.zero) return;
+
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      _updateRemaining();
+      if (_remaining == Duration.zero) {
+        _timer?.cancel();
+      }
+    });
+  }
+
+  void _updateRemaining() {
+    final difference = widget.endsAt.difference(DateTime.now());
+    final next = difference.isNegative ? Duration.zero : difference;
+    if (!mounted) {
+      _remaining = next;
+      return;
+    }
+    setState(() => _remaining = next);
+  }
+
+  String _formattedRemaining() {
+    final totalSeconds = _remaining == Duration.zero
+        ? 0
+        : (_remaining.inMilliseconds / 1000).ceil();
+    final hours = totalSeconds ~/ 3600;
+    final minutes = (totalSeconds % 3600) ~/ 60;
+    final seconds = totalSeconds % 60;
+    return '${hours.toString().padLeft(2, '0')}:'
+        '${minutes.toString().padLeft(2, '0')}:'
+        '${seconds.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 132,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerRight,
+        child: Text(
+          _formattedRemaining(),
+          textAlign: TextAlign.right,
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                color: const Color(0xFFD4B77D),
+                fontWeight: FontWeight.w800,
+                fontFeatures: const <FontFeature>[
+                  FontFeature.tabularFigures(),
+                ],
+              ),
+        ),
+      ),
     );
   }
 }
