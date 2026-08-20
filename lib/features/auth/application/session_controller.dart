@@ -244,6 +244,22 @@ class SessionController extends ChangeNotifier {
     }
   }
 
+  /// Temporary development-only reset of the job progression tree. Completed
+  /// task IDs and active jobs are cleared by the trusted callable without
+  /// resolving task outcomes.
+  Future<bool> resetTaskTreeForTesting() async {
+    final developmentService = _developmentService;
+    final userId = _credentials?.userId;
+    if (developmentService == null || userId == null) return false;
+
+    try {
+      await developmentService.resetTaskTreeForTesting();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Temporary development-only reset. Firebase Authentication is preserved,
   /// while the trusted callable recursively deletes the user's Firestore tree.
   Future<bool> clearInitialProfileForTesting() async {
