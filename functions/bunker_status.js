@@ -1,4 +1,4 @@
-const BUNKER_SCHEMA_VERSION = 5;
+const BUNKER_SCHEMA_VERSION = 6;
 const DEFAULT_SURVIVOR_ENERGY = 50;
 const DEFAULT_SLEEPING_SECONDS_PER_NEGATIVE_ENERGY = 60;
 const SLEEPING_ACTIVITY = "sleeping";
@@ -106,6 +106,12 @@ function normalizedBusySurvivors(source, fallbackDate = new Date()) {
         };
         if (typeof entry.taskId === "string" && entry.taskId.trim().length > 0) {
           normalized.taskId = entry.taskId.trim();
+        }
+        if (
+          typeof entry.executionId === "string" &&
+          entry.executionId.trim().length > 0
+        ) {
+          normalized.executionId = entry.executionId.trim();
         }
         return normalized;
       });
@@ -224,6 +230,7 @@ async function fixStatus({transaction, db, bunker, now = new Date()}) {
     survivors,
     idleSurvivors: [...idleSurvivors],
     busySurvivors: [...busyBySurvivorId.values()],
+    completedTaskIds: uniqueStringList(bunker.completedTaskIds),
   };
 }
 
