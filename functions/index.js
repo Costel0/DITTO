@@ -611,4 +611,5 @@ const development = require("./development");
 
 exports.addSurvivorForTesting = development.addSurvivorForTesting;
 exports.addItemForTesting = development.addItemForTesting;
+exports.resetTaskTreeForTesting = development.resetTaskTreeForTesting;
 exports.resetUserForTesting = development.resetUserForTesting;
