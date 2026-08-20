@@ -96,6 +96,8 @@
   "jobGardenInfoValue": "Sin cultivos activos",
   "jobClearGardenTitle": "Despejar el huerto",
   "jobClearGardenDescription": "Retira escombros y limpia la zona para dejar el huerto preparado para futuros cultivos.",
+  "jobUpgradeGardenTitle": "Mejorar el huerto",
+  "jobUpgradeGardenDescription": "Amplía y acondiciona el huerto para mejorar sus posibilidades de cultivo.",
   "hubExpeditionsTitle": "Expediciones",
   "hubExpeditionsDescription": "Prepara nuevas salidas, consulta rutas y gestiona las expediciones fuera del refugio.",
   "itemDetailQuantity": "Cantidad",
