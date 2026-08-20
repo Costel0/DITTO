@@ -1,9 +1,11 @@
 import 'bunker_state.dart';
 
-/// Read-only gateway for the authoritative bunker state.
+/// Gateway for the authoritative bunker state.
 ///
-/// Mutation methods are intentionally absent: the Flutter client may request
-/// snapshots, but only the server will be allowed to change game state.
+/// Flutter may read snapshots and request trusted server actions, but only the
+/// backend is allowed to decide and persist game-state mutations.
 abstract interface class BunkerStateService {
   Future<BunkerState> fetchBunkerState();
+
+  Future<BunkerState> resolveCompletedOccupations();
 }
