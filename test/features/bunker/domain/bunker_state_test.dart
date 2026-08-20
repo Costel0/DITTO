@@ -10,7 +10,7 @@ void main() {
     return <String, dynamic>{
       'id': id,
       'duplicateId': duplicateId,
-      if (energy != null) 'energy': energy,
+      'energy': ?energy,
       'statMods': <String, dynamic>{},
       'healthHistory': <dynamic>[],
       'equippedItemIds': <String>[],
