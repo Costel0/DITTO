@@ -91,6 +91,11 @@ class _JobAreaScreenState extends State<JobAreaScreen> {
       return;
     }
 
+    final alreadyActive = current.busySurvivors.any(
+      (busy) => (busy.taskId ?? busy.activity) == task.id,
+    );
+    if (alreadyActive) return;
+
     final JobTaskStartInfo startInfo;
     try {
       startInfo = await widget.taskService.fetchStartInfo(taskId: task.id);
@@ -166,9 +171,12 @@ class _JobAreaScreenState extends State<JobAreaScreen> {
   @override
   Widget build(BuildContext context) {
     final area = widget.area;
-    final completedTaskIds =
-        widget.bunkerStateController.state?.completedTaskIds.toSet() ??
-            <String>{};
+    final bunkerState = widget.bunkerStateController.state;
+    final completedTaskIds = bunkerState?.completedTaskIds.toSet() ?? <String>{};
+    final activeTaskIds = bunkerState?.busySurvivors
+            .map((busy) => busy.taskId ?? busy.activity)
+            .toSet() ??
+        <String>{};
     final tasks = jobTasksForArea(area)
         .where((task) => !completedTaskIds.contains(task.id))
         .toList(growable: false);
@@ -224,6 +232,7 @@ class _JobAreaScreenState extends State<JobAreaScreen> {
                                       child: _JobAreaContent(
                                         area: area,
                                         tasks: tasks,
+                                        activeTaskIds: activeTaskIds,
                                         startingTaskId: _startingTaskId,
                                         taskTitle: (task) =>
                                             _taskTitle(context, task),
@@ -327,6 +336,7 @@ class _JobAreaContent extends StatelessWidget {
   const _JobAreaContent({
     required this.area,
     required this.tasks,
+    required this.activeTaskIds,
     required this.startingTaskId,
     required this.taskTitle,
     required this.taskDescription,
@@ -335,6 +345,7 @@ class _JobAreaContent extends StatelessWidget {
 
   final JobArea area;
   final List<JobTaskDefinition> tasks;
+  final Set<String> activeTaskIds;
   final String? startingTaskId;
   final String Function(JobTaskDefinition task) taskTitle;
   final String Function(JobTaskDefinition task) taskDescription;
@@ -379,7 +390,8 @@ class _JobAreaContent extends StatelessWidget {
               title: taskTitle(task),
               description: taskDescription(task),
               isStarting: startingTaskId == task.id,
-              onTap: startingTaskId == null
+              isActive: activeTaskIds.contains(task.id),
+              onTap: startingTaskId == null && !activeTaskIds.contains(task.id)
                   ? () => onStartTask(task)
                   : null,
             ),
@@ -662,19 +674,21 @@ class _TaskTile extends StatelessWidget {
     required this.title,
     required this.description,
     required this.isStarting,
+    required this.isActive,
     required this.onTap,
   });
 
   final String title;
   final String description;
   final bool isStarting;
+  final bool isActive;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Material(
-      color: const Color(0xFF1B1A16),
+      color: isActive ? const Color(0xFF25221B) : const Color(0xFF1B1A16),
       borderRadius: BorderRadius.circular(7),
       child: InkWell(
         borderRadius: BorderRadius.circular(7),
@@ -683,13 +697,17 @@ class _TaskTile extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(7),
-            border: Border.all(color: const Color(0xFF4E4537)),
+            border: Border.all(
+              color: isActive
+                  ? const Color(0xFF7A6745)
+                  : const Color(0xFF4E4537),
+            ),
           ),
           child: Row(
             children: [
-              const Icon(
-                Icons.task_alt_rounded,
-                color: Color(0xFFC0A46F),
+              Icon(
+                isActive ? Icons.hourglass_top_rounded : Icons.task_alt_rounded,
+                color: const Color(0xFFC0A46F),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -722,6 +740,25 @@ class _TaskTile extends StatelessWidget {
                   width: 22,
                   height: 22,
                   child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else if (isActive)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.timelapse_rounded,
+                      size: 18,
+                      color: Color(0xFFC7A970),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      context.l10n.jobTaskInProgress,
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: const Color(0xFFC7A970),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
                 )
               else
                 Row(
