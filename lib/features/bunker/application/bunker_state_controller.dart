@@ -50,6 +50,9 @@ class BunkerStateController extends ChangeNotifier {
   Future<void> refresh() {
     if (_isDisposed) return Future<void>.value();
 
+    final activeResolution = _activeCompletionResolution;
+    if (activeResolution != null) return activeResolution;
+
     final activeRefresh = _activeRefresh;
     if (activeRefresh != null) return activeRefresh;
 
