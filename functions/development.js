@@ -5,12 +5,13 @@ const {
   normalizedBunkerSurvivors,
   normalizedSurvivor,
 } = require("./bunker_status");
+const {resetTaskTreeStateForTesting} = require("./development_state");
 
 // DEVELOPMENT-ONLY SERVER SURFACE.
 //
 // This module contains every callable that bypasses normal gameplay acquisition
-// rules. Production can remove this file + the three exports in index.js, or
-// set DITTO_DEVELOPMENT_TOOLS_REQUIRE_ADMIN=true and grant the Firebase Auth
+// rules. Production can remove this file + the development exports in index.js,
+// or set DITTO_DEVELOPMENT_TOOLS_REQUIRE_ADMIN=true and grant the Firebase Auth
 // custom claim {admin: true} only to trusted accounts.
 const REGION = "europe-west1";
 const DEVELOPMENT_TOOLS_REQUIRE_ADMIN =
@@ -202,6 +203,48 @@ exports.addItemForTesting = onCall(
         itemId,
         addedQuantity: quantity,
         quantity: nextQuantity,
+        revision: fixedBunker.revision,
+      };
+    });
+  },
+);
+
+exports.resetTaskTreeForTesting = onCall(
+  DEVELOPMENT_CALLABLE_OPTIONS,
+  async (request) => {
+    requireDevelopmentAccess(request);
+
+    const db = getFirestore();
+    const bunkerRef = db
+      .collection("users")
+      .doc(request.auth.uid)
+      .collection("state")
+      .doc("bunker");
+
+    return db.runTransaction(async (transaction) => {
+      const bunkerSnapshot = await transaction.get(bunkerRef);
+      if (!bunkerSnapshot.exists) {
+        throw new HttpsError(
+          "failed-precondition",
+          "The bunker must be initialized before resetting the task tree.",
+        );
+      }
+
+      const reset = resetTaskTreeStateForTesting(
+        bunkerSnapshot.data() || {},
+      );
+      const fixedBunker = await fixStatus({
+        transaction,
+        db,
+        bunker: reset.bunker,
+      });
+
+      transaction.set(bunkerRef, fixedBunker);
+
+      return {
+        reset: true,
+        cancelledOccupationCount: reset.cancelledOccupationCount,
+        clearedCompletedTaskCount: reset.clearedCompletedTaskCount,
         revision: fixedBunker.revision,
       };
     });
