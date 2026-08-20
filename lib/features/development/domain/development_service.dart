@@ -11,6 +11,8 @@ abstract interface class DevelopmentService {
     required int quantity,
   });
 
+  Future<void> resetTaskTreeForTesting();
+
   Future<void> resetUserForTesting();
 }
 
