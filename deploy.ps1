@@ -81,13 +81,11 @@ try {
     Write-Warning 'The working tree has uncommitted changes. The script will validate and deploy the files exactly as they exist locally.'
   }
 
-  if (-not (Test-Path (Join-Path $functionsDir 'node_modules'))) {
-    Invoke-NativeStep `
-      -Title 'Install Functions dependencies (npm ci)' `
-      -Command 'npm' `
-      -Arguments @('ci') `
-      -WorkingDirectory $functionsDir
-  }
+  Invoke-NativeStep `
+    -Title 'Install exact Functions dependencies (npm ci)' `
+    -Command 'npm' `
+    -Arguments @('ci') `
+    -WorkingDirectory $functionsDir
 
   # ---- Validation phase: nothing below this comment writes to Firebase. ----
   Invoke-NativeStep `
