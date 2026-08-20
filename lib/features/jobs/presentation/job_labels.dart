@@ -39,15 +39,33 @@ IconData jobAreaIcon(JobArea area) {
   }
 }
 
-String jobActivityLabel(BuildContext context, String activity) {
-  switch (activity) {
+String jobTaskTitle(BuildContext context, String taskId) {
+  switch (taskId) {
     case 'prepare_garden':
       return context.l10n.jobClearGardenTitle;
-    case 'sleeping':
-      return context.l10n.jobSleepingTitle;
+    case 'upgrade_garden':
+      return context.l10n.jobUpgradeGardenTitle;
     default:
-      return activity;
+      return taskId;
   }
+}
+
+String jobTaskDescription(BuildContext context, String taskId) {
+  switch (taskId) {
+    case 'prepare_garden':
+      return context.l10n.jobClearGardenDescription;
+    case 'upgrade_garden':
+      return context.l10n.jobUpgradeGardenDescription;
+    default:
+      return '';
+  }
+}
+
+String jobActivityLabel(BuildContext context, String activity) {
+  if (activity == 'sleeping') {
+    return context.l10n.jobSleepingTitle;
+  }
+  return jobTaskTitle(context, activity);
 }
 
 String survivorDisplayName(BuildContext context, Survivor survivor) {
