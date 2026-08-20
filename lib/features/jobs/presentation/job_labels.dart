@@ -42,7 +42,7 @@ IconData jobAreaIcon(JobArea area) {
 String jobTaskTitle(BuildContext context, String taskId) {
   switch (taskId) {
     case 'prepare_garden':
-      return context.l10n.jobClearGardenTitle;
+      return context.l10n.jobPrepareGardenTitle;
     case 'upgrade_garden':
       return context.l10n.jobUpgradeGardenTitle;
     default:
@@ -53,7 +53,7 @@ String jobTaskTitle(BuildContext context, String taskId) {
 String jobTaskDescription(BuildContext context, String taskId) {
   switch (taskId) {
     case 'prepare_garden':
-      return context.l10n.jobClearGardenDescription;
+      return context.l10n.jobPrepareGardenDescription;
     case 'upgrade_garden':
       return context.l10n.jobUpgradeGardenDescription;
     default:
