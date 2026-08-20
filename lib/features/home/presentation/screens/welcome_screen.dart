@@ -136,6 +136,12 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     await controller.refreshAfterMutation();
   }
 
+  Future<void> _resolveCompletedOccupationsFromCountdown() async {
+    final controller = _bunkerStateController;
+    if (controller == null) return;
+    await controller.resolveCompletedOccupations();
+  }
+
   void _selectSection(_HubSection section) {
     setState(() => _selectedSection = section);
     final controller = _bunkerStateController;
@@ -303,6 +309,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                                       bunkerLoadError:
                                           bunkerController?.lastError,
                                       onOpenJobArea: _openJobArea,
+                                      onResolveCompletedOccupations:
+                                          _resolveCompletedOccupationsFromCountdown,
                                       onPreviousSurvivor:
                                           _selectedSurvivorIndex > 0
                                               ? () =>
@@ -581,6 +589,7 @@ class _HubSectionView extends StatelessWidget {
     required this.bunkerIsRefreshing,
     required this.bunkerLoadError,
     required this.onOpenJobArea,
+    required this.onResolveCompletedOccupations,
     required this.onPreviousSurvivor,
     required this.onNextSurvivor,
   });
@@ -593,6 +602,7 @@ class _HubSectionView extends StatelessWidget {
   final bool bunkerIsRefreshing;
   final Object? bunkerLoadError;
   final ValueChanged<JobArea> onOpenJobArea;
+  final Future<void> Function() onResolveCompletedOccupations;
   final VoidCallback? onPreviousSurvivor;
   final VoidCallback? onNextSurvivor;
 
@@ -624,6 +634,7 @@ class _HubSectionView extends StatelessWidget {
           isRefreshing: bunkerIsRefreshing,
           loadError: bunkerLoadError,
           onOpenArea: onOpenJobArea,
+          onResolveCompletedOccupations: onResolveCompletedOccupations,
         );
       case _HubSection.expeditions:
         return _HubSectionContent(
