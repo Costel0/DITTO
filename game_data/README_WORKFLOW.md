@@ -4,6 +4,56 @@ Guía rápida de comandos para validar y publicar cambios en los JSON de configu
 
 Los comandos se ejecutan desde el repositorio DITTO.
 
+## Flujo completo recomendado: un solo comando
+
+Desde la raíz del repositorio puedes validar y desplegar todo con:
+
+```powershell
+.\deploy.ps1
+```
+
+El script ejecuta, en este orden:
+
+```text
+1. comprobaciones previas de Git y herramientas
+2. validación de items.json
+3. validación de todos los JSON privados de game_data/server/
+4. tests de Cloud Functions
+5. tests de Flutter
+6. flutter analyze
+7. build release de Flutter Web
+8. deploy de Cloud Functions + reglas de Firestore
+9. sincronización exacta de items.json
+10. sincronización exacta de game_data/server/
+11. deploy de Firebase Hosting
+```
+
+Si un comando devuelve un error, el script se detiene inmediatamente y no ejecuta ningún paso posterior.
+
+La fase de validación se completa **antes de modificar Firebase**. De esta forma, un fallo de tests, del analyzer, de los JSON o del build web impide que comience el despliegue.
+
+Los despliegues de Functions, Firestore, datos y Hosting son servicios separados y no forman una transacción atómica. Por eso el orden es conservador: primero se despliega un backend capaz de entender los datos nuevos, después se sincronizan los datos y Hosting queda para el final.
+
+### Solo validar, sin desplegar
+
+```powershell
+.\deploy.ps1 -ValidateOnly
+```
+
+Ejecuta todas las comprobaciones y el build web, pero no modifica Firebase.
+
+### Desplegar sin reconstruir ni actualizar Hosting
+
+```powershell
+.\deploy.ps1 -SkipHosting
+```
+
+Valida y despliega backend, reglas y datos, pero omite `flutter build web` y el deploy de Hosting.
+
+El script permite cambios locales sin commit porque durante desarrollo puede ser útil desplegar el working tree actual, pero mostrará una advertencia. En cambio, bloquea el despliegue si existen conflictos Git sin resolver.
+
+---
+
 ## 1. Si has modificado `game_data/items.json`
 
 ```powershell
@@ -125,6 +175,18 @@ firebase deploy --only hosting
 ---
 
 ## Resumen rápido
+
+### Todo: validar + desplegar backend, datos y web
+
+```powershell
+.\deploy.ps1
+```
+
+### Solo comprobar que todo está listo
+
+```powershell
+.\deploy.ps1 -ValidateOnly
+```
 
 ### Solo `items.json`
 
