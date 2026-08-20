@@ -520,7 +520,7 @@ class _SurvivorTaskDialogState extends State<_SurvivorTaskDialog> {
                     shrinkWrap: true,
                     padding: const EdgeInsets.all(14),
                     itemCount: widget.survivors.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    separatorBuilder: (_, _) => const SizedBox(height: 10),
                     itemBuilder: (context, index) {
                       final survivor = widget.survivors[index];
                       final selected = _selectedIds.contains(survivor.id);
