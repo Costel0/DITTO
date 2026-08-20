@@ -55,22 +55,44 @@ Any additional `.json` file added to `game_data/server/` is picked up automatica
 `job_tasks.json` is the server-authoritative editable task catalog. Each task supports:
 
 - `activity`, `location`, and `durationSeconds`.
-- `storable`: if `true`, finishing the task adds its ID to the player's `completedTaskIds` registry.
+- `storable`: if `true`, finishing the task adds its ID to the player's `completedTaskIds` registry. Stored tasks disappear from the available-task list and cannot be launched again.
 - `survivorRequirements.min/max`: allowed number of Survivors sharing one execution.
 - `requiredTaskIds`: task IDs that must already exist in `completedTaskIds`.
 - `cost.inventory`: item/resource quantities consumed atomically when the task starts.
-- `outcomes`: outcome ID -> probability pairs. Probabilities must add up to 1.
-- `outcomeEffects`: the effects for each outcome. `energyDelta` is applied to every participating Survivor; `inventoryDelta` is applied once to the shared execution.
+- `resultResolver`: determines which high-level result applies to the execution.
+- `results`: definitions for the possible high-level results. Common IDs can be `success` and `failure`, but the IDs are not restricted to those names.
 
 Resources use the same inventory map as the rest of the item system because resource items are identified by their item catalog type.
 
-Example:
+#### Result resolution
+
+`resultResolver.type` currently supports:
+
+- `fixed`: always resolves to `resultId`.
+- `random`: selects one result using `probabilities`, which must add up to 1.
+- `server`: reserves resolution for a named backend `handler` that will calculate the result.
+- `combat`: reserves resolution for a named combat `handler`.
+
+The generic resolver currently executes `fixed` and `random`. `server` and `combat` definitions are accepted and validated so the data format is ready for future server/combat logic, but the generic completion path deliberately refuses to guess their result.
+
+#### Outcomes inside a result
+
+Every result contains two layers:
+
+- `guaranteedOutcomes`: effects that always happen when that result is selected.
+- `randomOutcomes`: independent optional events. Each has its own `probability` from 0 to 1 and its own `effects`.
+
+Random outcomes are not mutually exclusive. If one result contains a 2% injury event and a 5% bonus-loot event, both are rolled independently and both may happen in the same execution.
+
+Currently supported effects are `energyDelta` and `inventoryDelta`. Energy changes apply to each participating Survivor; inventory changes apply once to the shared execution. Future effects such as injuries can be added to the outcome effect model without changing the result/probability hierarchy.
+
+Example showing both task success/failure and a small independent outcome inside success:
 
 ```json
 {
   "tasks": {
-    "clear_garden": {
-      "activity": "clear_garden",
+    "example_task": {
+      "activity": "example_task",
       "location": "garden",
       "durationSeconds": 300,
       "storable": true,
@@ -80,28 +102,49 @@ Example:
       },
       "requiredTaskIds": [],
       "cost": {
-        "inventory": {}
+        "inventory": {
+          "scrap_metal": 2
+        }
       },
-      "outcomes": {
-        "success": 0.8,
-        "failure": 0.2
+      "resultResolver": {
+        "type": "random",
+        "probabilities": {
+          "success": 0.8,
+          "failure": 0.2
+        }
       },
-      "outcomeEffects": {
+      "results": {
         "success": {
-          "energyDelta": -5,
-          "inventoryDelta": {
-            "scrap_metal": 2
+          "guaranteedOutcomes": {
+            "energyDelta": -5,
+            "inventoryDelta": {
+              "field_ration": 2
+            }
+          },
+          "randomOutcomes": {
+            "minor_accident": {
+              "probability": 0.02,
+              "effects": {
+                "energyDelta": -4,
+                "inventoryDelta": {}
+              }
+            }
           }
         },
         "failure": {
-          "energyDelta": -3,
-          "inventoryDelta": {}
+          "guaranteedOutcomes": {
+            "energyDelta": -3,
+            "inventoryDelta": {}
+          },
+          "randomOutcomes": {}
         }
       }
     }
   }
 }
 ```
+
+The `minor_accident` example currently models its consequence as an energy loss only. When the health/injury system exists, that random outcome can gain the corresponding injury effect or handler.
 
 A task used as a prerequisite must itself be `storable: true`; the sync validator rejects impossible prerequisite definitions. Sleeping is not a job task and is never stored in `completedTaskIds`.
 
@@ -113,7 +156,7 @@ npm run sync:server-data:check
 npm run sync:server-data:exact
 ```
 
-`sync:server-data:check` validates all local private JSON files without initializing Firestore or writing anything. For job tasks it also validates survivor ranges, prerequisite references, storable prerequisites, costs, outcome probabilities and outcome effects.
+`sync:server-data:check` validates all local private JSON files without initializing Firestore or writing anything. For job tasks it also validates survivor ranges, prerequisite references, storable prerequisites, costs, result resolvers, result probabilities and nested random outcomes.
 
 Each Firestore `/serverData/{documentId}` document is replaced with exactly the root JSON object from its corresponding local file. `sync:server-data:exact` also deletes remote `/serverData` documents that no longer have a local JSON file.
 
@@ -125,4 +168,4 @@ When deploying a backend version that depends on a new server-data document, syn
 
 Only fields that the client is allowed to know belong in `/items`, for example names, descriptions, visible stats, type, subtype and value.
 
-Loot probabilities, hidden encounter logic, anti-cheat rules, drop weights, task outcome probabilities and other server-only configuration belong in `game_data/server/` and `/serverData`.
+Loot probabilities, hidden encounter logic, anti-cheat rules, drop weights, task result probabilities, nested random outcomes and other server-only configuration belong in `game_data/server/` and `/serverData`.
