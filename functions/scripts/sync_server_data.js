@@ -6,6 +6,16 @@ const {
 } = require("firebase-admin/app");
 const {getFirestore} = require("firebase-admin/firestore");
 
+const SURVIVOR_STAT_KEYS = new Set([
+  "strength",
+  "dexterity",
+  "constitution",
+  "stealth",
+  "care",
+  "cunning",
+  "charm",
+]);
+
 function parseArgs(argv) {
   const options = {
     dryRun: false,
@@ -62,6 +72,44 @@ function validateInventoryMap(value, label, {positiveOnly = false} = {}) {
   }
 }
 
+function validateStatRequirements(value, label) {
+  if (value == null) return;
+  if (!isPlainObject(value)) {
+    throw new Error(`${label} must be an object.`);
+  }
+
+  for (const [stat, requirement] of Object.entries(value)) {
+    if (!SURVIVOR_STAT_KEYS.has(stat) || !isPlainObject(requirement)) {
+      throw new Error(`${label} contains an invalid stat requirement.`);
+    }
+    if (
+      !Number.isInteger(requirement.greaterThan) ||
+      requirement.greaterThan < 0 ||
+      requirement.greaterThan > 9
+    ) {
+      throw new Error(
+        `${label}.${stat}.greaterThan must be an integer from 0 to 9.`,
+      );
+    }
+  }
+}
+
+function validateStatExperienceDelta(value, label) {
+  if (value == null) return;
+  if (!isPlainObject(value)) {
+    throw new Error(`${label} must be an object.`);
+  }
+
+  for (const [stat, amount] of Object.entries(value)) {
+    if (!SURVIVOR_STAT_KEYS.has(stat)) {
+      throw new Error(`${label} contains an unknown Survivor stat: ${stat}.`);
+    }
+    if (!Number.isInteger(amount) || amount < 0) {
+      throw new Error(`${label}.${stat} must be a non-negative integer.`);
+    }
+  }
+}
+
 function validateEffects(value, label) {
   if (!isPlainObject(value)) {
     throw new Error(`${label} must be an object.`);
@@ -70,6 +118,10 @@ function validateEffects(value, label) {
     throw new Error(`${label}.energyDelta must be an integer.`);
   }
   validateInventoryMap(value.inventoryDelta, `${label}.inventoryDelta`);
+  validateStatExperienceDelta(
+    value.statExperienceDelta,
+    `${label}.statExperienceDelta`,
+  );
 }
 
 function validateTaskResults(task, filename, taskId) {
@@ -228,6 +280,10 @@ function validateJobTasks(data, filename) {
         `${filename}.${taskId}.survivorRequirements.max must be >= min.`,
       );
     }
+    validateStatRequirements(
+      task.survivorRequirements.statRequirements,
+      `${filename}.${taskId}.survivorRequirements.statRequirements`,
+    );
 
     const requiredTaskIds = validateStringList(
       task.requiredTaskIds,
