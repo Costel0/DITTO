@@ -13,6 +13,55 @@ import '../../domain/job_task.dart';
 import '../../domain/job_task_service.dart';
 import '../job_labels.dart';
 
+bool _survivorMeetsStatRequirements(
+  Survivor survivor,
+  Map<String, int> requirements,
+) {
+  return requirements.entries.every(
+    (entry) => survivor.effectiveStat(entry.key) > entry.value,
+  );
+}
+
+String _statLabel(BuildContext context, String stat) {
+  switch (stat) {
+    case 'strength':
+      return context.l10n.statStrength;
+    case 'dexterity':
+      return context.l10n.statDexterity;
+    case 'constitution':
+      return context.l10n.statConstitution;
+    case 'stealth':
+      return context.l10n.statStealth;
+    case 'care':
+      return context.l10n.statCare;
+    case 'cunning':
+      return context.l10n.statCunning;
+    case 'charm':
+      return context.l10n.statCharm;
+    default:
+      return stat;
+  }
+}
+
+String? _missingStatRequirementText(
+  BuildContext context,
+  Survivor survivor,
+  Map<String, int> requirements,
+) {
+  final missing = requirements.entries.where(
+    (entry) => survivor.effectiveStat(entry.key) <= entry.value,
+  );
+  if (missing.isEmpty) return null;
+
+  return missing
+      .map(
+        (entry) =>
+            '${_statLabel(context, entry.key)}: '
+            '${survivor.effectiveStat(entry.key)} / > ${entry.value}',
+      )
+      .join(' · ');
+}
+
 class JobAreaScreen extends StatefulWidget {
   const JobAreaScreen({
     super.key,
@@ -150,6 +199,7 @@ class _JobAreaScreenState extends State<JobAreaScreen> {
         survivors: available,
         minSurvivors: startInfo.minSurvivors,
         maxSurvivors: startInfo.maxSurvivors,
+        statRequirements: startInfo.statRequirements,
       ),
     );
     if (selected == null || selected.isEmpty || !mounted) return;
@@ -432,11 +482,13 @@ class _SurvivorTaskDialog extends StatefulWidget {
     required this.survivors,
     required this.minSurvivors,
     required this.maxSurvivors,
+    required this.statRequirements,
   });
 
   final List<Survivor> survivors;
   final int minSurvivors;
   final int maxSurvivors;
+  final Map<String, int> statRequirements;
 
   @override
   State<_SurvivorTaskDialog> createState() => _SurvivorTaskDialogState();
@@ -450,6 +502,10 @@ class _SurvivorTaskDialogState extends State<_SurvivorTaskDialog> {
       _selectedIds.length <= widget.maxSurvivors;
 
   void _toggle(Survivor survivor) {
+    if (!_survivorMeetsStatRequirements(survivor, widget.statRequirements)) {
+      return;
+    }
+
     setState(() {
       if (_selectedIds.remove(survivor.id)) return;
       if (_selectedIds.length < widget.maxSurvivors) {
@@ -561,12 +617,24 @@ class _SurvivorTaskDialogState extends State<_SurvivorTaskDialog> {
                     itemBuilder: (context, index) {
                       final survivor = widget.survivors[index];
                       final selected = _selectedIds.contains(survivor.id);
-                      final enabled =
-                          selected || _selectedIds.length < widget.maxSurvivors;
+                      final meetsRequirements = _survivorMeetsStatRequirements(
+                        survivor,
+                        widget.statRequirements,
+                      );
+                      final enabled = meetsRequirements &&
+                          (selected ||
+                              _selectedIds.length < widget.maxSurvivors);
                       return _SurvivorChoice(
                         survivor: survivor,
                         selected: selected,
                         enabled: enabled,
+                        restrictionText: meetsRequirements
+                            ? null
+                            : _missingStatRequirementText(
+                                context,
+                                survivor,
+                                widget.statRequirements,
+                              ),
                         onTap: () => _toggle(survivor),
                       );
                     },
@@ -597,12 +665,14 @@ class _SurvivorChoice extends StatelessWidget {
     required this.survivor,
     required this.selected,
     required this.enabled,
+    required this.restrictionText,
     required this.onTap,
   });
 
   final Survivor survivor;
   final bool selected;
   final bool enabled;
+  final String? restrictionText;
   final VoidCallback onTap;
 
   @override
@@ -675,6 +745,16 @@ class _SurvivorChoice extends StatelessWidget {
                           ],
                         ),
                       ),
+                      if (restrictionText != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          restrictionText!,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: const Color(0xFFD29C86),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
