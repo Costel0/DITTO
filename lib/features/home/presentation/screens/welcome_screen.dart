@@ -10,6 +10,7 @@ import '../../../../core/presentation/survival_background.dart';
 import '../../../auth/application/session_controller.dart';
 import '../../../bunker/application/bunker_state_controller.dart';
 import '../../../bunker/domain/bunker_state.dart';
+import '../../../hub/domain/hub_background_configuration.dart';
 import '../../../hub/domain/hub_scene_configuration.dart';
 import '../../../hub/presentation/widgets/hub_character_info.dart';
 import '../../../hub/presentation/widgets/hub_debug_controls.dart';
@@ -245,6 +246,10 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     final l10n = context.l10n;
     final rosterLength = _roster.length;
     final bunkerController = _bunkerStateController;
+    final sleepingSurvivorCount = bunkerController?.state?.busySurvivors
+            .where((busySurvivor) => busySurvivor.activity == 'sleeping')
+            .length ??
+        0;
 
     return Scaffold(
       body: SurvivalBackground(
@@ -290,6 +295,10 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                                     child: HubScrollableScene(
                                       characters: _hubCharacters,
                                       onCharacterTap: _openCharacterFromSlot,
+                                      backgroundState: HubBackgroundState(
+                                        sleepingSurvivorCount:
+                                            sleepingSurvivorCount,
+                                      ),
                                     ),
                                   ),
                                   _HubSectionBar(
