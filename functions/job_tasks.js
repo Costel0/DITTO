@@ -1,4 +1,9 @@
 const {createHash} = require("node:crypto");
+const {
+  applyStatExperienceDelta,
+  normalizedStatExperienceDelta,
+  normalizedStatRequirements,
+} = require("./survivor_progression");
 
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -60,12 +65,16 @@ function normalizedEffects(value, label) {
       raw.inventoryDelta,
       `${label}.inventoryDelta`,
     ),
+    statExperienceDelta: normalizedStatExperienceDelta(
+      raw.statExperienceDelta,
+      `${label}.statExperienceDelta`,
+    ),
   };
 }
 
 function normalizedSurvivorRequirements(value, taskId) {
   if (value == null) {
-    return {min: 1, max: 1};
+    return {min: 1, max: 1, statRequirements: {}};
   }
   if (!isPlainObject(value)) {
     throw new Error(`Task ${taskId} survivorRequirements must be an object.`);
@@ -81,7 +90,14 @@ function normalizedSurvivorRequirements(value, taskId) {
       `Task ${taskId} survivorRequirements.max must be >= min.`,
     );
   }
-  return {min, max};
+  return {
+    min,
+    max,
+    statRequirements: normalizedStatRequirements(
+      value.statRequirements,
+      `Task ${taskId} survivorRequirements.statRequirements`,
+    ),
+  };
 }
 
 function normalizedRandomOutcomes(value, taskId, resultId) {
@@ -157,7 +173,7 @@ function normalizedResults(rawTask, taskId) {
     }
 
     const results = {};
-    for (const [resultIdRaw, probability] of Object.entries(rawTask.outcomes)) {
+    for (const [resultIdRaw] of Object.entries(rawTask.outcomes)) {
       const resultId = resultIdRaw.trim();
       if (!resultId) {
         throw new Error(`Task ${taskId} contains an empty result ID.`);
@@ -477,8 +493,12 @@ function applyEffects(bunker, participantIds, effects) {
     if (!participantSet.has(survivor.id)) continue;
 
     const currentEnergy = Number.isInteger(survivor.energy) ? survivor.energy : 0;
+    const progressedSurvivor = applyStatExperienceDelta(
+      survivor,
+      effects.statExperienceDelta,
+    );
     survivors[index] = {
-      ...survivor,
+      ...progressedSurvivor,
       energy: currentEnergy + effects.energyDelta,
     };
   }
