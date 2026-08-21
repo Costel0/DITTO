@@ -1,21 +1,14 @@
+const {
+  normalizedStatExperience,
+  normalizedStatMods,
+} = require("./survivor_progression");
+
 const BUNKER_SCHEMA_VERSION = 6;
 const DEFAULT_SURVIVOR_ENERGY = 50;
 const DEFAULT_SLEEPING_SECONDS_PER_NEGATIVE_ENERGY = 60;
 const SLEEPING_ACTIVITY = "sleeping";
 const SLEEPING_LOCATION = "beds";
 const UNKNOWN_LOCATION = "unknown";
-
-function zeroStatMods() {
-  return {
-    strength: 0,
-    dexterity: 0,
-    constitution: 0,
-    stealth: 0,
-    care: 0,
-    cunning: 0,
-    charm: 0,
-  };
-}
 
 function normalizedSurvivor(source, survivorId, duplicateId) {
   const healthHistory = Array.isArray(source?.healthHistory)
@@ -24,9 +17,8 @@ function normalizedSurvivor(source, survivorId, duplicateId) {
   const equippedItemIds = Array.isArray(source?.equippedItemIds)
     ? source.equippedItemIds
     : [];
-  const statMods = source?.statMods && typeof source.statMods === "object"
-    ? source.statMods
-    : zeroStatMods();
+  const statMods = normalizedStatMods(source?.statMods);
+  const statExperience = normalizedStatExperience(source?.statExperience);
   const energy = Number.isInteger(source?.energy)
     ? source.energy
     : DEFAULT_SURVIVOR_ENERGY;
@@ -36,6 +28,7 @@ function normalizedSurvivor(source, survivorId, duplicateId) {
     duplicateId,
     energy,
     statMods,
+    statExperience,
     healthHistory,
     equippedItemIds,
   };
