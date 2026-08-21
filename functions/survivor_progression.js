@@ -62,9 +62,19 @@ function zeroStatMap() {
 function normalizedStatMods(value) {
   const source = isPlainObject(value) ? value : {};
   const normalized = zeroStatMap();
+  const sourceValues = {
+    strength: source.strength,
+    dexterity: source.dexterity ?? source.agility,
+    constitution: source.constitution ?? source.endurance,
+    stealth: source.stealth ?? source.scavenging,
+    care: source.care,
+    cunning: source.cunning,
+    charm: source.charm,
+  };
+
   for (const stat of SURVIVOR_STAT_KEYS) {
-    if (Number.isInteger(source[stat])) {
-      normalized[stat] = source[stat];
+    if (Number.isInteger(sourceValues[stat])) {
+      normalized[stat] = sourceValues[stat];
     }
   }
   return normalized;
