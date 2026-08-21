@@ -10,8 +10,8 @@ Se sincroniza con `/serverData/jobTasks`. La app no puede leer este documento di
 
 ```json
 {
-  "schemaVersion": 3,
-  "dataVersion": 4,
+  "schemaVersion": 4,
+  "dataVersion": 5,
   "tasks": {}
 }
 ```
@@ -49,7 +49,23 @@ Se sincroniza con `/serverData/jobTasks`. La app no puede leer este documento di
 - La clave del objeto (`prepare_garden`) es el ID único de la tarea.
 - `activity`: actividad que se guarda en la ocupación del Survivor.
 - `location`: zona donde sucede.
-- `durationSeconds`: duración total en segundos.
+- `durationSeconds`: duración base de la tarea si participa un único Survivor.
+
+La duración real se divide automáticamente entre el número de Survivors asignados:
+
+```text
+duracionReal = ceil(durationSeconds / numeroDeSurvivors)
+```
+
+Siempre se conserva un mínimo de 1 segundo.
+
+Ejemplo para una tarea de `300` segundos:
+
+- 1 Survivor -> 300 s.
+- 2 Survivors -> 150 s.
+- 3 Survivors -> 100 s.
+
+La Cloud Function calcula esta duración de forma autoritativa al iniciar la tarea y todos los participantes reciben el mismo `endsAt`.
 
 ### `storable`
 
@@ -57,6 +73,8 @@ Se sincroniza con `/serverData/jobTasks`. La app no puede leer este documento di
 - `false`: no se registra como completada y puede repetirse.
 
 Las tareas usadas en `requiredTaskIds` deben ser `storable: true`.
+
+## Requisitos de Survivors
 
 ### Número de Survivors
 
@@ -80,6 +98,43 @@ Para una tarea que **solo puede realizar exactamente un Survivor**, la forma can
 ```
 
 No existe un segundo formato abreviado: mantener siempre `min` y `max` hace que el esquema sea único y evita casos especiales en backend y validadores.
+
+### Requisitos de estadísticas
+
+Una task puede restringir qué Survivors se pueden seleccionar según sus estadísticas:
+
+```json
+"survivorRequirements": {
+  "min": 1,
+  "max": 3,
+  "statRequirements": {
+    "care": {
+      "greaterThan": 3
+    }
+  }
+}
+```
+
+En este ejemplo **cada Survivor seleccionado** necesita `care > 3`.
+
+- `greaterThan` es exclusivo: `3` no cumple `> 3`; `4` sí.
+- Se pueden incluir varias estadísticas y el Survivor debe cumplirlas todas.
+- El valor comprobado es la estadística efectiva: `baseStats del Duplicate + statMods del Survivor`.
+- El selector de Flutter deshabilita los Survivors que no cumplen los requisitos, pero el backend vuelve a validarlos siempre y es la autoridad final.
+
+Estadísticas admitidas:
+
+- `strength`
+- `dexterity`
+- `constitution`
+- `stealth`
+- `care`
+- `cunning`
+- `charm`
+
+Los valores de `greaterThan` pueden ir de `0` a `9`.
+
+> Si se modifican las estadísticas base de los Duplicates, hay que mantener sincronizada la tabla autoritativa del backend en `functions/survivor_progression.js` con `lib/features/survivors/domain/duplicate_catalog.dart`.
 
 ### Prerrequisitos
 
@@ -184,13 +239,48 @@ Cada resultado general tiene dos grupos de efectos:
   "energyDelta": -5,
   "inventoryDelta": {
     "scrap_metal": 2
+  },
+  "statExperienceDelta": {
+    "care": 5,
+    "strength": 1
   }
 }
 ```
 
 - `energyDelta`: se aplica a **cada Survivor participante**.
 - `inventoryDelta`: se aplica **una sola vez a la ejecución**, no una vez por Survivor.
-- Un valor positivo añade; uno negativo resta.
+- `statExperienceDelta`: experiencia que recibe **cada Survivor participante** en las estadísticas indicadas.
+- Un valor positivo añade; `inventoryDelta` también puede usar cantidades negativas cuando un outcome retire objetos.
+
+`statExperienceDelta` es opcional. Sus cantidades deben ser enteros no negativos.
+
+### Experiencia de estadísticas del Survivor
+
+Cada Survivor guarda en servidor un mapa oculto `statExperience` con un medidor independiente para cada estadística.
+
+Ejemplo interno:
+
+```json
+"statExperience": {
+  "strength": 1,
+  "dexterity": 0,
+  "constitution": 0,
+  "stealth": 0,
+  "care": 5,
+  "cunning": 0,
+  "charm": 0
+}
+```
+
+Reglas:
+
+1. El usuario no ve este medidor en la interfaz.
+2. Survivors antiguos que no tengan `statExperience` se normalizan automáticamente con `0` en todas las estadísticas.
+3. Cuando una estadística acumula al menos `100` XP y su valor efectivo es menor que `10`, se consumen `100` XP y se incrementa `statMods` en `+1` para esa estadística.
+4. Si queda experiencia sobrante, se conserva para el siguiente nivel.
+5. Si una ganancia permite varios niveles y la estadística sigue por debajo de `10`, pueden aplicarse varios incrementos en la misma resolución.
+6. Una estadística efectiva nunca sube por este sistema por encima de `10`.
+7. Una vez alcanzado `10`, el medidor deja de producir niveles y se mantiene limitado a `100`.
 
 ### Outcomes aleatorios dentro del resultado
 
@@ -203,12 +293,13 @@ Cada resultado general tiene dos grupos de efectos:
       "inventoryDelta": {}
     }
   },
-  "extra_scrap": {
+  "extra_training": {
     "probability": 0.05,
     "effects": {
       "energyDelta": 0,
-      "inventoryDelta": {
-        "scrap_metal": 1
+      "inventoryDelta": {},
+      "statExperienceDelta": {
+        "strength": 2
       }
     }
   }
@@ -220,58 +311,54 @@ Cada resultado general tiene dos grupos de efectos:
 - Sus probabilidades **no tienen que sumar 1**.
 - Pueden activarse varios random outcomes en una misma ejecución.
 - Las tiradas son deterministas para el mismo `executionId`, de modo que un reintento del backend no vuelve a sortear resultados distintos.
+- Los efectos de experiencia funcionan igual dentro de outcomes aleatorios que dentro de `guaranteedOutcomes`.
 
-## Ejemplo completo
+## Ejemplo: `upgrade_garden`
 
 ```json
-"explore_storage": {
-  "activity": "explore_storage",
-  "location": "storage",
-  "durationSeconds": 600,
+"upgrade_garden": {
+  "activity": "upgrade_garden",
+  "location": "garden",
+  "durationSeconds": 300,
   "storable": true,
   "survivorRequirements": {
     "min": 1,
-    "max": 1
+    "max": 3,
+    "statRequirements": {
+      "care": {
+        "greaterThan": 3
+      }
+    }
   },
-  "requiredTaskIds": [],
+  "requiredTaskIds": ["prepare_garden"],
   "cost": {
     "inventory": {}
   },
   "resultResolver": {
-    "type": "random",
-    "probabilities": {
-      "success": 0.9,
-      "failure": 0.1
-    }
+    "type": "fixed",
+    "resultId": "success"
   },
   "results": {
     "success": {
       "guaranteedOutcomes": {
-        "energyDelta": -5,
-        "inventoryDelta": {
-          "scrap_metal": 2
+        "energyDelta": 5,
+        "inventoryDelta": {},
+        "statExperienceDelta": {
+          "care": 5,
+          "strength": 1
         }
-      },
-      "randomOutcomes": {
-        "minor_accident": {
-          "probability": 0.02,
-          "effects": {
-            "energyDelta": -4,
-            "inventoryDelta": {}
-          }
-        }
-      }
-    },
-    "failure": {
-      "guaranteedOutcomes": {
-        "energyDelta": -3,
-        "inventoryDelta": {}
       },
       "randomOutcomes": {}
     }
   }
 }
 ```
+
+Con esta configuración:
+
+- Solo se pueden seleccionar Survivors con `care > 3`.
+- Cada participante recibe `+5` XP de `care` y `+1` XP de `strength` al completar la tarea.
+- Con 1/2/3 Survivors dura 300/150/100 segundos respectivamente.
 
 ## Añadir una nueva task
 
@@ -284,7 +371,7 @@ Al añadir una task nueva:
 3. Añade su título y descripción en `lib/features/jobs/presentation/job_labels.dart`.
 4. Añade las traducciones correspondientes en `lib/l10n/app_es.arb` y `lib/l10n/app_en.arb`.
 
-No hace falta tocar `job_area_screen.dart`, `hub_jobs.dart`, Functions ni los tests genéricos mientras la nueva task use estructuras ya soportadas por el esquema actual. Solo hace falta cambiar backend si introduces un nuevo tipo de resolver, efecto o campo con lógica nueva.
+No hace falta tocar `job_area_screen.dart`, Functions ni los tests genéricos mientras la nueva task use estructuras ya soportadas por el esquema actual. Solo hace falta cambiar backend si introduces un nuevo tipo de resolver, efecto o campo con lógica nueva.
 
 ## Después de modificarlo
 
