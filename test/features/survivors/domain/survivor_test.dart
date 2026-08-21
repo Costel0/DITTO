@@ -21,6 +21,16 @@ void main() {
     );
   });
 
+  test('only Duplicates 01-04 are selectable for a new user', () {
+    expect(
+      initialSelectableDuplicates.map((duplicate) => duplicate.id).toList(),
+      <String>['01', '02', '03', '04'],
+    );
+    expect(isInitialSelectableDuplicateId('04'), isTrue);
+    expect(isInitialSelectableDuplicateId('05'), isFalse);
+    expect(duplicateById('05'), isNotNull);
+  });
+
   test('energy accepts and serializes negative integers', () {
     final survivor = Survivor.fromMap(<String, dynamic>{
       'id': 's1',
