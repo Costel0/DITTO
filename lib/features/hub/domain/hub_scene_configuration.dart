@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'hub_background_configuration.dart';
 
 enum HubCharacterSlot {
+  leftCompanion2,
   leftCompanion,
   primary,
   rightCompanion1,
@@ -12,12 +13,13 @@ enum HubCharacterSlot {
 /// Assignment order for Survivors in the player's roster.
 ///
 /// The initial Survivor remains in the tuned primary position. New Survivors
-/// then fill the nearest right slot, the left slot, and finally the far right.
+/// alternate around it: nearest right, nearest left, far right, then far left.
 const List<HubCharacterSlot> hubRosterSlotOrder = <HubCharacterSlot>[
   HubCharacterSlot.primary,
   HubCharacterSlot.rightCompanion1,
   HubCharacterSlot.leftCompanion,
   HubCharacterSlot.rightCompanion2,
+  HubCharacterSlot.leftCompanion2,
 ];
 
 class HubElementPlacement {
@@ -61,6 +63,10 @@ const HubSceneConfiguration defaultHubSceneConfiguration =
   canvasSize: Size(1440, 360),
   initialFocusX: 720,
   characterPlacements: <HubCharacterSlot, HubElementPlacement>{
+    HubCharacterSlot.leftCompanion2: HubElementPlacement(
+      position: Offset(200, 90),
+      size: Size(170, 270),
+    ),
     HubCharacterSlot.leftCompanion: HubElementPlacement(
       position: Offset(280, 90),
       size: Size(170, 270),
