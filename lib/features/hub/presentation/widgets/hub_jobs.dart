@@ -6,6 +6,7 @@ import '../../../../core/localization/l10n.dart';
 import '../../../bunker/domain/bunker_state.dart';
 import '../../../jobs/domain/job_area.dart';
 import '../../../jobs/presentation/job_labels.dart';
+import '../../../survivors/presentation/widgets/survivor_profile_photo.dart';
 
 class HubJobs extends StatelessWidget {
   const HubJobs({
@@ -297,18 +298,17 @@ class _ActiveJobInfo extends StatelessWidget {
       ..sort((a, b) => a.first.endsAt.compareTo(b.first.endsAt));
 
     return _JobInfoFrame(
-      child: Column(
-        children: [
-          for (var index = 0; index < executions.length; index++) ...[
-            _BusyExecutionRow(
-              busySurvivors: executions[index],
-              bunkerState: bunker,
-              onResolveCompletedOccupations: onResolveCompletedOccupations,
-            ),
-            if (index + 1 < executions.length)
-              const Divider(height: 14, color: Color(0xFF443D31)),
-          ],
-        ],
+      child: ListView.separated(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: executions.length,
+        separatorBuilder: (context, index) =>
+            const Divider(height: 14, color: Color(0xFF443D31)),
+        itemBuilder: (context, index) => _BusyExecutionRow(
+          busySurvivors: executions[index],
+          bunkerState: bunker,
+          onResolveCompletedOccupations: onResolveCompletedOccupations,
+        ),
       ),
     );
   }
@@ -367,47 +367,132 @@ class _BusyExecutionRow extends StatelessWidget {
           : survivorDisplayName(context, survivor);
     }).join(', ');
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
+    final details = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(
-          busySurvivors.length > 1
-              ? Icons.groups_2_outlined
-              : Icons.person_outline_rounded,
-          size: 18,
-          color: const Color(0xFFC0A46F),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '$survivorNames · ${jobActivityLabel(context, first.activity)}',
-                style: theme.textTheme.labelMedium?.copyWith(
-                  color: const Color(0xFFBDB3A1),
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                '${context.l10n.jobStartsLabel}: '
-                '${_formatDateTime(context, first.startedAt)}  ·  '
-                '${context.l10n.jobEndsLabel}: '
-                '${_formatDateTime(context, first.endsAt)}',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: const Color(0xFF8F8677),
-                ),
-              ),
-            ],
+        Text(
+          '$survivorNames · ${jobActivityLabel(context, first.activity)}',
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: const Color(0xFFBDB3A1),
+            fontWeight: FontWeight.w700,
           ),
         ),
-        const SizedBox(width: 18),
-        _JobCountdown(
-          endsAt: first.endsAt,
-          onFinished: onResolveCompletedOccupations,
+        const SizedBox(height: 3),
+        Text(
+          '${context.l10n.jobStartsLabel}: '
+          '${_formatDateTime(context, first.startedAt)}  ·  '
+          '${context.l10n.jobEndsLabel}: '
+          '${_formatDateTime(context, first.endsAt)}',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: const Color(0xFF8F8677),
+          ),
         ),
       ],
+    );
+
+    final portraits = _BusySurvivorProfiles(
+      busySurvivors: busySurvivors,
+      bunkerState: bunkerState,
+    );
+    final countdown = _JobCountdown(
+      endsAt: first.endsAt,
+      onFinished: onResolveCompletedOccupations,
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 520;
+
+        if (compact) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  portraits,
+                  const SizedBox(width: 10),
+                  Expanded(child: details),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerRight,
+                child: countdown,
+              ),
+            ],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            portraits,
+            const SizedBox(width: 10),
+            Expanded(child: details),
+            const SizedBox(width: 18),
+            countdown,
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _BusySurvivorProfiles extends StatelessWidget {
+  const _BusySurvivorProfiles({
+    required this.busySurvivors,
+    required this.bunkerState,
+  });
+
+  final List<BusySurvivor> busySurvivors;
+  final BunkerState bunkerState;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 110),
+      child: Wrap(
+        spacing: 4,
+        runSpacing: 4,
+        children: [
+          for (final busy in busySurvivors)
+            _BusySurvivorProfile(
+              survivor: bunkerState.survivorById(busy.survivorId),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BusySurvivorProfile extends StatelessWidget {
+  const _BusySurvivorProfile({required this.survivor});
+
+  final dynamic survivor;
+
+  @override
+  Widget build(BuildContext context) {
+    final current = survivor;
+    if (current != null) {
+      return SurvivorProfilePhoto(
+        survivor: current,
+        size: 34,
+      );
+    }
+
+    return Container(
+      width: 34,
+      height: 34,
+      decoration: BoxDecoration(
+        color: const Color(0xFF211F19),
+        border: Border.all(color: const Color(0xFF514634)),
+      ),
+      child: const Icon(
+        Icons.person_outline_rounded,
+        size: 20,
+        color: Color(0xFF8F8677),
+      ),
     );
   }
 }
