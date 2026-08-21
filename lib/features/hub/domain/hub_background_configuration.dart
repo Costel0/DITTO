@@ -72,11 +72,18 @@ const Map<HubArea, Map<HubAreaState, String>> hubAreaStatePngNames =
 class HubBackgroundState {
   const HubBackgroundState({
     this.areaStates = const <HubArea, HubAreaState>{},
-  });
+    this.sleepingSurvivorCount = 0,
+  }) : assert(sleepingSurvivorCount >= 0);
 
   /// Current state of each area. Missing entries intentionally resolve to the
   /// area's default state.
   final Map<HubArea, HubAreaState> areaStates;
+
+  /// Number of Survivors currently sleeping in the bunker.
+  ///
+  /// Beds are the first data-driven tile: zero keeps the default PNG, while a
+  /// positive value resolves to background_beds_[number].png.
+  final int sleepingSurvivorCount;
 }
 
 class HubBackgroundSegment {
@@ -101,18 +108,22 @@ List<HubBackgroundSegment> resolveHubBackgroundSegments(
   HubBackgroundState state,
 ) {
   return <HubBackgroundSegment>[
-    for (final area in hubAreas)
-      _resolveAreaSegment(area, state.areaStates[area]),
+    for (final area in hubAreas) _resolveAreaSegment(area, state),
   ];
 }
 
 HubBackgroundSegment _resolveAreaSegment(
   HubArea area,
-  HubAreaState? requestedState,
+  HubBackgroundState state,
 ) {
   final stateMapping = hubAreaStatePngNames[area]!;
   final defaultPng = stateMapping[HubAreaState.defaultState]!;
-  final selectedPng = stateMapping[requestedState] ?? defaultPng;
+  final selectedPng = _selectedPngForArea(
+    area: area,
+    state: state,
+    stateMapping: stateMapping,
+    defaultPng: defaultPng,
+  );
 
   return HubBackgroundSegment(
     area: area,
@@ -120,4 +131,17 @@ HubBackgroundSegment _resolveAreaSegment(
     assetPath: '$_hubAreaAssetDirectory/$selectedPng',
     defaultAssetPath: '$_hubAreaAssetDirectory/$defaultPng',
   );
+}
+
+String _selectedPngForArea({
+  required HubArea area,
+  required HubBackgroundState state,
+  required Map<HubAreaState, String> stateMapping,
+  required String defaultPng,
+}) {
+  if (area == HubArea.beds && state.sleepingSurvivorCount > 0) {
+    return 'background_beds_${state.sleepingSurvivorCount}.png';
+  }
+
+  return stateMapping[state.areaStates[area]] ?? defaultPng;
 }
