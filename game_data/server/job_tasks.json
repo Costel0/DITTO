@@ -1,6 +1,6 @@
 {
-  "schemaVersion": 3,
-  "dataVersion": 4,
+  "schemaVersion": 4,
+  "dataVersion": 5,
   "tasks": {
     "prepare_garden": {
       "activity": "prepare_garden",
@@ -36,7 +36,12 @@
       "storable": true,
       "survivorRequirements": {
         "min": 1,
-        "max": 3
+        "max": 3,
+        "statRequirements": {
+          "care": {
+            "greaterThan": 3
+          }
+        }
       },
       "requiredTaskIds": ["prepare_garden"],
       "cost": {
@@ -50,7 +55,11 @@
         "success": {
           "guaranteedOutcomes": {
             "energyDelta": 5,
-            "inventoryDelta": {}
+            "inventoryDelta": {},
+            "statExperienceDelta": {
+              "care": 5,
+              "strength": 1
+            }
           },
           "randomOutcomes": {}
         }
