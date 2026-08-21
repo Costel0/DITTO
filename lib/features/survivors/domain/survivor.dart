@@ -1,3 +1,4 @@
+import 'duplicate_catalog.dart';
 import 'survivor_stats.dart';
 
 class SurvivorHealthRecord {
@@ -73,6 +74,29 @@ class Survivor {
   /// Square portrait used by compact reusable Survivor profile views.
   String get profileAssetPath =>
       'assets/characters/survivor_${duplicateId}_profile.png';
+
+  /// Effective visible stat: Duplicate base value + permanent Survivor mods.
+  int effectiveStat(String stat) {
+    final base = duplicateById(duplicateId)?.baseStats ?? SurvivorStats.zero;
+    switch (stat) {
+      case 'strength':
+        return base.strength + statMods.strength;
+      case 'dexterity':
+        return base.dexterity + statMods.dexterity;
+      case 'constitution':
+        return base.constitution + statMods.constitution;
+      case 'stealth':
+        return base.stealth + statMods.stealth;
+      case 'care':
+        return base.care + statMods.care;
+      case 'cunning':
+        return base.cunning + statMods.cunning;
+      case 'charm':
+        return base.charm + statMods.charm;
+      default:
+        return 0;
+    }
+  }
 
   Map<String, dynamic> toMap() => <String, dynamic>{
         'id': id,
