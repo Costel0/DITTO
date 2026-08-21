@@ -54,6 +54,18 @@ const List<Duplicate> predefinedDuplicates = <Duplicate>[
       charm: 0,
     ),
   ),
+  Duplicate(
+    id: '05',
+    baseStats: SurvivorStats(
+      strength: 0,
+      dexterity: 0,
+      constitution: 0,
+      stealth: 0,
+      care: 0,
+      cunning: 0,
+      charm: 0,
+    ),
+  ),
 ];
 
 Duplicate? duplicateById(String id) {
