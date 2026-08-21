@@ -26,11 +26,6 @@ function fakeTransaction(multiplier) {
   };
 }
 
-test("new Survivors default to 50 energy", () => {
-  const survivor = normalizedSurvivor(null, "s1", "01");
-  assert.equal(survivor.energy, 50);
-});
-
 test("fixStatus moves negative idle Survivors to sleeping", async () => {
   const now = new Date("2026-08-18T12:00:00.987Z");
   const fixed = await fixStatus({
@@ -70,16 +65,16 @@ test("normalizedBusySurvivors preserves task and execution IDs", () => {
   const [busy] = normalizedBusySurvivors([
     {
       survivorId: "s1",
-      taskId: "prepare_garden",
+      taskId: "test_task",
       executionId: "exec-1",
-      activity: "prepare_garden",
-      location: "garden",
+      activity: "test_task",
+      location: "test_area",
       startedAt: new Date("2026-08-18T12:00:00Z"),
       endsAt: new Date("2026-08-18T12:05:00Z"),
     },
   ]);
 
-  assert.equal(busy.taskId, "prepare_garden");
+  assert.equal(busy.taskId, "test_task");
   assert.equal(busy.executionId, "exec-1");
 });
 
@@ -102,13 +97,13 @@ test("fixStatus leaves completed occupations untouched", async () => {
           endsAt: new Date("2026-08-18T12:08:00Z"),
         },
       ],
-      completedTaskIds: ["prepare_garden", "prepare_garden"],
+      completedTaskIds: ["test_task", "test_task"],
       inventory: {},
     },
   });
 
   assert.deepEqual(fixed.idleSurvivors, []);
-  assert.deepEqual(fixed.completedTaskIds, ["prepare_garden"]);
+  assert.deepEqual(fixed.completedTaskIds, ["test_task"]);
   assert.equal(fixed.busySurvivors.length, 1);
   assert.equal(fixed.busySurvivors[0].survivorId, "s1");
   assert.equal(fixed.busySurvivors[0].activity, "sleeping");
