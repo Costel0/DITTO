@@ -45,6 +45,16 @@ String jobTaskTitle(BuildContext context, String taskId) {
       return context.l10n.jobPrepareGardenTitle;
     case 'upgrade_garden':
       return context.l10n.jobUpgradeGardenTitle;
+    case 'upgrade_garden_2':
+      return '${context.l10n.jobUpgradeGardenTitle} 2';
+    case 'upgrade_garden_3':
+      return '${context.l10n.jobUpgradeGardenTitle} 3';
+    case 'upgrade_garden_4':
+      return '${context.l10n.jobUpgradeGardenTitle} 4';
+    case 'upgrade_garden_5':
+      return '${context.l10n.jobUpgradeGardenTitle} 5';
+    case 'upgrade_garden_6':
+      return '${context.l10n.jobUpgradeGardenTitle} 6';
     default:
       return taskId;
   }
@@ -55,6 +65,11 @@ String jobTaskDescription(BuildContext context, String taskId) {
     case 'prepare_garden':
       return context.l10n.jobPrepareGardenDescription;
     case 'upgrade_garden':
+    case 'upgrade_garden_2':
+    case 'upgrade_garden_3':
+    case 'upgrade_garden_4':
+    case 'upgrade_garden_5':
+    case 'upgrade_garden_6':
       return context.l10n.jobUpgradeGardenDescription;
     default:
       return '';
