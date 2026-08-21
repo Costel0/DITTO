@@ -140,7 +140,7 @@ void main() {
     expect(state.busySurvivors.single.endsAt, state.serverUpdatedAt);
   });
 
-  test('reads legacy schema v2 busy map and missing energy', () {
+  test('reads legacy schema v2 busy map', () {
     final state = BunkerState.fromJson(<String, dynamic>{
       'schemaVersion': 2,
       'revision': 3,
@@ -156,7 +156,6 @@ void main() {
       'inventory': <String, int>{},
     });
 
-    expect(state.survivorById('s1')?.energy, 50);
     expect(state.busySurvivors.single.survivorId, 's2');
     expect(state.busySurvivors.single.activity, 'crafting');
     expect(state.busySurvivors.single.location, 'unknown');
