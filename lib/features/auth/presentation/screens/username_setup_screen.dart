@@ -39,11 +39,11 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
     }
 
     final existingDuplicateId = widget.sessionController.initialDuplicateId;
-    final existingIndex = predefinedDuplicates.indexWhere(
+    final existingIndex = initialSelectableDuplicates.indexWhere(
       (duplicate) => duplicate.id == existingDuplicateId,
     );
     _selectedDuplicateIndex = existingIndex >= 0 ? existingIndex : 0;
-    _selectedDuplicateId = predefinedDuplicates[_selectedDuplicateIndex].id;
+    _selectedDuplicateId = initialSelectableDuplicates[_selectedDuplicateIndex].id;
     _pageController = PageController(initialPage: _selectedDuplicateIndex);
   }
 
@@ -98,14 +98,14 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
   void _selectDuplicate(int index) {
     setState(() {
       _selectedDuplicateIndex = index;
-      _selectedDuplicateId = predefinedDuplicates[index].id;
+      _selectedDuplicateId = initialSelectableDuplicates[index].id;
       _errorMessage = null;
     });
   }
 
   void _changeDuplicate(int delta) {
     final target = _selectedDuplicateIndex + delta;
-    if (target < 0 || target >= predefinedDuplicates.length) return;
+    if (target < 0 || target >= initialSelectableDuplicates.length) return;
 
     _pageController.animateToPage(
       target,
@@ -164,10 +164,10 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
             height: 620,
             child: PageView.builder(
               controller: _pageController,
-              itemCount: predefinedDuplicates.length,
+              itemCount: initialSelectableDuplicates.length,
               onPageChanged: _selectDuplicate,
               itemBuilder: (context, index) {
-                final duplicate = predefinedDuplicates[index];
+                final duplicate = initialSelectableDuplicates[index];
                 final stats = duplicate.baseStats;
                 return Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 2),
@@ -225,29 +225,32 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
               Expanded(
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(predefinedDuplicates.length, (index) {
-                    final selected = index == _selectedDuplicateIndex;
-                    return AnimatedContainer(
-                      duration: const Duration(milliseconds: 180),
-                      width: selected ? 20 : 7,
-                      height: 7,
-                      margin: const EdgeInsets.symmetric(horizontal: 3),
-                      decoration: BoxDecoration(
-                        color: selected
-                            ? theme.colorScheme.primary
-                            : const Color(0xFF5A5245),
-                        borderRadius: BorderRadius.circular(99),
-                      ),
-                    );
-                  }),
+                  children: List.generate(
+                    initialSelectableDuplicates.length,
+                    (index) {
+                      final selected = index == _selectedDuplicateIndex;
+                      return AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        width: selected ? 20 : 7,
+                        height: 7,
+                        margin: const EdgeInsets.symmetric(horizontal: 3),
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? theme.colorScheme.primary
+                              : const Color(0xFF5A5245),
+                          borderRadius: BorderRadius.circular(99),
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ),
               IconButton.outlined(
                 tooltip: l10n.nextCharacter,
-                onPressed:
-                    _selectedDuplicateIndex == predefinedDuplicates.length - 1
-                        ? null
-                        : () => _changeDuplicate(1),
+                onPressed: _selectedDuplicateIndex ==
+                        initialSelectableDuplicates.length - 1
+                    ? null
+                    : () => _changeDuplicate(1),
                 icon: const Icon(Icons.chevron_right_rounded),
               ),
             ],
