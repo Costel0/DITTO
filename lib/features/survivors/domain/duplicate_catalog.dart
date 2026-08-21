@@ -21,7 +21,7 @@ const List<Duplicate> predefinedDuplicates = <Duplicate>[
   Duplicate(
     id: '02',
     baseStats: SurvivorStats(
-      strength: 4,
+      strength: 5,
       dexterity: 2,
       constitution: 5,
       stealth: 1,
@@ -33,13 +33,13 @@ const List<Duplicate> predefinedDuplicates = <Duplicate>[
   Duplicate(
     id: '03',
     baseStats: SurvivorStats(
-      strength: 0,
-      dexterity: 0,
-      constitution: 0,
-      stealth: 0,
-      care: 0,
-      cunning: 0,
-      charm: 0,
+      strength: 3,
+      dexterity: 5,
+      constitution: 2,
+      stealth: 3,
+      care: 4,
+      cunning: 3,
+      charm: 4,
     ),
   ),
   Duplicate(

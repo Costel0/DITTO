@@ -54,7 +54,7 @@
       "results": {
         "success": {
           "guaranteedOutcomes": {
-            "energyDelta": -5,
+            "energyDelta": -10,
             "inventoryDelta": {},
             "statExperienceDelta": {
               "care": 5,
@@ -90,7 +90,7 @@
       "results": {
         "success": {
           "guaranteedOutcomes": {
-            "energyDelta": -5,
+            "energyDelta": -20,
             "inventoryDelta": {},
             "statExperienceDelta": {
               "care": 5,
@@ -126,7 +126,7 @@
       "results": {
         "success": {
           "guaranteedOutcomes": {
-            "energyDelta": -5,
+            "energyDelta": -40,
             "inventoryDelta": {},
             "statExperienceDelta": {
               "care": 5,
@@ -198,7 +198,7 @@
       "results": {
         "success": {
           "guaranteedOutcomes": {
-            "energyDelta": -5,
+            "energyDelta": -50,
             "inventoryDelta": {},
             "statExperienceDelta": {
               "care": 5,
@@ -234,7 +234,7 @@
       "results": {
         "success": {
           "guaranteedOutcomes": {
-            "energyDelta": -5,
+            "energyDelta": -60,
             "inventoryDelta": {},
             "statExperienceDelta": {
               "care": 5,
