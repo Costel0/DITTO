@@ -59,22 +59,26 @@ function normalizedEffects(value, label) {
     throw new Error(`${label}.energyDelta must be an integer.`);
   }
 
+  const statExperienceDelta = normalizedStatExperienceDelta(
+    raw.statExperienceDelta,
+    `${label}.statExperienceDelta`,
+  );
+
   return {
     energyDelta,
     inventoryDelta: normalizedInventoryMap(
       raw.inventoryDelta,
       `${label}.inventoryDelta`,
     ),
-    statExperienceDelta: normalizedStatExperienceDelta(
-      raw.statExperienceDelta,
-      `${label}.statExperienceDelta`,
-    ),
+    ...(Object.keys(statExperienceDelta).length > 0
+      ? {statExperienceDelta}
+      : {}),
   };
 }
 
 function normalizedSurvivorRequirements(value, taskId) {
   if (value == null) {
-    return {min: 1, max: 1, statRequirements: {}};
+    return {min: 1, max: 1};
   }
   if (!isPlainObject(value)) {
     throw new Error(`Task ${taskId} survivorRequirements must be an object.`);
@@ -90,13 +94,18 @@ function normalizedSurvivorRequirements(value, taskId) {
       `Task ${taskId} survivorRequirements.max must be >= min.`,
     );
   }
+
+  const statRequirements = normalizedStatRequirements(
+    value.statRequirements,
+    `Task ${taskId} survivorRequirements.statRequirements`,
+  );
+
   return {
     min,
     max,
-    statRequirements: normalizedStatRequirements(
-      value.statRequirements,
-      `Task ${taskId} survivorRequirements.statRequirements`,
-    ),
+    ...(Object.keys(statRequirements).length > 0
+      ? {statRequirements}
+      : {}),
   };
 }
 
