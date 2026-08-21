@@ -6,6 +6,7 @@ const {
   normalizedSurvivor,
 } = require("./bunker_status");
 const {resetTaskTreeStateForTesting} = require("./development_state");
+const {VALID_DUPLICATE_IDS} = require("./survivor_progression");
 
 // DEVELOPMENT-ONLY SERVER SURFACE.
 //
@@ -16,7 +17,7 @@ const {resetTaskTreeStateForTesting} = require("./development_state");
 const REGION = "europe-west1";
 const DEVELOPMENT_TOOLS_REQUIRE_ADMIN =
   process.env.DITTO_DEVELOPMENT_TOOLS_REQUIRE_ADMIN === "true";
-const VALID_DUPLICATE_IDS = new Set(["01", "02", "03", "04"]);
+const VALID_DUPLICATE_ID_SET = new Set(VALID_DUPLICATE_IDS);
 const ITEM_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const MAX_INVENTORY_QUANTITY = 1000000000;
 
@@ -59,7 +60,7 @@ exports.addSurvivorForTesting = onCall(
     const duplicateId = typeof request.data?.duplicateId === "string"
       ? request.data.duplicateId.trim()
       : "";
-    if (!VALID_DUPLICATE_IDS.has(duplicateId)) {
+    if (!VALID_DUPLICATE_ID_SET.has(duplicateId)) {
       throw new HttpsError("invalid-argument", "Invalid Duplicate ID.");
     }
 
