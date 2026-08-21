@@ -25,6 +25,7 @@ class HubScrollableScene extends StatefulWidget {
     super.key,
     required this.characters,
     this.onCharacterTap,
+    this.backgroundState,
     this.configuration = defaultHubSceneConfiguration,
   });
 
@@ -32,6 +33,10 @@ class HubScrollableScene extends StatefulWidget {
   /// empty but retain their configured position for future companions.
   final Map<HubCharacterSlot, HubSceneCharacter> characters;
   final ValueChanged<HubCharacterSlot>? onCharacterTap;
+
+  /// Runtime visual state for the background tiles. When omitted, the static
+  /// state from [configuration] is used.
+  final HubBackgroundState? backgroundState;
   final HubSceneConfiguration configuration;
 
   @override
@@ -78,8 +83,9 @@ class _HubScrollableSceneState extends State<HubScrollableScene> {
 
   @override
   Widget build(BuildContext context) {
-    final backgroundSegments =
-        resolveHubBackgroundSegments(configuration.backgroundState);
+    final backgroundSegments = resolveHubBackgroundSegments(
+      widget.backgroundState ?? configuration.backgroundState,
+    );
 
     return ClipRect(
       child: LayoutBuilder(
