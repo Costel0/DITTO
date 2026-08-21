@@ -5,6 +5,7 @@ const {
   taskDefinitionFromSnapshot,
 } = require("../job_tasks");
 const {
+  VALID_DUPLICATE_IDS,
   applyStatExperienceDelta,
   effectiveSurvivorStat,
   normalizedStatMods,
@@ -16,6 +17,22 @@ function snapshotWithTasks(tasks) {
     data: () => ({tasks}),
   };
 }
+
+test("Duplicate 05 is part of the server catalog with placeholder zero stats", () => {
+  assert.equal(VALID_DUPLICATE_IDS.includes("05"), true);
+  const survivor = {duplicateId: "05", statMods: {}};
+  for (const stat of [
+    "strength",
+    "dexterity",
+    "constitution",
+    "stealth",
+    "care",
+    "cunning",
+    "charm",
+  ]) {
+    assert.equal(effectiveSurvivorStat(survivor, stat), 0);
+  }
+});
 
 test("effective stats combine Duplicate base stats and Survivor statMods", () => {
   const survivor = {

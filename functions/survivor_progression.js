@@ -49,7 +49,18 @@ const DUPLICATE_BASE_STATS = Object.freeze({
     cunning: 0,
     charm: 0,
   }),
+  "05": Object.freeze({
+    strength: 0,
+    dexterity: 0,
+    constitution: 0,
+    stealth: 0,
+    care: 0,
+    cunning: 0,
+    charm: 0,
+  }),
 });
+
+const VALID_DUPLICATE_IDS = Object.freeze(Object.keys(DUPLICATE_BASE_STATS));
 
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -195,6 +206,7 @@ function applyStatExperienceDelta(survivor, delta) {
 module.exports = {
   DUPLICATE_BASE_STATS,
   SURVIVOR_STAT_KEYS,
+  VALID_DUPLICATE_IDS,
   applyStatExperienceDelta,
   effectiveSurvivorStat,
   normalizedStatExperience,

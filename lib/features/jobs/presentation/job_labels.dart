@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/localization/l10n.dart';
 import '../../survivors/domain/survivor.dart';
+import '../../survivors/presentation/duplicate_presentation.dart';
 import '../domain/job_area.dart';
 
 String jobAreaTitle(BuildContext context, JobArea area) {
@@ -83,18 +84,5 @@ String jobActivityLabel(BuildContext context, String activity) {
   return jobTaskTitle(context, activity);
 }
 
-String survivorDisplayName(BuildContext context, Survivor survivor) {
-  final l10n = context.l10n;
-  switch (survivor.duplicateId) {
-    case '01':
-      return l10n.characterName1;
-    case '02':
-      return l10n.characterName2;
-    case '03':
-      return l10n.characterName3;
-    case '04':
-      return l10n.characterName4;
-    default:
-      return survivor.duplicateId;
-  }
-}
+String survivorDisplayName(BuildContext context, Survivor survivor) =>
+    duplicateDisplayName(context, survivor.duplicateId);

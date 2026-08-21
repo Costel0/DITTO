@@ -4,6 +4,7 @@ import '../../../../core/localization/l10n.dart';
 import '../../../items/presentation/widgets/equipped_item_list.dart';
 import '../../../survivors/domain/duplicate_catalog.dart';
 import '../../../survivors/domain/survivor.dart';
+import '../../../survivors/presentation/duplicate_presentation.dart';
 import '../../../survivors/presentation/widgets/survivor_portrait_artwork.dart';
 
 class HubCharacterInfo extends StatelessWidget {
@@ -17,38 +18,6 @@ class HubCharacterInfo extends StatelessWidget {
   final Survivor? survivor;
   final VoidCallback? onPrevious;
   final VoidCallback? onNext;
-
-  String _name(BuildContext context, String duplicateId) {
-    final l10n = context.l10n;
-    switch (duplicateId) {
-      case '01':
-        return l10n.characterName1;
-      case '02':
-        return l10n.characterName2;
-      case '03':
-        return l10n.characterName3;
-      case '04':
-        return l10n.characterName4;
-      default:
-        return duplicateId;
-    }
-  }
-
-  String _description(BuildContext context, String duplicateId) {
-    final l10n = context.l10n;
-    switch (duplicateId) {
-      case '01':
-        return l10n.characterDescription1;
-      case '02':
-        return l10n.characterDescription2;
-      case '03':
-        return l10n.characterDescription3;
-      case '04':
-        return l10n.characterDescription4;
-      default:
-        return '';
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -125,7 +94,10 @@ class HubCharacterInfo extends StatelessWidget {
                                   children: [
                                     Flexible(
                                       child: Text(
-                                        _name(context, survivor.duplicateId),
+                                        duplicateDisplayName(
+                                          context,
+                                          survivor.duplicateId,
+                                        ),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: Theme.of(context)
@@ -176,7 +148,7 @@ class HubCharacterInfo extends StatelessWidget {
                     border: Border.all(color: const Color(0xFF4F4638)),
                   ),
                   child: Text(
-                    _description(context, survivor.duplicateId),
+                    duplicateDescription(context, survivor.duplicateId),
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: const Color(0xFFA9A08F),
                           height: 1.5,

@@ -54,7 +54,39 @@ const List<Duplicate> predefinedDuplicates = <Duplicate>[
       charm: 0,
     ),
   ),
+  Duplicate(
+    id: '05',
+    baseStats: SurvivorStats(
+      strength: 0,
+      dexterity: 0,
+      constitution: 0,
+      stealth: 0,
+      care: 0,
+      cunning: 0,
+      charm: 0,
+    ),
+  ),
 ];
+
+/// Duplicates that a brand-new user may choose during bunker creation.
+///
+/// Later Duplicates remain in [predefinedDuplicates] so they can be acquired by
+/// gameplay or development tools without automatically becoming starter choices.
+const Set<String> initialSelectableDuplicateIds = <String>{
+  '01',
+  '02',
+  '03',
+  '04',
+};
+
+final List<Duplicate> initialSelectableDuplicates = List<Duplicate>.unmodifiable(
+  predefinedDuplicates.where(
+    (duplicate) => initialSelectableDuplicateIds.contains(duplicate.id),
+  ),
+);
+
+bool isInitialSelectableDuplicateId(String id) =>
+    initialSelectableDuplicateIds.contains(id);
 
 Duplicate? duplicateById(String id) {
   for (final duplicate in predefinedDuplicates) {

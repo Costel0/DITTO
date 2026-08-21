@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../app/navigation/app_routes.dart';
 import '../../../../core/localization/l10n.dart';
 import '../../../survivors/domain/duplicate_catalog.dart';
+import '../../../survivors/presentation/duplicate_presentation.dart';
 import '../../../survivors/presentation/widgets/survivor_portrait_artwork.dart';
 import '../../application/session_controller.dart';
 import '../widgets/auth_card_scaffold.dart';
@@ -21,13 +22,6 @@ class UsernameSetupScreen extends StatefulWidget {
 }
 
 class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
-  static const _characterIcons = <IconData>[
-    Icons.person_rounded,
-    Icons.face_rounded,
-    Icons.accessibility_new_rounded,
-    Icons.account_circle_rounded,
-  ];
-
   final _usernameController = TextEditingController();
   late final PageController _pageController;
 
@@ -45,11 +39,11 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
     }
 
     final existingDuplicateId = widget.sessionController.initialDuplicateId;
-    final existingIndex = predefinedDuplicates.indexWhere(
+    final existingIndex = initialSelectableDuplicates.indexWhere(
       (duplicate) => duplicate.id == existingDuplicateId,
     );
     _selectedDuplicateIndex = existingIndex >= 0 ? existingIndex : 0;
-    _selectedDuplicateId = predefinedDuplicates[_selectedDuplicateIndex].id;
+    _selectedDuplicateId = initialSelectableDuplicates[_selectedDuplicateIndex].id;
     _pageController = PageController(initialPage: _selectedDuplicateIndex);
   }
 
@@ -104,57 +98,20 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
   void _selectDuplicate(int index) {
     setState(() {
       _selectedDuplicateIndex = index;
-      _selectedDuplicateId = predefinedDuplicates[index].id;
+      _selectedDuplicateId = initialSelectableDuplicates[index].id;
       _errorMessage = null;
     });
   }
 
   void _changeDuplicate(int delta) {
     final target = _selectedDuplicateIndex + delta;
-    if (target < 0 || target >= predefinedDuplicates.length) return;
+    if (target < 0 || target >= initialSelectableDuplicates.length) return;
 
     _pageController.animateToPage(
       target,
       duration: const Duration(milliseconds: 260),
       curve: Curves.easeOutCubic,
     );
-  }
-
-  String _characterName(int index) {
-    final l10n = context.l10n;
-    switch (index) {
-      case 0:
-        return l10n.characterName1;
-      case 1:
-        return l10n.characterName2;
-      case 2:
-        return l10n.characterName3;
-      case 3:
-        return l10n.characterName4;
-      default:
-        return '';
-    }
-  }
-
-  String _characterDescription(int index) {
-    final l10n = context.l10n;
-    switch (index) {
-      case 0:
-        return l10n.characterDescription1;
-      case 1:
-        return l10n.characterDescription2;
-      case 2:
-        return l10n.characterDescription3;
-      case 3:
-        return l10n.characterDescription4;
-      default:
-        return '';
-    }
-  }
-
-  IconData _placeholderIcon(int index) {
-    if (index < _characterIcons.length) return _characterIcons[index];
-    return Icons.person_rounded;
   }
 
   @override
@@ -207,19 +164,19 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
             height: 620,
             child: PageView.builder(
               controller: _pageController,
-              itemCount: predefinedDuplicates.length,
+              itemCount: initialSelectableDuplicates.length,
               onPageChanged: _selectDuplicate,
               itemBuilder: (context, index) {
-                final duplicate = predefinedDuplicates[index];
+                final duplicate = initialSelectableDuplicates[index];
                 final stats = duplicate.baseStats;
                 return Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 2),
                   child: _CharacterSheet(
                     imageAsset: duplicate.dormantAssetPath,
                     fallbackImageAsset: duplicate.idleAssetPath,
-                    placeholderIcon: _placeholderIcon(index),
-                    name: _characterName(index),
-                    description: _characterDescription(index),
+                    placeholderIcon: duplicatePlaceholderIcon(duplicate.id),
+                    name: duplicateDisplayName(context, duplicate.id),
+                    description: duplicateDescription(context, duplicate.id),
                     stats: [
                       _CharacterStat(
                         label: l10n.statStrength,
@@ -268,29 +225,32 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
               Expanded(
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(predefinedDuplicates.length, (index) {
-                    final selected = index == _selectedDuplicateIndex;
-                    return AnimatedContainer(
-                      duration: const Duration(milliseconds: 180),
-                      width: selected ? 20 : 7,
-                      height: 7,
-                      margin: const EdgeInsets.symmetric(horizontal: 3),
-                      decoration: BoxDecoration(
-                        color: selected
-                            ? theme.colorScheme.primary
-                            : const Color(0xFF5A5245),
-                        borderRadius: BorderRadius.circular(99),
-                      ),
-                    );
-                  }),
+                  children: List.generate(
+                    initialSelectableDuplicates.length,
+                    (index) {
+                      final selected = index == _selectedDuplicateIndex;
+                      return AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        width: selected ? 20 : 7,
+                        height: 7,
+                        margin: const EdgeInsets.symmetric(horizontal: 3),
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? theme.colorScheme.primary
+                              : const Color(0xFF5A5245),
+                          borderRadius: BorderRadius.circular(99),
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ),
               IconButton.outlined(
                 tooltip: l10n.nextCharacter,
-                onPressed:
-                    _selectedDuplicateIndex == predefinedDuplicates.length - 1
-                        ? null
-                        : () => _changeDuplicate(1),
+                onPressed: _selectedDuplicateIndex ==
+                        initialSelectableDuplicates.length - 1
+                    ? null
+                    : () => _changeDuplicate(1),
                 icon: const Icon(Icons.chevron_right_rounded),
               ),
             ],
