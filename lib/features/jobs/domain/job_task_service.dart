@@ -3,6 +3,7 @@ class JobTaskStartInfo {
     required this.taskId,
     required this.minSurvivors,
     required this.maxSurvivors,
+    required this.statRequirements,
     required this.costInventory,
     required this.requiredTaskIds,
     required this.storable,
@@ -11,6 +12,11 @@ class JobTaskStartInfo {
   final String taskId;
   final int minSurvivors;
   final int maxSurvivors;
+
+  /// Survivor stat -> exclusive minimum required by the task.
+  /// Example: {'care': 3} means the selected Survivor must have care > 3.
+  final Map<String, int> statRequirements;
+
   final Map<String, int> costInventory;
   final List<String> requiredTaskIds;
   final bool storable;
@@ -19,6 +25,7 @@ class JobTaskStartInfo {
     final taskId = map['taskId'];
     final minSurvivors = map['minSurvivors'];
     final maxSurvivors = map['maxSurvivors'];
+    final statRequirementsRaw = map['statRequirements'];
     final costRaw = map['costInventory'];
     final requiredRaw = map['requiredTaskIds'];
     final storable = map['storable'];
@@ -33,6 +40,9 @@ class JobTaskStartInfo {
         maxSurvivors.toInt() < minSurvivors.toInt()) {
       throw const FormatException('Task start info has an invalid maximum.');
     }
+    if (statRequirementsRaw != null && statRequirementsRaw is! Map) {
+      throw const FormatException('Task stat requirements must be a map.');
+    }
     if (costRaw is! Map) {
       throw const FormatException('Task start info cost must be a map.');
     }
@@ -41,6 +51,27 @@ class JobTaskStartInfo {
     }
     if (storable is! bool) {
       throw const FormatException('Task storable flag must be boolean.');
+    }
+
+    final statRequirements = <String, int>{};
+    if (statRequirementsRaw is Map) {
+      for (final entry in statRequirementsRaw.entries) {
+        final requirement = entry.value;
+        if (entry.key is! String || requirement is! Map) {
+          throw const FormatException(
+            'Task stat requirements contain an invalid entry.',
+          );
+        }
+        final greaterThan = requirement['greaterThan'];
+        if (greaterThan is! num ||
+            !greaterThan.isFinite ||
+            greaterThan != greaterThan.toInt()) {
+          throw const FormatException(
+            'Task stat requirement threshold must be an integer.',
+          );
+        }
+        statRequirements[entry.key as String] = greaterThan.toInt();
+      }
     }
 
     final costInventory = <String, int>{};
@@ -55,6 +86,7 @@ class JobTaskStartInfo {
       taskId: taskId.trim(),
       minSurvivors: minSurvivors.toInt(),
       maxSurvivors: maxSurvivors.toInt(),
+      statRequirements: Map<String, int>.unmodifiable(statRequirements),
       costInventory: Map<String, int>.unmodifiable(costInventory),
       requiredTaskIds: List<String>.unmodifiable(requiredRaw.cast<String>()),
       storable: storable,
