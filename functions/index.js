@@ -17,13 +17,14 @@ const {
   taskDefinitionFromSnapshot,
 } = require("./job_tasks");
 const {
+  VALID_DUPLICATE_IDS,
   survivorMeetsStatRequirements,
 } = require("./survivor_progression");
 
 initializeApp();
 
 const REGION = "europe-west1";
-const VALID_DUPLICATE_IDS = new Set(["01", "02", "03", "04"]);
+const VALID_DUPLICATE_ID_SET = new Set(VALID_DUPLICATE_IDS);
 const CALLABLE_OPTIONS = {
   region: REGION,
   minInstances: 0,
@@ -261,7 +262,7 @@ exports.initializeBunker = onCall(
         "Username must contain between 3 and 24 characters.",
       );
     }
-    if (!VALID_DUPLICATE_IDS.has(duplicateId)) {
+    if (!VALID_DUPLICATE_ID_SET.has(duplicateId)) {
       throw new HttpsError("invalid-argument", "Invalid Duplicate ID.");
     }
 
