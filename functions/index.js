@@ -24,7 +24,9 @@ const {
 initializeApp();
 
 const REGION = "europe-west1";
-const VALID_DUPLICATE_ID_SET = new Set(VALID_DUPLICATE_IDS);
+// Only the first four catalog entries are valid starter choices. Later
+// Duplicates remain valid elsewhere for acquisition/development flows.
+const INITIAL_DUPLICATE_ID_SET = new Set(VALID_DUPLICATE_IDS.slice(0, 4));
 const CALLABLE_OPTIONS = {
   region: REGION,
   minInstances: 0,
@@ -262,8 +264,11 @@ exports.initializeBunker = onCall(
         "Username must contain between 3 and 24 characters.",
       );
     }
-    if (!VALID_DUPLICATE_ID_SET.has(duplicateId)) {
-      throw new HttpsError("invalid-argument", "Invalid Duplicate ID.");
+    if (!INITIAL_DUPLICATE_ID_SET.has(duplicateId)) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Invalid initial Duplicate ID.",
+      );
     }
 
     const uid = request.auth.uid;
