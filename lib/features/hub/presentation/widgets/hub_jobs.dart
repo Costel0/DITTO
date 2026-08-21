@@ -6,6 +6,7 @@ import '../../../../core/localization/l10n.dart';
 import '../../../bunker/domain/bunker_state.dart';
 import '../../../jobs/domain/job_area.dart';
 import '../../../jobs/presentation/job_labels.dart';
+import '../../../survivors/domain/survivor.dart';
 import '../../../survivors/presentation/widgets/survivor_profile_photo.dart';
 
 class HubJobs extends StatelessWidget {
@@ -469,7 +470,7 @@ class _BusySurvivorProfiles extends StatelessWidget {
 class _BusySurvivorProfile extends StatelessWidget {
   const _BusySurvivorProfile({required this.survivor});
 
-  final dynamic survivor;
+  final Survivor? survivor;
 
   @override
   Widget build(BuildContext context) {
