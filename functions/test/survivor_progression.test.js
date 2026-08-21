@@ -7,6 +7,7 @@ const {
 const {
   applyStatExperienceDelta,
   effectiveSurvivorStat,
+  normalizedStatMods,
   survivorMeetsStatRequirements,
 } = require("../survivor_progression");
 
@@ -24,6 +25,21 @@ test("effective stats combine Duplicate base stats and Survivor statMods", () =>
 
   assert.equal(effectiveSurvivorStat(survivor, "care"), 6);
   assert.equal(effectiveSurvivorStat(survivor, "strength"), 3);
+});
+
+test("legacy stat mod aliases are normalized to current stat names", () => {
+  assert.deepEqual(
+    normalizedStatMods({agility: 2, endurance: 3, scavenging: 4}),
+    {
+      strength: 0,
+      dexterity: 2,
+      constitution: 3,
+      stealth: 4,
+      care: 0,
+      cunning: 0,
+      charm: 0,
+    },
+  );
 });
 
 test("stat requirements use an exclusive greater-than comparison", () => {
