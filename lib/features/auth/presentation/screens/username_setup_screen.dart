@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../app/navigation/app_routes.dart';
 import '../../../../core/localization/l10n.dart';
 import '../../../survivors/domain/duplicate_catalog.dart';
+import '../../../survivors/presentation/duplicate_presentation.dart';
 import '../../../survivors/presentation/widgets/survivor_portrait_artwork.dart';
 import '../../application/session_controller.dart';
 import '../widgets/auth_card_scaffold.dart';
@@ -21,13 +22,6 @@ class UsernameSetupScreen extends StatefulWidget {
 }
 
 class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
-  static const _characterIcons = <IconData>[
-    Icons.person_rounded,
-    Icons.face_rounded,
-    Icons.accessibility_new_rounded,
-    Icons.account_circle_rounded,
-  ];
-
   final _usernameController = TextEditingController();
   late final PageController _pageController;
 
@@ -120,43 +114,6 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
     );
   }
 
-  String _characterName(int index) {
-    final l10n = context.l10n;
-    switch (index) {
-      case 0:
-        return l10n.characterName1;
-      case 1:
-        return l10n.characterName2;
-      case 2:
-        return l10n.characterName3;
-      case 3:
-        return l10n.characterName4;
-      default:
-        return '';
-    }
-  }
-
-  String _characterDescription(int index) {
-    final l10n = context.l10n;
-    switch (index) {
-      case 0:
-        return l10n.characterDescription1;
-      case 1:
-        return l10n.characterDescription2;
-      case 2:
-        return l10n.characterDescription3;
-      case 3:
-        return l10n.characterDescription4;
-      default:
-        return '';
-    }
-  }
-
-  IconData _placeholderIcon(int index) {
-    if (index < _characterIcons.length) return _characterIcons[index];
-    return Icons.person_rounded;
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -217,9 +174,9 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
                   child: _CharacterSheet(
                     imageAsset: duplicate.dormantAssetPath,
                     fallbackImageAsset: duplicate.idleAssetPath,
-                    placeholderIcon: _placeholderIcon(index),
-                    name: _characterName(index),
-                    description: _characterDescription(index),
+                    placeholderIcon: duplicatePlaceholderIcon(duplicate.id),
+                    name: duplicateDisplayName(context, duplicate.id),
+                    description: duplicateDescription(context, duplicate.id),
                     stats: [
                       _CharacterStat(
                         label: l10n.statStrength,
