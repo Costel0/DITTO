@@ -23,7 +23,7 @@ const DUPLICATE_BASE_STATS = Object.freeze({
     charm: 4,
   }),
   "02": Object.freeze({
-    strength: 4,
+    strength: 5,
     dexterity: 2,
     constitution: 5,
     stealth: 1,
@@ -32,13 +32,13 @@ const DUPLICATE_BASE_STATS = Object.freeze({
     charm: 3,
   }),
   "03": Object.freeze({
-    strength: 0,
-    dexterity: 0,
-    constitution: 0,
-    stealth: 0,
-    care: 0,
-    cunning: 0,
-    charm: 0,
+    strength: 3,
+    dexterity: 5,
+    constitution: 2,
+    stealth: 3,
+    care: 4,
+    cunning: 3,
+    charm: 4,
   }),
   "04": Object.freeze({
     strength: 0,
@@ -118,9 +118,7 @@ function normalizedStatRequirements(value, label) {
 
     const greaterThan = requirement.greaterThan;
     if (!Number.isInteger(greaterThan) || greaterThan < 0 || greaterThan > 9) {
-      throw new Error(
-        `${label}.${stat}.greaterThan must be an integer from 0 to 9.`,
-      );
+      throw new Error(`${label}.${stat}.greaterThan must be an integer from 0 to 9.`);
     }
     normalized[stat] = {greaterThan};
   }
@@ -137,7 +135,7 @@ function normalizedStatExperienceDelta(value, label) {
   for (const [statRaw, amount] of Object.entries(value)) {
     const stat = statRaw.trim();
     if (!SURVIVOR_STAT_KEY_SET.has(stat)) {
-      throw new Error(`${label} contains an unknown Survivor stat: ${statRaw}.`);
+      throw new Error(`${label} contains an unknown Survivor stat: ${stat}.`);
     }
     if (!Number.isInteger(amount) || amount < 0) {
       throw new Error(`${label}.${stat} must be a non-negative integer.`);
@@ -148,9 +146,8 @@ function normalizedStatExperienceDelta(value, label) {
 }
 
 function baseStatValue(duplicateId, stat) {
-  if (!SURVIVOR_STAT_KEY_SET.has(stat)) return 0;
-  const duplicateStats = DUPLICATE_BASE_STATS[duplicateId];
-  return Number.isInteger(duplicateStats?.[stat]) ? duplicateStats[stat] : 0;
+  const duplicate = DUPLICATE_BASE_STATS[duplicateId];
+  return Number.isInteger(duplicate?.[stat]) ? duplicate[stat] : 0;
 }
 
 function effectiveSurvivorStat(survivor, stat) {
@@ -158,13 +155,16 @@ function effectiveSurvivorStat(survivor, stat) {
   const duplicateId = typeof survivor?.duplicateId === "string"
     ? survivor.duplicateId
     : "";
-  const mods = normalizedStatMods(survivor?.statMods);
-  return baseStatValue(duplicateId, stat) + mods[stat];
+  const statMods = normalizedStatMods(survivor?.statMods);
+  return baseStatValue(duplicateId, stat) + statMods[stat];
 }
 
-function survivorMeetsStatRequirements(survivor, statRequirements) {
-  const requirements = isPlainObject(statRequirements) ? statRequirements : {};
-  return Object.entries(requirements).every(([stat, requirement]) =>
+function survivorMeetsStatRequirements(survivor, requirements) {
+  const normalized = normalizedStatRequirements(
+    requirements,
+    "Survivor stat requirements",
+  );
+  return Object.entries(normalized).every(([stat, requirement]) =>
     effectiveSurvivorStat(survivor, stat) > requirement.greaterThan,
   );
 }
