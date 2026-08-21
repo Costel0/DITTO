@@ -16,6 +16,9 @@ const {
   selectTaskResult,
   taskDefinitionFromSnapshot,
 } = require("./job_tasks");
+const {
+  survivorMeetsStatRequirements,
+} = require("./survivor_progression");
 
 initializeApp();
 
@@ -427,6 +430,7 @@ exports.getJobTaskStartInfo = onCall(
       taskId: task.id,
       minSurvivors: task.survivorRequirements.min,
       maxSurvivors: task.survivorRequirements.max,
+      statRequirements: task.survivorRequirements.statRequirements,
       costInventory: task.cost.inventory,
       requiredTaskIds: task.requiredTaskIds,
       storable: task.storable,
@@ -536,6 +540,15 @@ exports.startJobTask = onCall(
             `Survivor ${survivorId} must recover before starting a task.`,
           );
         }
+        if (!survivorMeetsStatRequirements(
+          survivor,
+          task.survivorRequirements.statRequirements,
+        )) {
+          throw new HttpsError(
+            "failed-precondition",
+            `Survivor ${survivorId} does not meet the task stat requirements.`,
+          );
+        }
       }
 
       let workingBunker;
@@ -549,7 +562,13 @@ exports.startJobTask = onCall(
       }
 
       const now = truncateToSecond(new Date()) || new Date();
-      const endsAt = new Date(now.getTime() + task.durationSeconds * 1000);
+      const effectiveDurationSeconds = Math.max(
+        1,
+        Math.ceil(task.durationSeconds / survivorIds.length),
+      );
+      const endsAt = new Date(
+        now.getTime() + effectiveDurationSeconds * 1000,
+      );
       const busySurvivors = normalizedBusySurvivors(
         bunker.busySurvivors,
         now,
@@ -583,6 +602,7 @@ exports.startJobTask = onCall(
         started: true,
         executionId,
         survivorIds,
+        durationSeconds: effectiveDurationSeconds,
         revision: fixed.revision,
       };
     });
