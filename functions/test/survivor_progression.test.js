@@ -5,7 +5,7 @@ const {
   taskDefinitionFromSnapshot,
 } = require("../job_tasks");
 const {
-  VALID_DUPLICATE_IDS,
+  DUPLICATE_BASE_STATS,
   applyStatExperienceDelta,
   effectiveSurvivorStat,
   normalizedStatMods,
@@ -18,30 +18,26 @@ function snapshotWithTasks(tasks) {
   };
 }
 
-test("Duplicate 05 is part of the server catalog with placeholder zero stats", () => {
-  assert.equal(VALID_DUPLICATE_IDS.includes("05"), true);
-  const survivor = {duplicateId: "05", statMods: {}};
-  for (const stat of [
-    "strength",
-    "dexterity",
-    "constitution",
-    "stealth",
-    "care",
-    "cunning",
-    "charm",
-  ]) {
-    assert.equal(effectiveSurvivorStat(survivor, stat), 0);
-  }
-});
+const testDuplicateId = Object.keys(DUPLICATE_BASE_STATS)[0];
+
+function baseStat(stat) {
+  return DUPLICATE_BASE_STATS[testDuplicateId][stat];
+}
 
 test("effective stats combine Duplicate base stats and Survivor statMods", () => {
   const survivor = {
-    duplicateId: "01",
+    duplicateId: testDuplicateId,
     statMods: {care: 2, strength: 1},
   };
 
-  assert.equal(effectiveSurvivorStat(survivor, "care"), 6);
-  assert.equal(effectiveSurvivorStat(survivor, "strength"), 3);
+  assert.equal(
+    effectiveSurvivorStat(survivor, "care"),
+    baseStat("care") + 2,
+  );
+  assert.equal(
+    effectiveSurvivorStat(survivor, "strength"),
+    baseStat("strength") + 1,
+  );
 });
 
 test("legacy stat mod aliases are normalized to current stat names", () => {
@@ -60,50 +56,55 @@ test("legacy stat mod aliases are normalized to current stat names", () => {
 });
 
 test("stat requirements use an exclusive greater-than comparison", () => {
+  const targetEffectiveCare = 5;
   const survivor = {
-    duplicateId: "01",
-    statMods: {},
+    duplicateId: testDuplicateId,
+    statMods: {
+      care: targetEffectiveCare - baseStat("care"),
+    },
   };
 
   assert.equal(
-    survivorMeetsStatRequirements(survivor, {care: {greaterThan: 3}}),
+    survivorMeetsStatRequirements(survivor, {care: {greaterThan: 4}}),
     true,
   );
   assert.equal(
-    survivorMeetsStatRequirements(survivor, {care: {greaterThan: 4}}),
+    survivorMeetsStatRequirements(survivor, {care: {greaterThan: 5}}),
     false,
   );
 });
 
 test("experience reaching 100 increases the stat and keeps remainder", () => {
+  const initialCareMod = 4 - baseStat("care");
   const progressed = applyStatExperienceDelta(
     {
       id: "s1",
-      duplicateId: "01",
-      statMods: {},
+      duplicateId: testDuplicateId,
+      statMods: {care: initialCareMod},
       statExperience: {care: 98},
     },
     {care: 5, strength: 1},
   );
 
-  assert.equal(progressed.statMods.care, 1);
+  assert.equal(progressed.statMods.care, initialCareMod + 1);
   assert.equal(progressed.statExperience.care, 3);
   assert.equal(progressed.statExperience.strength, 1);
   assert.equal(effectiveSurvivorStat(progressed, "care"), 5);
 });
 
 test("experience cannot raise an effective stat above 10", () => {
+  const maxedCareMod = 10 - baseStat("care");
   const progressed = applyStatExperienceDelta(
     {
       id: "s1",
-      duplicateId: "01",
-      statMods: {care: 6},
+      duplicateId: testDuplicateId,
+      statMods: {care: maxedCareMod},
       statExperience: {care: 95},
     },
     {care: 20},
   );
 
-  assert.equal(progressed.statMods.care, 6);
+  assert.equal(progressed.statMods.care, maxedCareMod);
   assert.equal(effectiveSurvivorStat(progressed, "care"), 10);
   assert.equal(progressed.statExperience.care, 100);
 });
@@ -111,9 +112,9 @@ test("experience cannot raise an effective stat above 10", () => {
 test("task definitions apply stat requirements and XP to every participant", () => {
   const task = taskDefinitionFromSnapshot(
     snapshotWithTasks({
-      upgrade_garden: {
-        activity: "upgrade_garden",
-        location: "garden",
+      test_task: {
+        activity: "test_task",
+        location: "test_area",
         durationSeconds: 300,
         storable: true,
         survivorRequirements: {
@@ -141,7 +142,7 @@ test("task definitions apply stat requirements and XP to every participant", () 
         },
       },
     }),
-    "upgrade_garden",
+    "test_task",
   );
 
   assert.deepEqual(task.survivorRequirements.statRequirements, {
@@ -151,8 +152,18 @@ test("task definitions apply stat requirements and XP to every participant", () 
   const completion = applyTaskCompletionEffects(
     {
       survivors: [
-        {id: "s1", duplicateId: "01", energy: 50, statMods: {}},
-        {id: "s2", duplicateId: "01", energy: 50, statMods: {}},
+        {
+          id: "s1",
+          duplicateId: testDuplicateId,
+          energy: 50,
+          statMods: {},
+        },
+        {
+          id: "s2",
+          duplicateId: testDuplicateId,
+          energy: 50,
+          statMods: {},
+        },
       ],
       inventory: {},
     },
