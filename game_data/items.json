@@ -1,11 +1,15 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": 2,
+  "catalogVersion": 3,
   "items": [
     {
       "id": "scrap_metal",
-      "type": ["resource"],
-      "subtype": ["metal"],
+      "type": [
+        "resource"
+      ],
+      "subtype": [
+        "metal"
+      ],
       "value": 2,
       "stackable": true,
       "name": {
@@ -22,8 +26,12 @@
     },
     {
       "id": "field_ration",
-      "type": ["food"],
-      "subtype": ["ration"],
+      "type": [
+        "food"
+      ],
+      "subtype": [
+        "ration"
+      ],
       "value": 12,
       "stackable": true,
       "name": {
@@ -40,8 +48,14 @@
     },
     {
       "id": "wood_plank",
-      "type": ["weapon", "resource"],
-      "subtype": ["melee", "wood"],
+      "type": [
+        "weapon",
+        "resource"
+      ],
+      "subtype": [
+        "melee",
+        "wood"
+      ],
       "value": 4,
       "stackable": true,
       "name": {
@@ -61,8 +75,12 @@
     },
     {
       "id": "work_helmet",
-      "type": ["equipment"],
-      "subtype": ["head"],
+      "type": [
+        "equipment"
+      ],
+      "subtype": [
+        "head"
+      ],
       "value": 28,
       "stackable": false,
       "name": {
@@ -75,6 +93,50 @@
       },
       "stats": {
         "armor": 2
+      }
+    },
+    {
+      "id": "electronics",
+      "type": [
+        "resource"
+      ],
+      "subtype": [
+        "electronics"
+      ],
+      "value": 1,
+      "stackable": true,
+      "name": {
+        "en": "Electronics",
+        "es": "Electrónica"
+      },
+      "description": {
+        "en": "Recovered electronic components useful for repairs and construction.",
+        "es": "Componentes electrónicos recuperados útiles para reparaciones y construcción."
+      },
+      "stats": {
+        "craftingValue": 1
+      }
+    },
+    {
+      "id": "trash",
+      "type": [
+        "resource"
+      ],
+      "subtype": [
+        "waste"
+      ],
+      "value": 0,
+      "stackable": true,
+      "name": {
+        "en": "Trash",
+        "es": "Basura"
+      },
+      "description": {
+        "en": "Mixed discarded material that can still be repurposed for crude construction.",
+        "es": "Desechos variados que todavía pueden reaprovecharse en construcciones rudimentarias."
+      },
+      "stats": {
+        "craftingValue": 1
       }
     }
   ]
