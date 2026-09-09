@@ -821,6 +821,35 @@ class _SurvivorTaskDialogState extends State<_SurvivorTaskDialog> {
     return options;
   }
 
+  String _durationLabel(BuildContext context) {
+    final totalSeconds = _estimatedDurationSeconds;
+    if (totalSeconds <= 0) return '—';
+    if (totalSeconds < 60) {
+      return context.l10n.expeditionDurationSeconds(totalSeconds);
+    }
+    final minutes = totalSeconds ~/ 60;
+    final seconds = totalSeconds % 60;
+    if (seconds == 0) {
+      return context.l10n.expeditionDurationMinutes(minutes);
+    }
+    return '${context.l10n.expeditionDurationMinutes(minutes)} '
+        '${context.l10n.expeditionDurationSeconds(seconds)}';
+  }
+
+  String _inventorySummary(
+    BuildContext context,
+    Map<String, Item> catalog,
+    Map<String, int> inventory,
+  ) {
+    if (inventory.isEmpty) return '—';
+    final languageCode = Localizations.localeOf(context).languageCode;
+    return inventory.entries.map((entry) {
+      final itemName =
+          catalog[entry.key]?.nameForLanguage(languageCode) ?? entry.key;
+      return '${entry.value} × $itemName';
+    }).join(' · ');
+  }
+
   void _toggle(Survivor survivor) {
     if (!_survivorMeetsStatRequirements(survivor, widget.statRequirements)) {
       return;
@@ -966,7 +995,7 @@ class _SurvivorTaskDialogState extends State<_SurvivorTaskDialog> {
                                     fontWeight: FontWeight.w700,
                                   ),
                                 ),
-                                if (widget.energyCostPerSurvivor > 0) ...[
+                                if (_scaledEnergyCost > 0) ...[
                                   const SizedBox(height: 5),
                                   Row(
                                     mainAxisSize: MainAxisSize.min,
@@ -980,7 +1009,7 @@ class _SurvivorTaskDialogState extends State<_SurvivorTaskDialog> {
                                       Flexible(
                                         child: Text(
                                           '${context.l10n.jobEnergyCostLabel}: '
-                                          '${widget.energyCostPerSurvivor} '
+                                          '$_scaledEnergyCost '
                                           '${context.l10n.jobPerSurvivorLabel}',
                                           style: theme.textTheme.labelSmall
                                               ?.copyWith(
@@ -1009,6 +1038,85 @@ class _SurvivorTaskDialogState extends State<_SurvivorTaskDialog> {
                         shrinkWrap: true,
                         padding: const EdgeInsets.all(14),
                         children: [
+                          if (_isBatch) ...[
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF211F19),
+                                borderRadius: BorderRadius.circular(7),
+                                border: Border.all(
+                                  color: const Color(0xFF4A4134),
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Text(
+                                    context.l10n.jobBatchModeLabel,
+                                    style:
+                                        theme.textTheme.titleMedium?.copyWith(
+                                      color: const Color(0xFFE6D8BD),
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  TextField(
+                                    controller: _executionCountController,
+                                    keyboardType: TextInputType.number,
+                                    inputFormatters: <TextInputFormatter>[
+                                      FilteringTextInputFormatter.digitsOnly,
+                                    ],
+                                    onChanged: (_) => setState(() {}),
+                                    decoration: InputDecoration(
+                                      labelText:
+                                          context.l10n.jobBatchQuantityLabel,
+                                      hintText:
+                                          context.l10n.jobBatchQuantityHint,
+                                      suffixText:
+                                          '/ ${widget.maxExecutionCount}',
+                                      border: const OutlineInputBorder(),
+                                      isDense: true,
+                                    ),
+                                  ),
+                                  if (_executionCount == null) ...[
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      context.l10n.jobBatchInvalidQuantity,
+                                      style:
+                                          theme.textTheme.bodySmall?.copyWith(
+                                        color: const Color(0xFFD29C86),
+                                      ),
+                                    ),
+                                  ],
+                                  const SizedBox(height: 12),
+                                  _BatchSummaryRow(
+                                    label:
+                                        context.l10n.jobBatchDurationLabel,
+                                    value: _durationLabel(context),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  _BatchSummaryRow(
+                                    label: context.l10n.jobBatchInputsLabel,
+                                    value: _inventorySummary(
+                                      context,
+                                      catalog,
+                                      _scaledFixedInventoryCost,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  _BatchSummaryRow(
+                                    label: context.l10n.jobBatchOutputsLabel,
+                                    value: _inventorySummary(
+                                      context,
+                                      catalog,
+                                      _scaledOutputInventory,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 18),
+                          ],
                           if (requirements.isNotEmpty) ...[
                             Text(
                               context.l10n.jobRequirementsLabel,
