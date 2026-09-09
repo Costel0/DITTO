@@ -7,6 +7,7 @@ import '../../../../core/firebase/firestore_item_catalog_service.dart';
 import '../../../../core/localization/l10n.dart';
 import '../../../../core/presentation/survival_background.dart';
 import '../../../bunker/application/bunker_state_controller.dart';
+import '../../../bunker/domain/bunker_state.dart';
 import '../../../hub/domain/hub_scene_configuration.dart';
 import '../../../items/domain/item.dart';
 import '../../../survivors/domain/survivor.dart';
