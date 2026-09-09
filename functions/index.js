@@ -16,9 +16,12 @@ const {
   applyTaskStartCost,
   missingRequiredTaskIds,
   normalizedResourceSelection,
+  normalizedTaskExecutionCount,
   selectTaskResult,
   taskDefinitionFromSnapshot,
+  taskDurationSecondsForExecution,
   taskEnergyCostPerSurvivor,
+  taskFixedOutputInventory,
 } = require("./job_tasks");
 const {
   VALID_DUPLICATE_IDS,
@@ -300,12 +303,16 @@ async function resolveCompletedOccupationsForUser(db, uid) {
         const task = requiredTaskDefinition(taskCatalogSnapshot, taskId);
         const executionSeed = first.executionId || groupKey;
         const result = selectTaskResult(task, executionSeed);
+        const executionCount = Number.isInteger(first.taskExecutionCount)
+          ? first.taskExecutionCount
+          : 1;
         const completion = applyTaskCompletionEffects(
           workingBunker,
           participantIds,
           task,
           result.id,
           executionSeed,
+          executionCount,
         );
         workingBunker = completion.bunker;
         if (task.storable) {
@@ -560,6 +567,10 @@ exports.getJobTaskStartInfo = onCall(
       costInventory: task.cost.inventory,
       resourceCraftingValueCost: task.cost.resources.craftingValue,
       energyCostPerSurvivor: taskEnergyCostPerSurvivor(task),
+      durationSecondsPerExecution: task.durationSeconds,
+      outputInventoryPerExecution: taskFixedOutputInventory(task),
+      executionMode: task.execution.type,
+      maxExecutionCount: task.execution.maxCount,
       requiredTaskIds: task.requiredTaskIds,
       storable: task.storable,
     };
@@ -616,6 +627,19 @@ exports.startJobTask = onCall(
       }
 
       const task = requiredTaskDefinition(taskCatalogSnapshot, taskId);
+      let executionCount;
+      try {
+        executionCount = normalizedTaskExecutionCount(
+          task,
+          request.data?.executionCount,
+        );
+      } catch (error) {
+        throw new HttpsError(
+          "invalid-argument",
+          error instanceof Error ? error.message : "Invalid execution count.",
+        );
+      }
+
       const resourceItemDefinitions = {};
       const selectedResourceItemIds = Object.keys(resourceSelection);
 
@@ -725,6 +749,7 @@ exports.startJobTask = onCall(
           {
             resourceSelection,
             itemDefinitions: resourceItemDefinitions,
+            executionCount,
           },
         );
       } catch (error) {
@@ -735,9 +760,10 @@ exports.startJobTask = onCall(
       }
 
       const now = truncateToSecond(new Date()) || new Date();
-      const effectiveDurationSeconds = Math.max(
-        1,
-        Math.ceil(task.durationSeconds / survivorIds.length),
+      const effectiveDurationSeconds = taskDurationSecondsForExecution(
+        task,
+        executionCount,
+        survivorIds.length,
       );
       const endsAt = new Date(
         now.getTime() + effectiveDurationSeconds * 1000,
@@ -751,6 +777,7 @@ exports.startJobTask = onCall(
           survivorId,
           executionId,
           taskId: task.id,
+          taskExecutionCount: executionCount,
           activity: task.activity,
           location: task.location,
           startedAt: now,
@@ -775,6 +802,7 @@ exports.startJobTask = onCall(
         started: true,
         executionId,
         survivorIds,
+        executionCount,
         durationSeconds: effectiveDurationSeconds,
         revision: fixed.revision,
       };
