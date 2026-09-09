@@ -13,6 +13,7 @@ function exampleDefinition() {
     data: () => ({
       actions: {
         inspect: {
+          expeditionType: "test_type",
           availability: "bunker",
           durationSeconds: 17,
           energyDelta: -7,
@@ -81,11 +82,12 @@ test("expedition actions are rejected outside their available coordinates", () =
   );
 });
 
-test("legacy scout action IDs resolve through the current scavenge type", () => {
+test("intermediate scavenge action IDs resolve to scout surroundings", () => {
   const definition = expeditionDefinitionFromSnapshot({
     data: () => ({
       actions: {
-        scavenge: {
+        scout_surroundings: {
+          expeditionType: "scavenge",
           availability: "bunker",
           durationSeconds: 9,
           energyDelta: -3,
@@ -98,9 +100,10 @@ test("legacy scout action IDs resolve through the current scavenge type", () => 
     definition,
     {x: 2, y: 2, z: 2},
     {x: 2, y: 2, z: 2},
-    ["scout_surroundings"],
+    ["scavenge"],
   );
 
   assert.equal(actions.length, 1);
-  assert.equal(actions[0].id, "scavenge");
+  assert.equal(actions[0].id, "scout_surroundings");
+  assert.equal(actions[0].expeditionType, "scavenge");
 });
