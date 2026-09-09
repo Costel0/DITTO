@@ -48,6 +48,26 @@ function normalizedInventoryMap(value, label, {positiveOnly = false} = {}) {
   return normalized;
 }
 
+function normalizedResourceCost(value, label) {
+  if (value == null) return {craftingValue: 0};
+  if (!isPlainObject(value)) {
+    throw new Error(`${label} must be an object.`);
+  }
+
+  const craftingValue = value.craftingValue ?? 0;
+  if (!Number.isInteger(craftingValue) || craftingValue < 0) {
+    throw new Error(
+      `${label}.craftingValue must be a non-negative integer.`,
+    );
+  }
+
+  return {craftingValue};
+}
+
+function normalizedResourceSelection(value, label = "resourceItems") {
+  return normalizedInventoryMap(value, label, {positiveOnly: true});
+}
+
 function normalizedEffects(value, label) {
   const raw = value == null ? {} : value;
   if (!isPlainObject(raw)) {
@@ -389,6 +409,10 @@ function taskDefinitionFromSnapshot(snapshot, taskId) {
         `Task ${normalizedTaskId} cost.inventory`,
         {positiveOnly: true},
       ),
+      resources: normalizedResourceCost(
+        rawCost.resources,
+        `Task ${normalizedTaskId} cost.resources`,
+      ),
     },
     resultResolver: resultDefinition.resolver,
     results: resultDefinition.results,
@@ -425,9 +449,70 @@ function applyInventoryDelta(inventorySource, delta, {rejectNegative = true} = {
   return inventory;
 }
 
-function applyTaskStartCost(bunker, task) {
+function applyTaskStartCost(
+  bunker,
+  task,
+  {resourceSelection = {}, itemDefinitions = {}} = {},
+) {
+  const selectedResources = normalizedResourceSelection(resourceSelection);
+  const resourceRequirement = task.cost.resources?.craftingValue ?? 0;
+  const selectedEntries = Object.entries(selectedResources);
+
+  if (resourceRequirement === 0 && selectedEntries.length > 0) {
+    throw new Error(`Task ${task.id} does not require generic resources.`);
+  }
+
+  let selectedCraftingValue = 0;
+  if (resourceRequirement > 0) {
+    if (selectedEntries.length === 0) {
+      throw new Error(
+        `Task ${task.id} requires ${resourceRequirement} crafting resource value.`,
+      );
+    }
+    if (!isPlainObject(itemDefinitions)) {
+      throw new Error("Resource item definitions must be an object.");
+    }
+
+    for (const [itemId, quantity] of selectedEntries) {
+      const item = itemDefinitions[itemId];
+      const rawTypes = Array.isArray(item?.type)
+        ? item.type
+        : typeof item?.type === "string"
+          ? [item.type]
+          : [];
+      const types = rawTypes
+        .filter((type) => typeof type === "string")
+        .map((type) => type.trim());
+      const craftingValue = item?.stats?.craftingValue;
+
+      if (
+        !types.includes("resource") ||
+        !Number.isInteger(craftingValue) ||
+        craftingValue <= 0
+      ) {
+        throw new Error(
+          `Item ${itemId} is not an eligible crafting resource.`,
+        );
+      }
+
+      selectedCraftingValue += craftingValue * quantity;
+    }
+
+    if (selectedCraftingValue < resourceRequirement) {
+      throw new Error(
+        `Selected resources provide ${selectedCraftingValue}; ` +
+          `task requires ${resourceRequirement}.`,
+      );
+    }
+  }
+
+  const totalCost = {...task.cost.inventory};
+  for (const [itemId, quantity] of selectedEntries) {
+    totalCost[itemId] = (totalCost[itemId] ?? 0) + quantity;
+  }
+
   const costDelta = Object.fromEntries(
-    Object.entries(task.cost.inventory).map(([itemId, quantity]) => [
+    Object.entries(totalCost).map(([itemId, quantity]) => [
       itemId,
       -quantity,
     ]),
@@ -575,6 +660,7 @@ module.exports = {
   applyTaskCompletionEffects,
   applyTaskStartCost,
   missingRequiredTaskIds,
+  normalizedResourceSelection,
   selectTaskResult,
   taskDefinitionFromSnapshot,
 };
