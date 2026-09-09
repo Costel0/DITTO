@@ -28,6 +28,17 @@ String? _optionalNonEmptyString(Object? raw) {
   return normalized.isEmpty ? null : normalized;
 }
 
+int? _optionalPositiveInt(Object? raw) {
+  if (raw == null) return null;
+  if (raw is! num ||
+      !raw.isFinite ||
+      raw != raw.toInt() ||
+      raw.toInt() < 1) {
+    throw const FormatException('Expected a positive integer.');
+  }
+  return raw.toInt();
+}
+
 class BunkerCoordinates {
   const BunkerCoordinates({
     required this.x,
@@ -94,6 +105,7 @@ class BusySurvivor {
     this.taskId,
     this.executionId,
     this.expeditionType,
+    this.taskExecutionCount,
   });
 
   final String survivorId;
@@ -111,6 +123,10 @@ class BusySurvivor {
   /// Expedition presentation/type discriminator. Null for jobs, sleeping, and
   /// legacy expedition entries created before this field existed.
   final String? expeditionType;
+
+  /// Number of base executions grouped into this job occupation. Normal tasks
+  /// and legacy data use 1.
+  final int? taskExecutionCount;
 
   factory BusySurvivor.fromJson(
     Map<String, dynamic> json, {
@@ -177,6 +193,7 @@ class BusySurvivor {
       taskId: _optionalNonEmptyString(json['taskId']),
       executionId: _optionalNonEmptyString(json['executionId']),
       expeditionType: _optionalNonEmptyString(json['expeditionType']),
+      taskExecutionCount: _optionalPositiveInt(json['taskExecutionCount']),
     );
   }
 }
