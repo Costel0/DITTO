@@ -16,6 +16,7 @@ import '../../../hub/domain/hub_scene_configuration.dart';
 import '../../../hub/presentation/widgets/hub_character_info.dart';
 import '../../../expeditions/domain/expedition_service.dart';
 import '../../../expeditions/presentation/widgets/hub_expeditions.dart';
+import '../../../hub/presentation/widgets/hub_beds_dialog.dart';
 import '../../../hub/presentation/widgets/hub_debug_controls.dart';
 import '../../../hub/presentation/widgets/hub_inventory.dart';
 import '../../../hub/presentation/widgets/hub_jobs.dart';
@@ -223,6 +224,20 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     return controller.state?.inventory;
   }
 
+  void _openHubArea(HubArea area) {
+    if (area != HubArea.beds) return;
+
+    final controller = _bunkerStateController;
+    if (controller == null) return;
+
+    unawaited(
+      HubBedsDialog.show(
+        context,
+        controller: controller,
+      ),
+    );
+  }
+
   void _openCharacterFromSlot(HubCharacterSlot slot) {
     final idleIndex = hubRosterSlotOrder.indexOf(slot);
     final idleSurvivors = _idleHubSurvivors;
@@ -302,6 +317,10 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                                     child: HubScrollableScene(
                                       characters: _hubCharacters,
                                       onCharacterTap: _openCharacterFromSlot,
+                                      onAreaTap: _openHubArea,
+                                      tappableAreas: const <HubArea>{
+                                        HubArea.beds,
+                                      },
                                       backgroundState: HubBackgroundState(
                                         sleepingSurvivorCount:
                                             sleepingSurvivorCount,
