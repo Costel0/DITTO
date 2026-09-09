@@ -608,6 +608,7 @@ exports.getJobTaskStartInfo = onCall(
 
     return {
       taskId: task.id,
+      location: task.location,
       minSurvivors: task.survivorRequirements.min,
       maxSurvivors: task.survivorRequirements.max,
       statRequirements: task.survivorRequirements.statRequirements,
