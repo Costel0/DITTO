@@ -7,6 +7,17 @@ test("resetTaskTreeStateForTesting clears completed jobs and cancels active jobs
   const bunker = {
     completedTaskIds: ["prepare_garden", "repair_door"],
     idleSurvivors: ["s3"],
+    activeBackgroundTasks: [
+      {
+        executionId: "crop-1",
+        taskId: "plant_potatoes",
+        activity: "plant_potatoes",
+        location: "garden",
+        startedBySurvivorId: "s3",
+        startedAt: now,
+        endsAt: new Date(now.getTime() + 60000),
+      },
+    ],
     busySurvivors: [
       {
         survivorId: "s1",
@@ -38,11 +49,12 @@ test("resetTaskTreeStateForTesting clears completed jobs and cancels active jobs
   assert.deepEqual(result.bunker.completedTaskIds, []);
   assert.deepEqual(new Set(result.bunker.idleSurvivors), new Set(["s1", "s3"]));
   assert.equal(result.bunker.busySurvivors.length, 1);
+  assert.deepEqual(result.bunker.activeBackgroundTasks, []);
   assert.equal(result.bunker.busySurvivors[0].activity, "sleeping");
   assert.equal(result.bunker.busySurvivors[0].survivorId, "s2");
   assert.deepEqual(result.bunker.inventory, {scrap_metal: 4});
   assert.deepEqual(result.bunker.survivors, bunker.survivors);
-  assert.equal(result.cancelledOccupationCount, 1);
+  assert.equal(result.cancelledOccupationCount, 2);
   assert.equal(result.clearedCompletedTaskCount, 2);
 });
 
