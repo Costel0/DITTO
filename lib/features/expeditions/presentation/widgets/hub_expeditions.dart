@@ -59,10 +59,6 @@ class _HubExpeditionsState extends State<HubExpeditions> {
     }
   }
 
-  String _text(BuildContext context, String es, String en) {
-    return Localizations.localeOf(context).languageCode == 'es' ? es : en;
-  }
-
   List<Survivor> get _availableSurvivors {
     final bunker = widget.bunkerState;
     if (bunker == null) return const <Survivor>[];
@@ -170,26 +166,14 @@ class _HubExpeditionsState extends State<HubExpeditions> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            _text(
-              context,
-              'Expedición resuelta.',
-              'Expedition resolved.',
-            ),
-          ),
+          content: Text(context.l10n.expeditionResolvedToast),
         ),
       );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            _text(
-              context,
-              'No se ha podido completar la revisión de la expedición.',
-              'The expedition review could not be completed.',
-            ),
-          ),
+          content: Text(context.l10n.expeditionReviewError),
         ),
       );
       unawaited(_loadPendingReviews());
@@ -269,7 +253,7 @@ class _HubExpeditionsState extends State<HubExpeditions> {
               ),
               const SizedBox(height: 22),
               Text(
-                _text(context, 'Expediciones', 'Expeditions'),
+                l10n.hubExpeditionsTitle,
                 style: theme.textTheme.titleMedium?.copyWith(
                   color: const Color(0xFFE3D4B7),
                   fontWeight: FontWeight.w800,
@@ -355,10 +339,6 @@ class _ResolvedExpeditionCard extends StatelessWidget {
   final bool isOpening;
   final VoidCallback onTap;
 
-  String _text(BuildContext context, String es, String en) {
-    return Localizations.localeOf(context).languageCode == 'es' ? es : en;
-  }
-
   @override
   Widget build(BuildContext context) {
     if (review.expeditionType == 'scavenge') {
@@ -383,7 +363,8 @@ class _ResolvedExpeditionCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'SCAVENGE · ${_text(context, 'RESUELTA', 'RESOLVED')}',
+                        '${context.l10n.expeditionScavengeLabel} · '
+                        '${context.l10n.expeditionResolvedBadge}',
                         style: Theme.of(context).textTheme.labelMedium?.copyWith(
                               color: const Color(0xFFD5BA78),
                               fontWeight: FontWeight.w900,
@@ -392,11 +373,7 @@ class _ResolvedExpeditionCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 5),
                       Text(
-                        _text(
-                          context,
-                          'Resolución automática completada · pendiente de decisión',
-                          'Automatic resolution complete · waiting for your decision',
-                        ),
+                        context.l10n.expeditionPendingReviewTitle,
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(
                               color: const Color(0xFFE4D5B8),
                               fontWeight: FontWeight.w800,
@@ -404,10 +381,8 @@ class _ResolvedExpeditionCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        _text(
-                          context,
-                          'Coordenadas: ${review.coordinates.displayValue}',
-                          'Coordinates: ${review.coordinates.displayValue}',
+                        context.l10n.expeditionCoordinatesValue(
+                          review.coordinates.displayValue,
                         ),
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: const Color(0xFF9D9382),
@@ -439,8 +414,12 @@ class _ResolvedExpeditionCard extends StatelessWidget {
       onTap: isOpening ? null : onTap,
       tileColor: const Color(0xFF1B1A16),
       leading: const Icon(Icons.assignment_turned_in_outlined),
-      title: Text(_text(context, 'Expedición resuelta', 'Resolved expedition')),
-      subtitle: Text(review.coordinates.displayValue),
+      title: Text(context.l10n.expeditionResolvedFallbackTitle),
+      subtitle: Text(
+        context.l10n.expeditionCoordinatesValue(
+          review.coordinates.displayValue,
+        ),
+      ),
     );
   }
 }
@@ -516,7 +495,7 @@ class _ScavengeActiveCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'SCAVENGE',
+                  context.l10n.expeditionScavengeLabel,
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
                         color: const Color(0xFFD3B878),
                         fontWeight: FontWeight.w900,
