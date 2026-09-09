@@ -1,11 +1,14 @@
 enum JobTaskExecutionMode {
   single,
+  background,
   batch;
 
   static JobTaskExecutionMode fromWire(Object? raw) {
     switch (raw) {
       case 'single':
         return JobTaskExecutionMode.single;
+      case 'background':
+        return JobTaskExecutionMode.background;
       case 'batch':
         return JobTaskExecutionMode.batch;
       default:
@@ -58,6 +61,7 @@ class JobTaskStartInfo {
   final int maxExecutionCount;
 
   bool get isBatch => executionMode == JobTaskExecutionMode.batch;
+  bool get isBackground => executionMode == JobTaskExecutionMode.background;
 
   final List<String> requiredTaskIds;
   final bool storable;
@@ -190,10 +194,10 @@ class JobTaskStartInfo {
 
     final executionMode = JobTaskExecutionMode.fromWire(executionModeRaw);
     final maxExecutionCount = maxExecutionCountRaw.toInt();
-    if (executionMode == JobTaskExecutionMode.single &&
+    if (executionMode != JobTaskExecutionMode.batch &&
         maxExecutionCount != 1) {
       throw const FormatException(
-        'Single job tasks must have maxExecutionCount = 1.',
+        'Non-batch job tasks must have maxExecutionCount = 1.',
       );
     }
 
