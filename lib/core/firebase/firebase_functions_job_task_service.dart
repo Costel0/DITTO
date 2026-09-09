@@ -28,12 +28,14 @@ class FirebaseFunctionsJobTaskService implements JobTaskService {
     required String taskId,
     required List<String> survivorIds,
     Map<String, int> resourceItems = const <String, int>{},
+    int executionCount = 1,
   }) async {
     final callable = _functions.httpsCallable('startJobTask');
     await callable.call(<String, dynamic>{
       'taskId': taskId.trim(),
       'survivorIds': survivorIds.map((id) => id.trim()).toList(growable: false),
       'resourceItems': Map<String, int>.from(resourceItems),
+      'executionCount': executionCount,
     });
   }
 }
