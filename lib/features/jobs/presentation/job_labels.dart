@@ -46,6 +46,8 @@ String jobTaskTitle(BuildContext context, String taskId) {
       return context.l10n.jobCleanKitchenTitle;
     case 'craft_electronics_from_scrap':
       return context.l10n.jobCraftElectronicsTitle;
+    case 'plant_potatoes':
+      return context.l10n.jobPlantPotatoesTitle;
     case 'prepare_garden':
       return context.l10n.jobPrepareGardenTitle;
     case 'upgrade_garden':
@@ -71,6 +73,8 @@ String jobTaskDescription(BuildContext context, String taskId) {
       return context.l10n.jobCleanKitchenDescription;
     case 'craft_electronics_from_scrap':
       return context.l10n.jobCraftElectronicsDescription;
+    case 'plant_potatoes':
+      return context.l10n.jobPlantPotatoesDescription;
     case 'prepare_garden':
       return context.l10n.jobPrepareGardenDescription;
     case 'upgrade_garden':
