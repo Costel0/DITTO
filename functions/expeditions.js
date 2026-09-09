@@ -552,7 +552,12 @@ function applyExpeditionAutomaticResolution(
   bunker,
   participantIds,
   actions,
+  outcomes = [],
 ) {
+  // The selected outcomes are deliberately part of this boundary even though
+  // the current implementation only applies energy. Future unavoidable
+  // injuries/deaths can be applied here without involving the user decision.
+  void outcomes;
   const participantSet = new Set(participantIds);
   const survivors = Array.isArray(bunker.survivors)
     ? bunker.survivors.map((survivor) => ({...survivor}))
