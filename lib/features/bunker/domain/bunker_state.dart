@@ -93,6 +93,7 @@ class BusySurvivor {
     required this.endsAt,
     this.taskId,
     this.executionId,
+    this.expeditionType,
   });
 
   final String survivorId;
@@ -106,6 +107,10 @@ class BusySurvivor {
 
   /// Shared by every Survivor assigned to the same task execution.
   final String? executionId;
+
+  /// Expedition presentation/type discriminator. Null for jobs, sleeping, and
+  /// legacy expedition entries created before this field existed.
+  final String? expeditionType;
 
   factory BusySurvivor.fromJson(
     Map<String, dynamic> json, {
@@ -171,6 +176,7 @@ class BusySurvivor {
       endsAt: endsAt,
       taskId: _optionalNonEmptyString(json['taskId']),
       executionId: _optionalNonEmptyString(json['executionId']),
+      expeditionType: _optionalNonEmptyString(json['expeditionType']),
     );
   }
 }
