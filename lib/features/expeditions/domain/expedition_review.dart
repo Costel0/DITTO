@@ -32,6 +32,68 @@ Map<String, int> _positiveInventoryMap(Object? raw, String field) {
   return Map<String, int>.unmodifiable(result);
 }
 
+class ExpeditionReviewSummary {
+  const ExpeditionReviewSummary({
+    required this.id,
+    required this.expeditionType,
+    required this.actionIds,
+    required this.survivorIds,
+    required this.coordinates,
+    required this.completedAt,
+    this.executionId,
+  });
+
+  final String id;
+  final String? executionId;
+  final String expeditionType;
+  final List<String> actionIds;
+  final List<String> survivorIds;
+  final ExpeditionCoordinates coordinates;
+  final DateTime completedAt;
+
+  factory ExpeditionReviewSummary.fromMap(Map<String, dynamic> map) {
+    String requiredString(String field) {
+      final raw = map[field];
+      if (raw is! String || raw.trim().isEmpty) {
+        throw FormatException('$field must be a non-empty string.');
+      }
+      return raw.trim();
+    }
+
+    List<String> stringList(String field) {
+      final raw = map[field];
+      if (raw is! List || raw.any((value) => value is! String)) {
+        throw FormatException('$field must be a list of strings.');
+      }
+      return List<String>.unmodifiable(
+        raw.cast<String>().map((value) => value.trim()).where(
+              (value) => value.isNotEmpty,
+            ),
+      );
+    }
+
+    final coordinatesRaw = map['coordinates'];
+    if (coordinatesRaw is! Map) {
+      throw const FormatException('Invalid expedition review summary.');
+    }
+
+    final rawExecutionId = map['executionId'];
+    return ExpeditionReviewSummary(
+      id: requiredString('id'),
+      executionId: rawExecutionId is String && rawExecutionId.trim().isNotEmpty
+          ? rawExecutionId.trim()
+          : null,
+      expeditionType: requiredString('expeditionType'),
+      actionIds: stringList('actionIds'),
+      survivorIds: stringList('survivorIds'),
+      coordinates: ExpeditionCoordinates.fromMap(
+        Map<String, dynamic>.from(coordinatesRaw),
+      ),
+      completedAt: _requiredReviewDate(map['completedAt'], 'completedAt'),
+    );
+  }
+}
+
 class ExpeditionOutcomeReview {
   const ExpeditionOutcomeReview({
     required this.actionId,
