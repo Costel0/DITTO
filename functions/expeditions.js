@@ -35,6 +35,15 @@ function normalizedActionDefinition(rawAction, actionId) {
     throw new Error(`Expedition action ${actionId} must be an object.`);
   }
 
+  const expeditionType = typeof rawAction.expeditionType === "string"
+    ? rawAction.expeditionType.trim()
+    : "";
+  if (!expeditionType) {
+    throw new Error(
+      `Expedition action ${actionId} must define expeditionType.`,
+    );
+  }
+
   const availability = rawAction.availability;
   if (availability !== "bunker") {
     throw new Error(
@@ -61,6 +70,7 @@ function normalizedActionDefinition(rawAction, actionId) {
 
   return {
     id: actionId,
+    expeditionType,
     availability,
     durationSeconds,
     energyDelta,
@@ -128,7 +138,9 @@ function normalizedActionIds(value) {
 }
 
 function canonicalActionId(actionId) {
-  return actionId === "scout_surroundings" ? "scavenge" : actionId;
+  // Compatibility with the short-lived intermediate representation where the
+  // expedition type itself was stored as the action ID.
+  return actionId === "scavenge" ? "scout_surroundings" : actionId;
 }
 
 function actionDefinitionsByIds(definition, actionIds) {
@@ -166,6 +178,19 @@ function selectedActionDefinitions(
     }
     return action;
   });
+}
+
+function expeditionTypeForActions(actions) {
+  if (!Array.isArray(actions) || actions.length === 0) {
+    throw new Error("An expedition requires at least one action.");
+  }
+  const types = new Set(actions.map((action) => action.expeditionType));
+  if (types.size !== 1) {
+    throw new Error(
+      "All selected expedition actions must belong to the same expedition type.",
+    );
+  }
+  return actions[0].expeditionType;
 }
 
 function expeditionDurationSeconds(actions) {
@@ -267,6 +292,7 @@ module.exports = {
   expeditionEnergyDelta,
   expeditionLocation,
   expeditionTaskId,
+  expeditionTypeForActions,
   normalizedActionIds,
   normalizedCoordinates,
   sameCoordinates,
