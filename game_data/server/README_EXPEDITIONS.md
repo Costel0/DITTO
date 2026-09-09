@@ -65,7 +65,7 @@ Las probabilidades de todos los outcomes de una acción deben sumar exactamente 
 
 - `probability`: probabilidad entre `0` y `1`.
 - `narrativeId`: identificador de la narración que presenta Flutter.
-- `inventoryDelta`: recompensa de objetos. Se aplica en backend al completar la expedición.
+- `inventoryDelta`: recompensa de objetos. El backend la mantiene privada y la entrega al revisar el informe.
 - `imageKey`: opcional. Permite una imagen especial para un outcome concreto.
 - `eventTrigger.poolId`: hook reservado para el futuro sistema de eventos. Actualmente se registra en el informe, pero no ejecuta ninguna lógica adicional.
 
@@ -73,15 +73,15 @@ El pool inicial para eventos comunes se identifica como `evento_comun`.
 
 ## Resolución e informes pendientes
 
-1. Al llegar `endsAt`, la Cloud Function de resolución selecciona el outcome usando una tirada determinista derivada del `executionId`.
-2. El backend aplica energía y recompensa al bunker.
-3. La expedición desaparece de `busySurvivors`.
-4. Se crea una entrada en `pendingExpeditionReviews`.
-5. Flutter muestra la expedición como **resuelta / pendiente de revisar**, pero no enseña el outcome en la card.
+1. Al llegar `endsAt`, la Cloud Function selecciona el outcome usando una tirada determinista derivada del `executionId`.
+2. Se aplica el coste de energía y la expedición desaparece de `busySurvivors`.
+3. En `BunkerState.pendingExpeditionReviews` se guarda **solo un resumen opaco**: tipo, acciones, participantes, coordenadas y fecha. No contiene outcome ni recompensa.
+4. El informe completo se guarda en `/users/{uid}/expeditionReviews/{reviewId}`. Las reglas de Firestore niegan todo acceso cliente a esa subcolección.
+5. Flutter muestra la expedición como **resuelta / pendiente de revisar** sin conocer el resultado.
 6. Al pulsarla, Flutter llama `reviewExpeditionResult`.
-7. Esa callable elimina el informe pendiente de forma atómica y devuelve sus datos.
-8. Flutter abre el popup con narración, recompensa e imagen.
-9. Como el informe ya fue consumido en backend, no vuelve a aparecer aunque el popup se cierre inmediatamente.
+7. La callable entrega la recompensa, elimina el resumen pendiente y consume el informe privado en una única transacción.
+8. Flutter recibe el informe y abre el popup con narración, recompensa e imagen.
+9. El informe ya no puede volver a cobrarse ni aparece otra vez en la lista.
 
 ## Imágenes de resultado
 
@@ -108,5 +108,3 @@ Durante el desarrollo existió brevemente `expedition:scavenge` como si `scaveng
 
 Ejecuta el flujo descrito en `game_data/README_WORKFLOW.md`. Se recomienda `hard_deploy.cmd` cuando cambie este archivo o su lógica, porque hay que sincronizar `serverData` y Functions.
 
-
-La recompensa material se entrega al revisar el informe, no al terminar la expedición, para mantener el outcome oculto hasta ese momento.
