@@ -185,6 +185,7 @@ async function resolveCompletedOccupationsForUser(db, uid) {
     const pendingExpeditionReviews = normalizedPendingExpeditionReviews(
       bunker.pendingExpeditionReviews,
     );
+    const privateExpeditionReviewWrites = [];
     const resolvedGroupKeys = new Set();
     const resolvedSurvivorIds = new Set();
     const resolvedExecutions = [];
@@ -269,10 +270,13 @@ async function resolveCompletedOccupationsForUser(db, uid) {
           .doc(uid)
           .collection("expeditionReviews")
           .doc(reviewId);
-        transaction.set(privateReviewRef, {
-          ...reviewSummary,
-          inventoryDelta,
-          outcomes: reviewOutcomes,
+        privateExpeditionReviewWrites.push({
+          ref: privateReviewRef,
+          data: {
+            ...reviewSummary,
+            inventoryDelta,
+            outcomes: reviewOutcomes,
+          },
         });
 
         resolvedExecutions.push({
@@ -331,6 +335,9 @@ async function resolveCompletedOccupationsForUser(db, uid) {
       bunker: workingBunker,
     });
     transaction.set(bunkerRef, fixed);
+    for (const privateWrite of privateExpeditionReviewWrites) {
+      transaction.set(privateWrite.ref, privateWrite.data);
+    }
 
     return {
       resolvedCount: resolvedExecutions.length,
