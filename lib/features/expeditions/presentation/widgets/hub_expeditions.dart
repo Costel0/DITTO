@@ -38,7 +38,8 @@ class _HubExpeditionsState extends State<HubExpeditions> {
   bool _isLoadingReviews = false;
   String? _reviewingId;
   int? _lastRevision;
-  List<ExpeditionReview> _pendingReviews = const <ExpeditionReview>[];
+  List<ExpeditionReviewSummary> _pendingReviews =
+      const <ExpeditionReviewSummary>[];
 
   @override
   void initState() {
@@ -122,7 +123,7 @@ class _HubExpeditionsState extends State<HubExpeditions> {
     }
   }
 
-  Future<void> _reviewResult(ExpeditionReview summary) async {
+  Future<void> _reviewResult(ExpeditionReviewSummary summary) async {
     if (_reviewingId != null) return;
     setState(() => _reviewingId = summary.id);
     try {
@@ -313,7 +314,7 @@ class _ResolvedExpeditionCard extends StatelessWidget {
     required this.onTap,
   });
 
-  final ExpeditionReview review;
+  final ExpeditionReviewSummary review;
   final bool isOpening;
   final VoidCallback onTap;
 
