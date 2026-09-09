@@ -29,7 +29,6 @@ const {
   actionIdsFromExpeditionTaskId,
   applyExpeditionCompletion,
   availableActionsAtCoordinates,
-  coordinatesFromExpeditionLocation,
   expeditionDefinitionFromSnapshot,
   expeditionDurationSeconds,
   expeditionEnergyDelta,
