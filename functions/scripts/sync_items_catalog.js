@@ -9,7 +9,7 @@ const {
   getFirestore,
 } = require("firebase-admin/firestore");
 
-const VALID_TYPES = new Set(["weapon", "equipment", "resource", "food"]);
+const VALID_TYPES = new Set(["weapon", "equipment", "resource", "food", "misc"]);
 const ITEM_ID_PATTERN = /^[a-z0-9_]+$/;
 const BATCH_SIZE = 400;
 
