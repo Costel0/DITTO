@@ -203,6 +203,7 @@ function normalizedPendingExpeditionReviews(source) {
       survivorIds: uniqueStringList(entry.survivorIds),
       coordinates: normalizedBunkerCoordinates(entry.coordinates),
       completedAt,
+      resolutionStatus: "pending_interactive",
     };
     if (
       typeof entry.executionId === "string" &&
