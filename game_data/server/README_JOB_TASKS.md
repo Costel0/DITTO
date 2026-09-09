@@ -6,6 +6,55 @@ Archivo: `game_data/server/job_tasks.json`
 
 Se sincroniza con `/serverData/jobTasks`. La app no puede leer este documento directamente; las Cloud Functions exponen únicamente la información necesaria para jugar.
 
+## Autoridad: App vs Backend
+
+La lógica de Jobs es **server-authoritative**.
+
+### Responsabilidad de Flutter
+
+Flutter puede:
+
+- mostrar títulos, descripciones, iconos y assets;
+- pedir al backend los metadatos necesarios para presentar una task;
+- mostrar previews de duración, energía, inputs y outputs;
+- filtrar/deshabilitar opciones localmente para mejorar UX;
+- recoger los Survivors, recursos y `executionCount` elegidos por el usuario;
+- mostrar `startedAt`, `endsAt` y countdowns;
+- pedir al backend que resuelva ejecuciones cuyo contador haya llegado a cero.
+
+Las comprobaciones de Flutter son únicamente preventivas/visuales. Nunca conceden una ejecución ni aplican resultados.
+
+### Responsabilidad del Backend
+
+Cloud Functions + `job_tasks.json` deciden y vuelven a validar siempre:
+
+- existencia y definición de la task;
+- `location` y `execution.type`;
+- si ya existe otra ejecución activa del mismo `taskId`;
+- prerrequisitos y `storable`;
+- número de Survivors;
+- que los Survivors existan, estén disponibles y tengan energía válida;
+- requisitos de estadísticas efectivas;
+- `executionCount` y sus límites;
+- costes de inventario y recursos genéricos;
+- duración efectiva, `startedAt` y `endsAt`;
+- qué estado persiste la ejecución (`busySurvivors` o `activeBackgroundTasks`);
+- resultado general y outcomes aleatorios;
+- energía, XP, inventario y cualquier otro efecto de resolución;
+- cuándo una ejecución es realmente resoluble, comparando `endsAt` con la hora del servidor.
+
+Antes de iniciar una nueva task, el backend intenta resolver primero cualquier ejecución ya vencida. Por tanto, iniciar una tarea no depende de que el cliente haya ejecutado previamente un countdown o una resolución.
+
+Firestore refuerza esta separación: el cliente puede leer su `BunkerState`, pero no escribirlo. `/serverData` tampoco es legible ni escribible por el cliente.
+
+> Los callables de desarrollo como `addItemForTesting` y `resetTaskTreeForTesting` son una excepción intencionada para desarrollo y deben bloquearse/retirarse antes de producción.
+
+### Regla de concurrencia actual
+
+Solo puede existir **una ejecución activa por `taskId`** a la vez, independientemente de que sea `single`, `batch` o `background`.
+
+Flutter lo refleja deshabilitando la task, pero la regla real se aplica de nuevo en backend. Si en el futuro alguna task necesita concurrencia real, debe añadirse como una propiedad explícita del esquema y validarse en servidor; no debe resolverse únicamente cambiando la UI.
+
 ## Estructura raíz
 
 ```json
