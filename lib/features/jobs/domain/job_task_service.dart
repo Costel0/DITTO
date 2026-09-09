@@ -20,6 +20,7 @@ enum JobTaskExecutionMode {
 class JobTaskStartInfo {
   const JobTaskStartInfo({
     required this.taskId,
+    required this.location,
     required this.minSurvivors,
     required this.maxSurvivors,
     required this.statRequirements,
@@ -35,6 +36,7 @@ class JobTaskStartInfo {
   });
 
   final String taskId;
+  final String location;
   final int minSurvivors;
   final int maxSurvivors;
 
@@ -68,6 +70,7 @@ class JobTaskStartInfo {
 
   factory JobTaskStartInfo.fromMap(Map<String, dynamic> map) {
     final taskId = map['taskId'];
+    final location = map['location'];
     final minSurvivors = map['minSurvivors'];
     final maxSurvivors = map['maxSurvivors'];
     final statRequirementsRaw = map['statRequirements'];
@@ -86,6 +89,9 @@ class JobTaskStartInfo {
 
     if (taskId is! String || taskId.trim().isEmpty) {
       throw const FormatException('Task start info has an invalid taskId.');
+    }
+    if (location is! String || location.trim().isEmpty) {
+      throw const FormatException('Task start info has an invalid location.');
     }
     if (minSurvivors is! num || minSurvivors.toInt() < 1) {
       throw const FormatException('Task start info has an invalid minimum.');
@@ -203,6 +209,7 @@ class JobTaskStartInfo {
 
     return JobTaskStartInfo(
       taskId: taskId.trim(),
+      location: location.trim(),
       minSurvivors: minSurvivors.toInt(),
       maxSurvivors: maxSurvivors.toInt(),
       statRequirements: Map<String, int>.unmodifiable(statRequirements),
