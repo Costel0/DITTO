@@ -110,11 +110,13 @@ class HubBedsDialog extends StatelessWidget {
                     builder: (context, _) {
                       final state = controller.state;
                       final sleepers = state == null
-                          ? const <BusySurvivor>[]
+                          ? <BusySurvivor>[]
                           : state.busySurvivors
                               .where((busy) => busy.activity == 'sleeping')
-                              .toList(growable: false)
-                        ..sort((a, b) => a.endsAt.compareTo(b.endsAt));
+                              .toList();
+                      sleepers.sort(
+                        (a, b) => a.endsAt.compareTo(b.endsAt),
+                      );
 
                       if (state == null && controller.isRefreshing) {
                         return const Center(
