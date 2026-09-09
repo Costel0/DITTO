@@ -240,6 +240,7 @@ async function resolveCompletedOccupationsForUser(db, uid) {
           workingBunker,
           participantIds,
           actions,
+          outcomes,
         );
 
         // Freeze the selected outcome and every allowed interactive option at
