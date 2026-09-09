@@ -4,6 +4,7 @@ const {
   BUNKER_SCHEMA_VERSION,
   fixStatus,
   normalizedBusySurvivors,
+  normalizedPendingExpeditionReviews,
   normalizedSurvivor,
 } = require("../bunker_status");
 
@@ -136,4 +137,33 @@ test("fixStatus preserves assigned bunker coordinates", async () => {
   });
 
   assert.deepEqual(fixed.bunkerCoordinates, assigned);
+});
+
+test("pending expedition summaries never expose outcome details", () => {
+  const [summary] = normalizedPendingExpeditionReviews([
+    {
+      id: "review-1",
+      executionId: "exec-1",
+      expeditionType: "test_type",
+      actionIds: ["inspect"],
+      survivorIds: ["s1"],
+      coordinates: {x: 1, y: 2, z: 3},
+      completedAt: new Date("2026-09-09T12:00:00Z"),
+      inventoryDelta: {secret_item: 4},
+      outcomes: [
+        {
+          actionId: "inspect",
+          outcomeId: "secret",
+          narrativeId: "secret_narrative",
+          inventoryDelta: {secret_item: 4},
+        },
+      ],
+    },
+  ]);
+
+  assert.equal(summary.id, "review-1");
+  assert.equal(summary.expeditionType, "test_type");
+  assert.deepEqual(summary.coordinates, {x: 1, y: 2, z: 3});
+  assert.equal("inventoryDelta" in summary, false);
+  assert.equal("outcomes" in summary, false);
 });
