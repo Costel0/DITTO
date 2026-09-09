@@ -1,3 +1,19 @@
+enum JobTaskExecutionMode {
+  single,
+  batch;
+
+  static JobTaskExecutionMode fromWire(Object? raw) {
+    switch (raw) {
+      case 'single':
+        return JobTaskExecutionMode.single;
+      case 'batch':
+        return JobTaskExecutionMode.batch;
+      default:
+        throw const FormatException('Invalid job task execution mode.');
+    }
+  }
+}
+
 class JobTaskStartInfo {
   const JobTaskStartInfo({
     required this.taskId,
@@ -7,6 +23,10 @@ class JobTaskStartInfo {
     required this.costInventory,
     required this.resourceCraftingValueCost,
     required this.energyCostPerSurvivor,
+    required this.durationSecondsPerExecution,
+    required this.outputInventoryPerExecution,
+    required this.executionMode,
+    required this.maxExecutionCount,
     required this.requiredTaskIds,
     required this.storable,
   });
@@ -28,6 +48,17 @@ class JobTaskStartInfo {
   /// Guaranteed fixed energy spent by each participating Survivor.
   final int energyCostPerSurvivor;
 
+  /// Base duration before survivor-count and batch scaling.
+  final int durationSecondsPerExecution;
+
+  /// Guaranteed fixed inventory output for one base execution.
+  final Map<String, int> outputInventoryPerExecution;
+
+  final JobTaskExecutionMode executionMode;
+  final int maxExecutionCount;
+
+  bool get isBatch => executionMode == JobTaskExecutionMode.batch;
+
   final List<String> requiredTaskIds;
   final bool storable;
 
@@ -40,6 +71,12 @@ class JobTaskStartInfo {
     final resourceCraftingValueCostRaw =
         map['resourceCraftingValueCost'] ?? 0;
     final energyCostPerSurvivorRaw = map['energyCostPerSurvivor'] ?? 0;
+    final durationSecondsPerExecutionRaw =
+        map['durationSecondsPerExecution'] ?? 0;
+    final outputInventoryRaw =
+        map['outputInventoryPerExecution'] ?? const <String, int>{};
+    final executionModeRaw = map['executionMode'] ?? 'single';
+    final maxExecutionCountRaw = map['maxExecutionCount'] ?? 1;
     final requiredRaw = map['requiredTaskIds'];
     final storable = map['storable'];
 
@@ -73,6 +110,26 @@ class JobTaskStartInfo {
         energyCostPerSurvivorRaw < 0) {
       throw const FormatException(
         'Task energy cost must be a non-negative integer.',
+      );
+    }
+    if (durationSecondsPerExecutionRaw is! num ||
+        !durationSecondsPerExecutionRaw.isFinite ||
+        durationSecondsPerExecutionRaw !=
+            durationSecondsPerExecutionRaw.toInt() ||
+        durationSecondsPerExecutionRaw <= 0) {
+      throw const FormatException(
+        'Task duration per execution must be a positive integer.',
+      );
+    }
+    if (outputInventoryRaw is! Map) {
+      throw const FormatException('Task output inventory must be a map.');
+    }
+    if (maxExecutionCountRaw is! num ||
+        !maxExecutionCountRaw.isFinite ||
+        maxExecutionCountRaw != maxExecutionCountRaw.toInt() ||
+        maxExecutionCountRaw < 1) {
+      throw const FormatException(
+        'Task maximum execution count must be a positive integer.',
       );
     }
     if (requiredRaw is! List || requiredRaw.any((value) => value is! String)) {
@@ -111,6 +168,28 @@ class JobTaskStartInfo {
       costInventory[entry.key as String] = (entry.value as num).toInt();
     }
 
+    final outputInventory = <String, int>{};
+    for (final entry in outputInventoryRaw.entries) {
+      if (entry.key is! String || entry.value is! num) {
+        throw const FormatException(
+          'Task output contains an invalid quantity.',
+        );
+      }
+      final quantity = (entry.value as num).toInt();
+      if (quantity > 0) {
+        outputInventory[entry.key as String] = quantity;
+      }
+    }
+
+    final executionMode = JobTaskExecutionMode.fromWire(executionModeRaw);
+    final maxExecutionCount = maxExecutionCountRaw.toInt();
+    if (executionMode == JobTaskExecutionMode.single &&
+        maxExecutionCount != 1) {
+      throw const FormatException(
+        'Single job tasks must have maxExecutionCount = 1.',
+      );
+    }
+
     return JobTaskStartInfo(
       taskId: taskId.trim(),
       minSurvivors: minSurvivors.toInt(),
@@ -119,6 +198,11 @@ class JobTaskStartInfo {
       costInventory: Map<String, int>.unmodifiable(costInventory),
       resourceCraftingValueCost: resourceCraftingValueCostRaw.toInt(),
       energyCostPerSurvivor: energyCostPerSurvivorRaw.toInt(),
+      durationSecondsPerExecution: durationSecondsPerExecutionRaw.toInt(),
+      outputInventoryPerExecution:
+          Map<String, int>.unmodifiable(outputInventory),
+      executionMode: executionMode,
+      maxExecutionCount: maxExecutionCount,
       requiredTaskIds: List<String>.unmodifiable(requiredRaw.cast<String>()),
       storable: storable,
     );
@@ -132,5 +216,6 @@ abstract class JobTaskService {
     required String taskId,
     required List<String> survivorIds,
     Map<String, int> resourceItems = const <String, int>{},
+    int executionCount = 1,
   });
 }
