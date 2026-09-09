@@ -232,5 +232,9 @@
   "jobBatchDurationLabel": "Estimated duration",
   "jobBatchInputsLabel": "Consumes",
   "jobBatchOutputsLabel": "Produces",
-  "jobBatchInvalidQuantity": "Enter a valid quantity."
+  "jobBatchInvalidQuantity": "Enter a valid quantity.",
+  "jobPlantPotatoesTitle": "Plant potatoes",
+  "jobPlantPotatoesDescription": "Plant potatoes in the prepared garden and let them grow before collecting the harvest.",
+  "jobBackgroundModeLabel": "Passive task",
+  "jobBackgroundModeDescription": "The Survivor only needs to be available to start the task. They are immediately free afterwards and can perform other activities."
 }
