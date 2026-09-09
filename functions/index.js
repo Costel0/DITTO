@@ -657,6 +657,12 @@ exports.startJobTask = onCall(
     }
 
     const db = getFirestore();
+
+    // Starting a job must not depend on the client having resolved an expired
+    // timer first. Bring the authoritative bunker to its logical current state
+    // before validating availability, prerequisites or active-task rules.
+    await resolveCompletedOccupationsForUser(db, request.auth.uid);
+
     const executionId = randomUUID();
     const bunkerRef = db
       .collection("users")
