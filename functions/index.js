@@ -230,6 +230,7 @@ async function resolveCompletedOccupationsForUser(db, uid) {
         const expeditionType = first.expeditionType ||
           expeditionTypeForActions(actions);
         const coordinates = coordinatesFromExpeditionLocation(first.location);
+        const reviewId = first.executionId || encodeURIComponent(groupKey);
 
         workingBunker = applyExpeditionCompletion(
           workingBunker,
@@ -249,14 +250,27 @@ async function resolveCompletedOccupationsForUser(db, uid) {
             : {}),
         }));
 
-        pendingExpeditionReviews.push({
-          id: first.executionId || groupKey,
+        const reviewSummary = {
+          id: reviewId,
           ...(first.executionId ? {executionId: first.executionId} : {}),
           expeditionType,
           actionIds,
           survivorIds: participantIds,
           coordinates,
           completedAt: now,
+        };
+        pendingExpeditionReviews.push(reviewSummary);
+
+        // Full outcome details live in a backend-only subcollection. Firestore
+        // rules do not grant the client access to this path; the report is
+        // returned exactly once by reviewExpeditionResult.
+        const privateReviewRef = db
+          .collection("users")
+          .doc(uid)
+          .collection("expeditionReviews")
+          .doc(reviewId);
+        transaction.set(privateReviewRef, {
+          ...reviewSummary,
           inventoryDelta,
           outcomes: reviewOutcomes,
         });
@@ -264,7 +278,7 @@ async function resolveCompletedOccupationsForUser(db, uid) {
         resolvedExecutions.push({
           executionId: first.executionId || null,
           taskId: first.taskId,
-          result: reviewOutcomes.map((outcome) => outcome.outcomeId),
+          result: "pending_review",
           triggeredRandomOutcomeIds: [],
           survivorIds: participantIds,
         });
@@ -1006,14 +1020,17 @@ exports.reviewExpeditionResult = onCall(
     }
 
     const db = getFirestore();
-    const bunkerRef = db
-      .collection("users")
-      .doc(request.auth.uid)
-      .collection("state")
-      .doc("bunker");
+    const userRef = db.collection("users").doc(request.auth.uid);
+    const bunkerRef = userRef.collection("state").doc("bunker");
+    const privateReviewRef = userRef
+      .collection("expeditionReviews")
+      .doc(reviewId);
 
     return db.runTransaction(async (transaction) => {
-      const bunkerSnapshot = await transaction.get(bunkerRef);
+      const [bunkerSnapshot, privateReviewSnapshot] = await Promise.all([
+        transaction.get(bunkerRef),
+        transaction.get(privateReviewRef),
+      ]);
       if (!bunkerSnapshot.exists) {
         throw new HttpsError(
           "failed-precondition",
@@ -1033,7 +1050,28 @@ exports.reviewExpeditionResult = onCall(
         );
       }
 
-      const [review] = reviews.splice(reviewIndex, 1);
+      // Compatibility for any report produced by the brief development version
+      // that stored full outcomes directly in BunkerState.
+      const rawLegacyReview = Array.isArray(bunker.pendingExpeditionReviews)
+        ? bunker.pendingExpeditionReviews.find((entry) =>
+          entry && typeof entry === "object" && entry.id === reviewId)
+        : null;
+      const privateReview = privateReviewSnapshot.exists
+        ? privateReviewSnapshot.data()
+        : rawLegacyReview &&
+          Array.isArray(rawLegacyReview.outcomes) &&
+          rawLegacyReview.outcomes.length > 0
+          ? rawLegacyReview
+          : null;
+
+      if (!privateReview) {
+        throw new HttpsError(
+          "failed-precondition",
+          "The private expedition report is missing.",
+        );
+      }
+
+      reviews.splice(reviewIndex, 1);
       const now = truncateToSecond(new Date()) || new Date();
       const fixed = await fixStatus({
         transaction,
@@ -1044,12 +1082,24 @@ exports.reviewExpeditionResult = onCall(
           pendingExpeditionReviews: reviews,
         },
       });
+
       transaction.set(bunkerRef, fixed);
+      if (privateReviewSnapshot.exists) {
+        transaction.delete(privateReviewRef);
+      }
+
+      const completedAt = truncateToSecond(privateReview.completedAt);
+      if (!completedAt) {
+        throw new HttpsError(
+          "failed-precondition",
+          "The expedition report has an invalid completion date.",
+        );
+      }
 
       return {
         review: {
-          ...review,
-          completedAt: review.completedAt.toISOString(),
+          ...privateReview,
+          completedAt: completedAt.toISOString(),
         },
         revision: fixed.revision,
       };
