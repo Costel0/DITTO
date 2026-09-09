@@ -203,7 +203,7 @@ class BunkerState {
         completedTaskIds = List<String>.unmodifiable(completedTaskIds),
         inventory = Map<String, int>.unmodifiable(inventory);
 
-  static const int supportedSchemaVersion = 7;
+  static const int supportedSchemaVersion = 8;
   static const int bunkerCoordinatesSchemaVersion = 7;
   static const int completedTasksSchemaVersion = 6;
   static const int locationSchemaVersion = 5;
