@@ -55,14 +55,6 @@ class FirestoreBunkerStateService implements BunkerStateService {
 
     final normalized = _normalizeFirestoreMap(data);
 
-    // Schema v8 adds pending expedition review metadata. That field is consumed
-    // by ExpeditionService rather than BunkerState, so the core bunker model can
-    // safely parse the rest using the v7 shape until the next broader schema
-    // consolidation.
-    if (normalized['schemaVersion'] == 8) {
-      normalized['schemaVersion'] = BunkerState.supportedSchemaVersion;
-    }
-
     return BunkerState.fromJson(normalized);
   }
 
