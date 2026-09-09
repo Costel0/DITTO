@@ -1,13 +1,15 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../../core/localization/l10n.dart';
 import '../../../bunker/domain/bunker_state.dart';
 import '../../../survivors/domain/survivor.dart';
 import '../../../survivors/presentation/duplicate_presentation.dart';
-import '../../../survivors/presentation/widgets/survivor_profile_photo.dart';
+import '../../domain/expedition_review.dart';
 import '../../domain/expedition_service.dart';
 import 'expedition_launcher_dialog.dart';
+import 'expedition_result_dialog.dart';
 
 class HubExpeditions extends StatefulWidget {
   const HubExpeditions({
@@ -33,6 +35,31 @@ class HubExpeditions extends StatefulWidget {
 
 class _HubExpeditionsState extends State<HubExpeditions> {
   bool _isOpeningLauncher = false;
+  bool _isLoadingReviews = false;
+  String? _reviewingId;
+  int? _lastRevision;
+  List<ExpeditionReview> _pendingReviews = const <ExpeditionReview>[];
+
+  @override
+  void initState() {
+    super.initState();
+    _lastRevision = widget.bunkerState?.revision;
+    unawaited(_loadPendingReviews());
+  }
+
+  @override
+  void didUpdateWidget(covariant HubExpeditions oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final revision = widget.bunkerState?.revision;
+    if (revision != null && revision != _lastRevision) {
+      _lastRevision = revision;
+      unawaited(_loadPendingReviews());
+    }
+  }
+
+  String _text(BuildContext context, String es, String en) {
+    return Localizations.localeOf(context).languageCode == 'es' ? es : en;
+  }
 
   List<Survivor> get _availableSurvivors {
     final bunker = widget.bunkerState;
@@ -42,6 +69,21 @@ class _HubExpeditionsState extends State<HubExpeditions> {
         .whereType<Survivor>()
         .where((survivor) => survivor.energy >= 0)
         .toList(growable: false);
+  }
+
+  Future<void> _loadPendingReviews() async {
+    if (_isLoadingReviews) return;
+    if (mounted) setState(() => _isLoadingReviews = true);
+    try {
+      final reviews = await widget.expeditionService.fetchPendingReviews();
+      if (!mounted) return;
+      setState(() => _pendingReviews = reviews);
+    } catch (_) {
+      // Keep the latest successfully loaded list. The bunker poll/revision will
+      // retry naturally without blocking active expedition rendering.
+    } finally {
+      if (mounted) setState(() => _isLoadingReviews = false);
+    }
   }
 
   Future<void> _openLauncher() async {
@@ -80,6 +122,44 @@ class _HubExpeditionsState extends State<HubExpeditions> {
     }
   }
 
+  Future<void> _reviewResult(ExpeditionReview summary) async {
+    if (_reviewingId != null) return;
+    setState(() => _reviewingId = summary.id);
+    try {
+      final reviewed =
+          await widget.expeditionService.reviewExpeditionResult(summary.id);
+      if (!mounted) return;
+
+      setState(() {
+        _pendingReviews = _pendingReviews
+            .where((review) => review.id != summary.id)
+            .toList(growable: false);
+      });
+      unawaited(widget.onRefreshAfterMutation());
+
+      await ExpeditionResultDialog.show(
+        context,
+        review: reviewed,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _text(
+              context,
+              'No se ha podido abrir el informe de expedición.',
+              'The expedition report could not be opened.',
+            ),
+          ),
+        ),
+      );
+      unawaited(_loadPendingReviews());
+    } finally {
+      if (mounted) setState(() => _reviewingId = null);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -88,6 +168,7 @@ class _HubExpeditionsState extends State<HubExpeditions> {
     final activeExpeditions = _groupActiveExpeditions(
       bunker?.busySurvivors ?? const <BusySurvivor>[],
     );
+    final hasEntries = activeExpeditions.isNotEmpty || _pendingReviews.isNotEmpty;
 
     return Container(
       width: double.infinity,
@@ -111,7 +192,7 @@ class _HubExpeditionsState extends State<HubExpeditions> {
                       ),
                     ),
                   ),
-                  if (widget.isRefreshing)
+                  if (widget.isRefreshing || _isLoadingReviews)
                     const SizedBox(
                       width: 18,
                       height: 18,
@@ -150,7 +231,7 @@ class _HubExpeditionsState extends State<HubExpeditions> {
               ),
               const SizedBox(height: 22),
               Text(
-                l10n.expeditionActiveTitle,
+                _text(context, 'Expediciones', 'Expeditions'),
                 style: theme.textTheme.titleMedium?.copyWith(
                   color: const Color(0xFFE3D4B7),
                   fontWeight: FontWeight.w800,
@@ -164,7 +245,7 @@ class _HubExpeditionsState extends State<HubExpeditions> {
                     color: const Color(0xFFB08C75),
                   ),
                 )
-              else if (activeExpeditions.isEmpty)
+              else if (!hasEntries)
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -181,14 +262,25 @@ class _HubExpeditionsState extends State<HubExpeditions> {
                 )
               else
                 Expanded(
-                  child: ListView.separated(
-                    itemCount: activeExpeditions.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 10),
-                    itemBuilder: (context, index) => _ActiveExpeditionCard(
-                      entries: activeExpeditions[index],
-                      bunkerState: bunker!,
-                      onFinished: widget.onResolveCompletedOccupations,
-                    ),
+                  child: ListView(
+                    children: [
+                      for (final review in _pendingReviews) ...[
+                        _ResolvedExpeditionCard(
+                          review: review,
+                          isOpening: _reviewingId == review.id,
+                          onTap: () => _reviewResult(review),
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+                      for (final entries in activeExpeditions) ...[
+                        _ActiveExpeditionCard(
+                          entries: entries,
+                          bunkerState: bunker!,
+                          onFinished: widget.onResolveCompletedOccupations,
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+                    ],
                   ),
                 ),
             ],
@@ -214,6 +306,107 @@ List<List<BusySurvivor>> _groupActiveExpeditions(
   return result;
 }
 
+class _ResolvedExpeditionCard extends StatelessWidget {
+  const _ResolvedExpeditionCard({
+    required this.review,
+    required this.isOpening,
+    required this.onTap,
+  });
+
+  final ExpeditionReview review;
+  final bool isOpening;
+  final VoidCallback onTap;
+
+  String _text(BuildContext context, String es, String en) {
+    return Localizations.localeOf(context).languageCode == 'es' ? es : en;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (review.expeditionType == 'scavenge') {
+      return Material(
+        color: const Color(0xFF1B1A15),
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          onTap: isOpening ? null : onTap,
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFF8A7143)),
+            ),
+            child: Row(
+              children: [
+                const _ScavengeVisual(size: 72, resolved: true),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'SCAVENGE · ${_text(context, 'RESUELTA', 'RESOLVED')}',
+                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                              color: const Color(0xFFD5BA78),
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.7,
+                            ),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        _text(
+                          context,
+                          'Informe pendiente de revisar',
+                          'Report waiting to be reviewed',
+                        ),
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              color: const Color(0xFFE4D5B8),
+                              fontWeight: FontWeight.w800,
+                            ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _text(
+                          context,
+                          'Coordenadas: ${review.coordinates.displayValue}',
+                          'Coordinates: ${review.coordinates.displayValue}',
+                        ),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: const Color(0xFF9D9382),
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                if (isOpening)
+                  const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                else
+                  const Icon(
+                    Icons.mark_email_unread_outlined,
+                    color: Color(0xFFD4B77D),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return ListTile(
+      onTap: isOpening ? null : onTap,
+      tileColor: const Color(0xFF1B1A16),
+      leading: const Icon(Icons.assignment_turned_in_outlined),
+      title: Text(_text(context, 'Expedición resuelta', 'Resolved expedition')),
+      subtitle: Text(review.coordinates.displayValue),
+    );
+  }
+}
+
 class _ActiveExpeditionCard extends StatelessWidget {
   const _ActiveExpeditionCard({
     required this.entries,
@@ -227,47 +420,29 @@ class _ActiveExpeditionCard extends StatelessWidget {
 
   String get _typeId {
     final explicitType = entries.first.expeditionType;
-    if (explicitType != null && explicitType.isNotEmpty) {
-      return explicitType;
-    }
-
-    // Legacy fallback for expeditions created before expeditionType was stored
-    // separately in busySurvivors.
-    final taskId = entries.first.taskId;
-    if (taskId == null || !taskId.startsWith('expedition:')) {
-      return 'unknown';
-    }
-    final firstId = taskId
-        .substring('expedition:'.length)
-        .split('+')
-        .firstWhere((id) => id.isNotEmpty, orElse: () => 'unknown');
-    if (firstId == 'scout_surroundings' || firstId == 'scavenge') {
+    if (explicitType != null && explicitType.isNotEmpty) return explicitType;
+    final taskId = entries.first.taskId ?? '';
+    if (taskId.contains('scout_surroundings') || taskId.contains('scavenge')) {
       return 'scavenge';
     }
-    return firstId;
+    return 'unknown';
   }
 
   @override
   Widget build(BuildContext context) {
-    switch (_typeId) {
-      case 'scavenge':
-        return _ScavengeExpeditionCard(
-          entries: entries,
-          bunkerState: bunkerState,
-          onFinished: onFinished,
-        );
-      default:
-        return _GenericExpeditionCard(
-          entries: entries,
-          bunkerState: bunkerState,
-          onFinished: onFinished,
-        );
+    if (_typeId == 'scavenge') {
+      return _ScavengeActiveCard(
+        entries: entries,
+        bunkerState: bunkerState,
+        onFinished: onFinished,
+      );
     }
+    return _GenericActiveCard(entries: entries, onFinished: onFinished);
   }
 }
 
-class _ScavengeExpeditionCard extends StatelessWidget {
-  const _ScavengeExpeditionCard({
+class _ScavengeActiveCard extends StatelessWidget {
+  const _ScavengeActiveCard({
     required this.entries,
     required this.bunkerState,
     required this.onFinished,
@@ -277,85 +452,15 @@ class _ScavengeExpeditionCard extends StatelessWidget {
   final BunkerState bunkerState;
   final Future<void> Function() onFinished;
 
-  String _survivorNames(BuildContext context) => entries.map((entry) {
-        final survivor = bunkerState.survivorById(entry.survivorId);
-        return survivor == null
-            ? entry.survivorId
-            : duplicateDisplayName(context, survivor.duplicateId);
-      }).join(', ');
-
-  Widget _portraits() {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 120),
-      child: Wrap(
-        spacing: 4,
-        runSpacing: 4,
-        children: [
-          for (final entry in entries)
-            _ExpeditionPortrait(
-              survivor: bunkerState.survivorById(entry.survivorId),
-            ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final first = entries.first;
-    final details = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-              decoration: BoxDecoration(
-                color: const Color(0xFF322A1D),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: const Color(0xFF77643F)),
-              ),
-              child: Text(
-                'SCAVENGE',
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: const Color(0xFFD3B878),
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1.0,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 7),
-        Text(
-          context.l10n.expeditionScavengeInProgressTitle,
-          style: theme.textTheme.titleMedium?.copyWith(
-            color: const Color(0xFFE4D5B8),
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: 5),
-        Text(
-          context.l10n.expeditionCoordinatesValue(first.location),
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: const Color(0xFFB0A38F),
-          ),
-        ),
-        const SizedBox(height: 3),
-        Text(
-          _survivorNames(context),
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: const Color(0xFF8F8677),
-          ),
-        ),
-      ],
-    );
-
-    final countdown = _ExpeditionCountdown(
-      endsAt: first.endsAt,
-      onFinished: onFinished,
-    );
+    final names = entries.map((entry) {
+      final survivor = bunkerState.survivorById(entry.survivorId);
+      return survivor == null
+          ? entry.survivorId
+          : duplicateDisplayName(context, survivor.duplicateId);
+    }).join(', ');
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -363,70 +468,98 @@ class _ScavengeExpeditionCard extends StatelessWidget {
         color: const Color(0xFF191914),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: const Color(0xFF66583C)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x33000000),
-            blurRadius: 12,
-            offset: Offset(0, 6),
-          ),
-        ],
       ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final compact = constraints.maxWidth < 620;
-
-          if (compact) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: Row(
+        children: [
+          const _ScavengeVisual(size: 76),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const _ScavengeScanner(size: 78),
-                    const SizedBox(width: 12),
-                    Expanded(child: details),
-                  ],
+                Text(
+                  'SCAVENGE',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: const Color(0xFFD3B878),
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1,
+                      ),
                 ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(child: _portraits()),
-                    const SizedBox(width: 10),
-                    countdown,
-                  ],
+                const SizedBox(height: 5),
+                Text(
+                  context.l10n.expeditionScavengeInProgressTitle,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: const Color(0xFFE4D5B8),
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  context.l10n.expeditionCoordinatesValue(first.location),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: const Color(0xFF9F9687),
+                      ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  names,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: const Color(0xFF8F8677),
+                      ),
                 ),
               ],
-            );
-          }
-
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              const _ScavengeScanner(size: 88),
-              const SizedBox(width: 14),
-              Expanded(child: details),
-              const SizedBox(width: 12),
-              _portraits(),
-              const SizedBox(width: 18),
-              countdown,
-            ],
-          );
-        },
+            ),
+          ),
+          const SizedBox(width: 12),
+          _ExpeditionCountdown(
+            endsAt: first.endsAt,
+            onFinished: onFinished,
+          ),
+        ],
       ),
     );
   }
 }
 
-class _ScavengeScanner extends StatefulWidget {
-  const _ScavengeScanner({required this.size});
+class _GenericActiveCard extends StatelessWidget {
+  const _GenericActiveCard({
+    required this.entries,
+    required this.onFinished,
+  });
 
-  final double size;
+  final List<BusySurvivor> entries;
+  final Future<void> Function() onFinished;
 
   @override
-  State<_ScavengeScanner> createState() => _ScavengeScannerState();
+  Widget build(BuildContext context) {
+    final first = entries.first;
+    return ListTile(
+      tileColor: const Color(0xFF1B1A16),
+      leading: const Icon(Icons.explore_outlined),
+      title: Text(context.l10n.expeditionActiveFallbackTitle),
+      subtitle: Text(first.location),
+      trailing: _ExpeditionCountdown(
+        endsAt: first.endsAt,
+        onFinished: onFinished,
+      ),
+    );
+  }
 }
 
-class _ScavengeScannerState extends State<_ScavengeScanner>
+class _ScavengeVisual extends StatefulWidget {
+  const _ScavengeVisual({
+    required this.size,
+    this.resolved = false,
+  });
+
+  final double size;
+  final bool resolved;
+
+  @override
+  State<_ScavengeVisual> createState() => _ScavengeVisualState();
+}
+
+class _ScavengeVisualState extends State<_ScavengeVisual>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
@@ -453,162 +586,59 @@ class _ScavengeScannerState extends State<_ScavengeScanner>
           borderRadius: BorderRadius.circular(7),
           child: AnimatedBuilder(
             animation: _controller,
-            builder: (context, child) {
-              final sweepLeft =
-                  8 + (widget.size - 17) * _controller.value;
+            builder: (context, _) {
+              final sweepLeft = 7 + (widget.size - 16) * _controller.value;
               return Stack(
                 children: [
                   const Positioned(
-                    left: 11,
-                    bottom: 10,
+                    left: 9,
+                    bottom: 8,
                     child: Icon(
                       Icons.construction_rounded,
-                      size: 24,
+                      size: 22,
                       color: Color(0xFF746A58),
                     ),
                   ),
                   const Positioned(
-                    right: 10,
-                    top: 12,
+                    right: 8,
+                    top: 9,
                     child: Icon(
                       Icons.recycling_rounded,
-                      size: 25,
+                      size: 23,
                       color: Color(0xFF8B7957),
                     ),
                   ),
-                  Positioned(
-                    left: sweepLeft,
-                    top: 7,
-                    bottom: 7,
-                    child: Container(
-                      width: 2,
-                      decoration: const BoxDecoration(
+                  if (!widget.resolved)
+                    Positioned(
+                      left: sweepLeft,
+                      top: 6,
+                      bottom: 6,
+                      child: Container(
+                        width: 2,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFD0B36F),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Color(0x88D0B36F),
+                              blurRadius: 7,
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  else
+                    const Center(
+                      child: Icon(
+                        Icons.check_circle_outline_rounded,
+                        size: 36,
                         color: Color(0xFFD0B36F),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Color(0x88D0B36F),
-                            blurRadius: 7,
-                          ),
-                        ],
                       ),
                     ),
-                  ),
-                  Positioned(
-                    left: 16 + 12 * _controller.value,
-                    top: 17 + 6 * _controller.value,
-                    child: const Icon(
-                      Icons.search_rounded,
-                      size: 30,
-                      color: Color(0xFFD8BE83),
-                    ),
-                  ),
                 ],
               );
             },
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _GenericExpeditionCard extends StatelessWidget {
-  const _GenericExpeditionCard({
-    required this.entries,
-    required this.bunkerState,
-    required this.onFinished,
-  });
-
-  final List<BusySurvivor> entries;
-  final BunkerState bunkerState;
-  final Future<void> Function() onFinished;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final first = entries.first;
-    final portraits = ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 120),
-      child: Wrap(
-        spacing: 4,
-        runSpacing: 4,
-        children: [
-          for (final entry in entries)
-            _ExpeditionPortrait(
-              survivor: bunkerState.survivorById(entry.survivorId),
-            ),
-        ],
-      ),
-    );
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1B1A16),
-        borderRadius: BorderRadius.circular(7),
-        border: Border.all(color: const Color(0xFF4E4537)),
-      ),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.explore_outlined,
-            color: Color(0xFFC0A46F),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  context.l10n.expeditionActiveFallbackTitle,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    color: const Color(0xFFE4D5B8),
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  context.l10n.expeditionCoordinatesValue(first.location),
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: const Color(0xFF9F9687),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          portraits,
-          const SizedBox(width: 18),
-          _ExpeditionCountdown(
-            endsAt: first.endsAt,
-            onFinished: onFinished,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ExpeditionPortrait extends StatelessWidget {
-  const _ExpeditionPortrait({required this.survivor});
-
-  final Survivor? survivor;
-
-  @override
-  Widget build(BuildContext context) {
-    final current = survivor;
-    if (current != null) {
-      return SurvivorProfilePhoto(survivor: current, size: 38);
-    }
-    return Container(
-      width: 38,
-      height: 38,
-      decoration: BoxDecoration(
-        color: const Color(0xFF211F19),
-        border: Border.all(color: const Color(0xFF514634)),
-      ),
-      child: const Icon(
-        Icons.person_outline_rounded,
-        color: Color(0xFF8F8677),
       ),
     );
   }
@@ -629,9 +659,8 @@ class _ExpeditionCountdown extends StatefulWidget {
 
 class _ExpeditionCountdownState extends State<_ExpeditionCountdown> {
   Timer? _timer;
-  Timer? _completionTimer;
   Duration _remaining = Duration.zero;
-  bool _completionScheduled = false;
+  bool _completionRequested = false;
 
   @override
   void initState() {
@@ -648,24 +677,22 @@ class _ExpeditionCountdownState extends State<_ExpeditionCountdown> {
   @override
   void dispose() {
     _timer?.cancel();
-    _completionTimer?.cancel();
     super.dispose();
   }
 
   void _restart() {
     _timer?.cancel();
-    _completionTimer?.cancel();
-    _completionScheduled = false;
+    _completionRequested = false;
     _update();
     if (_remaining == Duration.zero) {
-      _scheduleCompletion();
+      _requestCompletion();
       return;
     }
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       _update();
       if (_remaining == Duration.zero) {
         _timer?.cancel();
-        _scheduleCompletion();
+        _requestCompletion();
       }
     });
   }
@@ -680,13 +707,10 @@ class _ExpeditionCountdownState extends State<_ExpeditionCountdown> {
     setState(() => _remaining = next);
   }
 
-  void _scheduleCompletion() {
-    if (_completionScheduled) return;
-    _completionScheduled = true;
-    _completionTimer = Timer(const Duration(seconds: 1), () {
-      if (!mounted) return;
-      unawaited(widget.onFinished());
-    });
+  void _requestCompletion() {
+    if (_completionRequested) return;
+    _completionRequested = true;
+    unawaited(widget.onFinished());
   }
 
   String _formatted() {
@@ -706,12 +730,9 @@ class _ExpeditionCountdownState extends State<_ExpeditionCountdown> {
   Widget build(BuildContext context) {
     return Text(
       _formatted(),
-      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+      style: Theme.of(context).textTheme.titleMedium?.copyWith(
             color: const Color(0xFFD4B77D),
             fontWeight: FontWeight.w800,
-            fontFeatures: const <FontFeature>[
-              FontFeature.tabularFigures(),
-            ],
           ),
     );
   }
