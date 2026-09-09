@@ -276,6 +276,77 @@ function validateExpeditions(data, filename) {
         `${filename}.actions.${actionId}.energyDelta must be an integer.`,
       );
     }
+
+    if (
+      !isPlainObject(action.outcomes) ||
+      Object.keys(action.outcomes).length === 0
+    ) {
+      throw new Error(
+        `${filename}.actions.${actionId}.outcomes must be a non-empty object.`,
+      );
+    }
+
+    let probabilitySum = 0;
+    for (const [outcomeId, outcome] of Object.entries(action.outcomes)) {
+      if (!outcomeId.trim() || !isPlainObject(outcome)) {
+        throw new Error(
+          `${filename}.actions.${actionId}.outcomes contains an invalid outcome.`,
+        );
+      }
+      if (
+        typeof outcome.probability !== "number" ||
+        !Number.isFinite(outcome.probability) ||
+        outcome.probability <= 0 ||
+        outcome.probability > 1
+      ) {
+        throw new Error(
+          `${filename}.actions.${actionId}.outcomes.${outcomeId}.probability must be in (0, 1].`,
+        );
+      }
+      probabilitySum += outcome.probability;
+
+      if (
+        typeof outcome.narrativeId !== "string" ||
+        !outcome.narrativeId.trim()
+      ) {
+        throw new Error(
+          `${filename}.actions.${actionId}.outcomes.${outcomeId}.narrativeId must be a string.`,
+        );
+      }
+
+      validateInventoryMap(
+        outcome.inventoryDelta,
+        `${filename}.actions.${actionId}.outcomes.${outcomeId}.inventoryDelta`,
+        {positiveOnly: true},
+      );
+
+      if (outcome.imageKey != null && (
+        typeof outcome.imageKey !== "string" ||
+        !outcome.imageKey.trim()
+      )) {
+        throw new Error(
+          `${filename}.actions.${actionId}.outcomes.${outcomeId}.imageKey must be a non-empty string.`,
+        );
+      }
+
+      if (outcome.eventTrigger != null) {
+        if (
+          !isPlainObject(outcome.eventTrigger) ||
+          typeof outcome.eventTrigger.poolId !== "string" ||
+          !outcome.eventTrigger.poolId.trim()
+        ) {
+          throw new Error(
+            `${filename}.actions.${actionId}.outcomes.${outcomeId}.eventTrigger.poolId must be a string.`,
+          );
+        }
+      }
+    }
+
+    if (Math.abs(probabilitySum - 1) > 1e-9) {
+      throw new Error(
+        `${filename}.actions.${actionId} outcome probabilities must sum to 1.`,
+      );
+    }
   }
 }
 
