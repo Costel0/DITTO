@@ -252,18 +252,26 @@ class _JobAreaScreenState extends State<JobAreaScreen> {
       ...?bunkerState?.activeBackgroundTasks
           .map((active) => active.taskId),
     };
-    final backgroundEndsAtByTaskId = <String, DateTime>{
-      for (final active
-          in bunkerState?.activeBackgroundTasks ??
-              const <ActiveBackgroundTask>[])
-        active.taskId: active.endsAt,
-    };
+    final activeEndsAtByTaskId = <String, DateTime>{};
     final activeExecutionCountByTaskId = <String, int>{};
     for (final busy in bunkerState?.busySurvivors ?? const <BusySurvivor>[]) {
       final taskId = busy.taskId ?? busy.activity;
+      final existingEndsAt = activeEndsAtByTaskId[taskId];
+      if (existingEndsAt == null || busy.endsAt.isAfter(existingEndsAt)) {
+        activeEndsAtByTaskId[taskId] = busy.endsAt;
+      }
+
       final count = busy.taskExecutionCount ?? 1;
       final current = activeExecutionCountByTaskId[taskId] ?? 1;
       if (count > current) activeExecutionCountByTaskId[taskId] = count;
+    }
+    for (final active
+        in bunkerState?.activeBackgroundTasks ??
+            const <ActiveBackgroundTask>[]) {
+      final existingEndsAt = activeEndsAtByTaskId[active.taskId];
+      if (existingEndsAt == null || active.endsAt.isAfter(existingEndsAt)) {
+        activeEndsAtByTaskId[active.taskId] = active.endsAt;
+      }
     }
     final tasks = jobTasksForArea(area).where((task) {
       if (completedTaskIds.contains(task.id)) return false;
@@ -330,8 +338,8 @@ class _JobAreaScreenState extends State<JobAreaScreen> {
                                         activeTaskIds: activeTaskIds,
                                         activeExecutionCountByTaskId:
                                             activeExecutionCountByTaskId,
-                                        backgroundEndsAtByTaskId:
-                                            backgroundEndsAtByTaskId,
+                                        activeEndsAtByTaskId:
+                                            activeEndsAtByTaskId,
                                         onResolveCompletedOccupations:
                                             widget.bunkerStateController
                                                 .resolveCompletedOccupations,
@@ -486,7 +494,7 @@ class _JobAreaContent extends StatelessWidget {
     required this.tasks,
     required this.activeTaskIds,
     required this.activeExecutionCountByTaskId,
-    required this.backgroundEndsAtByTaskId,
+    required this.activeEndsAtByTaskId,
     required this.onResolveCompletedOccupations,
     required this.startingTaskId,
     required this.taskInfoLoading,
@@ -502,7 +510,7 @@ class _JobAreaContent extends StatelessWidget {
   final List<JobTaskDefinition> tasks;
   final Set<String> activeTaskIds;
   final Map<String, int> activeExecutionCountByTaskId;
-  final Map<String, DateTime> backgroundEndsAtByTaskId;
+  final Map<String, DateTime> activeEndsAtByTaskId;
   final Future<void> Function() onResolveCompletedOccupations;
   final String? startingTaskId;
   final bool taskInfoLoading;
@@ -624,8 +632,8 @@ class _JobAreaContent extends StatelessWidget {
                           isBackground: startInfo?.isBackground ?? false,
                           activeExecutionCount:
                               activeExecutionCountByTaskId[task.id] ?? 1,
-                          backgroundEndsAt:
-                              backgroundEndsAtByTaskId[task.id],
+                          activeEndsAt:
+                              activeEndsAtByTaskId[task.id],
                           onResolveCompletedOccupations:
                               onResolveCompletedOccupations,
                           isStarting: startingTaskId == task.id,
@@ -1675,7 +1683,7 @@ class _TaskTile extends StatelessWidget {
     required this.isBatch,
     required this.isBackground,
     required this.activeExecutionCount,
-    required this.backgroundEndsAt,
+    required this.activeEndsAt,
     required this.onResolveCompletedOccupations,
     required this.isStarting,
     required this.isActive,
@@ -1689,7 +1697,7 @@ class _TaskTile extends StatelessWidget {
   final bool isBatch;
   final bool isBackground;
   final int activeExecutionCount;
-  final DateTime? backgroundEndsAt;
+  final DateTime? activeEndsAt;
   final Future<void> Function() onResolveCompletedOccupations;
   final bool isStarting;
   final bool isActive;
@@ -1828,10 +1836,26 @@ class _TaskTile extends StatelessWidget {
                   height: 22,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              else if (isActive && backgroundEndsAt != null)
-                _BackgroundTaskCountdown(
-                  endsAt: backgroundEndsAt!,
-                  onFinished: onResolveCompletedOccupations,
+              else if (isActive && activeEndsAt != null)
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    if (activeExecutionCount > 1) ...[
+                      Text(
+                        '×$activeExecutionCount',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: const Color(0xFFC7A970),
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                    ],
+                    _TaskCountdown(
+                      endsAt: activeEndsAt!,
+                      onFinished: onResolveCompletedOccupations,
+                    ),
+                  ],
                 )
               else if (isActive)
                 Row(
@@ -1844,9 +1868,7 @@ class _TaskTile extends StatelessWidget {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      activeExecutionCount > 1
-                          ? '${context.l10n.jobTaskInProgress} ×$activeExecutionCount'
-                          : context.l10n.jobTaskInProgress,
+                      context.l10n.jobTaskInProgress,
                       style: theme.textTheme.labelLarge?.copyWith(
                         color: const Color(0xFFC7A970),
                         fontWeight: FontWeight.w800,
@@ -1867,8 +1889,8 @@ class _TaskTile extends StatelessWidget {
   }
 }
 
-class _BackgroundTaskCountdown extends StatefulWidget {
-  const _BackgroundTaskCountdown({
+class _TaskCountdown extends StatefulWidget {
+  const _TaskCountdown({
     required this.endsAt,
     required this.onFinished,
   });
@@ -1877,11 +1899,11 @@ class _BackgroundTaskCountdown extends StatefulWidget {
   final Future<void> Function() onFinished;
 
   @override
-  State<_BackgroundTaskCountdown> createState() =>
-      _BackgroundTaskCountdownState();
+  State<_TaskCountdown> createState() =>
+      _TaskCountdownState();
 }
 
-class _BackgroundTaskCountdownState extends State<_BackgroundTaskCountdown> {
+class _TaskCountdownState extends State<_TaskCountdown> {
   Timer? _timer;
   Duration _remaining = Duration.zero;
   bool _completionRequested = false;
@@ -1893,7 +1915,7 @@ class _BackgroundTaskCountdownState extends State<_BackgroundTaskCountdown> {
   }
 
   @override
-  void didUpdateWidget(covariant _BackgroundTaskCountdown oldWidget) {
+  void didUpdateWidget(covariant _TaskCountdown oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.endsAt != widget.endsAt) {
       _restart();
