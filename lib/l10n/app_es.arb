@@ -232,5 +232,9 @@
   "jobBatchDurationLabel": "Duración estimada",
   "jobBatchInputsLabel": "Consumirá",
   "jobBatchOutputsLabel": "Producirá",
-  "jobBatchInvalidQuantity": "Introduce una cantidad válida."
+  "jobBatchInvalidQuantity": "Introduce una cantidad válida.",
+  "jobPlantPotatoesTitle": "Plantar patatas",
+  "jobPlantPotatoesDescription": "Planta patatas en el huerto preparado y deja que crezcan antes de recoger la cosecha.",
+  "jobBackgroundModeLabel": "Tarea pasiva",
+  "jobBackgroundModeDescription": "El superviviente solo necesita estar disponible para iniciar la tarea. Después queda libre inmediatamente y puede realizar otras actividades."
 }
