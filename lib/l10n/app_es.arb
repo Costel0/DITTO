@@ -130,5 +130,11 @@
         "type": "String"
       }
     }
-  }
+  },
+  "jobResourceSelectionTitle": "Recursos de fabricación",
+  "jobResourceSelectionDescription": "Selecciona recursos del inventario para cubrir el valor necesario. Los objetos reservados por costes fijos no pueden reutilizarse.",
+  "jobResourceValueLabel": "Valor seleccionado",
+  "jobResourcePerUnitLabel": "valor/u",
+  "jobResourceAvailableLabel": "disponibles",
+  "jobNoEligibleResources": "No tienes recursos válidos disponibles."
 }
