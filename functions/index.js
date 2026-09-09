@@ -777,7 +777,9 @@ exports.startJobTask = onCall(
           survivorId,
           executionId,
           taskId: task.id,
-          taskExecutionCount: executionCount,
+          ...(task.execution.type === "batch"
+            ? {taskExecutionCount: executionCount}
+            : {}),
           activity: task.activity,
           location: task.location,
           startedAt: now,
