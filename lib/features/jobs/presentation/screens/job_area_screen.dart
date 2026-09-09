@@ -113,8 +113,15 @@ class _JobAreaScreenState extends State<JobAreaScreen> {
 
     for (final task in jobTasksForArea(widget.area)) {
       try {
-        loaded[task.id] =
+        final info =
             await widget.taskService.fetchStartInfo(taskId: task.id);
+        if (info.taskId != task.id || info.location != task.area.id) {
+          throw StateError(
+            'Job task presentation registry does not match server data: '
+            '${task.id}.',
+          );
+        }
+        loaded[task.id] = info;
       } catch (error) {
         firstError ??= error;
       }
