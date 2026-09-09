@@ -163,7 +163,9 @@ test("pending expedition summaries never expose outcome details", () => {
 
   assert.equal(summary.id, "review-1");
   assert.equal(summary.expeditionType, "test_type");
+  assert.equal(summary.resolutionStatus, "pending_interactive");
   assert.deepEqual(summary.coordinates, {x: 1, y: 2, z: 3});
   assert.equal("inventoryDelta" in summary, false);
   assert.equal("outcomes" in summary, false);
+  assert.equal("resolutionOptions" in summary, false);
 });
