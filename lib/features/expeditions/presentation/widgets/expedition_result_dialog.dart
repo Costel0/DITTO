@@ -91,7 +91,7 @@ class _ExpeditionResultDialogState extends State<ExpeditionResultDialog> {
       case 'food':
         return context.l10n.expeditionRewardFood;
       default:
-        return itemId;
+        return context.l10n.expeditionRewardUnknown;
     }
   }
 
