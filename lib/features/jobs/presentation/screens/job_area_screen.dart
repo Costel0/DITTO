@@ -657,6 +657,11 @@ class _SurvivorTaskDialogState extends State<_SurvivorTaskDialog> {
       _selectedIds.length >= widget.minSurvivors &&
       _selectedIds.length <= widget.maxSurvivors;
 
+  bool get _fixedInventorySatisfied =>
+      widget.fixedInventoryCost.entries.every(
+        (entry) => (widget.inventory[entry.key] ?? 0) >= entry.value,
+      );
+
   int _selectedResourceValue(Map<String, Item> catalog) {
     var total = 0;
     for (final entry in _selectedResourceQuantities.entries) {
@@ -667,8 +672,38 @@ class _SurvivorTaskDialogState extends State<_SurvivorTaskDialog> {
     return total;
   }
 
+  List<_TaskRequirementStatus> _requirementStatuses(
+    BuildContext context,
+    Map<String, Item> catalog,
+  ) {
+    final languageCode = Localizations.localeOf(context).languageCode;
+    final result = <_TaskRequirementStatus>[];
+
+    for (final entry in widget.fixedInventoryCost.entries) {
+      result.add(
+        _TaskRequirementStatus(
+          label: catalog[entry.key]?.nameForLanguage(languageCode) ?? entry.key,
+          current: widget.inventory[entry.key] ?? 0,
+          required: entry.value,
+        ),
+      );
+    }
+
+    if (widget.resourceCraftingValueRequired > 0) {
+      result.add(
+        _TaskRequirementStatus(
+          label: context.l10n.jobGenericResourcesLabel,
+          current: _selectedResourceValue(catalog),
+          required: widget.resourceCraftingValueRequired,
+        ),
+      );
+    }
+
+    return result;
+  }
+
   bool _canConfirm(Map<String, Item> catalog) {
-    if (!_survivorsCanConfirm) return false;
+    if (!_survivorsCanConfirm || !_fixedInventorySatisfied) return false;
     if (widget.resourceCraftingValueRequired <= 0) return true;
     return _selectedResourceValue(catalog) >=
         widget.resourceCraftingValueRequired;
@@ -747,11 +782,16 @@ class _SurvivorTaskDialogState extends State<_SurvivorTaskDialog> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final requiresResources = widget.resourceCraftingValueRequired > 0;
+    final needsCatalog =
+        requiresResources || widget.fixedInventoryCost.isNotEmpty;
 
     return StreamBuilder<Map<String, Item>>(
-      stream: requiresResources ? _catalogStream : null,
+      stream: needsCatalog ? _catalogStream : null,
       builder: (context, snapshot) {
         final catalog = snapshot.data ?? const <String, Item>{};
+        final requirements = _requirementStatuses(context, catalog);
+        final missingRequirements =
+            requirements.where((requirement) => !requirement.isMet).toList();
         final resourceOptions = _resourceOptions(catalog);
         final languageCode = Localizations.localeOf(context).languageCode;
         resourceOptions.sort(
@@ -853,6 +893,42 @@ class _SurvivorTaskDialogState extends State<_SurvivorTaskDialog> {
                         shrinkWrap: true,
                         padding: const EdgeInsets.all(14),
                         children: [
+                          if (requirements.isNotEmpty) ...[
+                            Text(
+                              context.l10n.jobRequirementsLabel,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                color: const Color(0xFFE6D8BD),
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: [
+                                for (final requirement in requirements)
+                                  _RequirementBadge(
+                                    requirement: requirement,
+                                  ),
+                              ],
+                            ),
+                            if (missingRequirements.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                context.l10n.jobRequirementsMissingHint,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: const Color(0xFFD29C86),
+                                  height: 1.35,
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 18),
+                            const Divider(
+                              height: 1,
+                              color: Color(0xFF4A4134),
+                            ),
+                            const SizedBox(height: 18),
+                          ],
                           for (var index = 0;
                               index < widget.survivors.length;
                               index++) ...[
