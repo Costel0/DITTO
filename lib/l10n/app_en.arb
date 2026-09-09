@@ -221,5 +221,16 @@
   "expeditionCloseWithoutResolving": "Close without resolving",
   "expeditionResolveButton": "Resolve expedition",
   "expeditionCloseDecideLater": "Close and decide later",
-  "expeditionRewardUnknown": "Item"
+  "expeditionRewardUnknown": "Item",
+  "jobCleanKitchenTitle": "Clean the kitchen",
+  "jobCleanKitchenDescription": "Remove dirt, debris, and unusable materials to leave the kitchen in usable condition.",
+  "jobCraftElectronicsTitle": "Craft electronic components",
+  "jobCraftElectronicsDescription": "Reuse scrap metal to produce basic electronic components.",
+  "jobBatchModeLabel": "Batch production",
+  "jobBatchQuantityLabel": "Quantity",
+  "jobBatchQuantityHint": "Number of times",
+  "jobBatchDurationLabel": "Estimated duration",
+  "jobBatchInputsLabel": "Consumes",
+  "jobBatchOutputsLabel": "Produces",
+  "jobBatchInvalidQuantity": "Enter a valid quantity."
 }
