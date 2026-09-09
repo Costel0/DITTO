@@ -142,20 +142,42 @@ class _HubExpeditionsState extends State<HubExpeditions> {
     if (_reviewingId != null) return;
     setState(() => _reviewingId = summary.id);
     try {
-      final reviewed =
-          await widget.expeditionService.reviewExpeditionResult(summary.id);
+      // Opening is read-only. Closing the popup returns null and leaves the
+      // pending report untouched so it can be reopened later.
+      final review =
+          await widget.expeditionService.fetchExpeditionReview(summary.id);
+      if (!mounted) return;
+
+      final choices = await ExpeditionResultDialog.show(
+        context,
+        review: review,
+      );
+      if (!mounted || choices == null) return;
+
+      await widget.expeditionService.resolveExpeditionReview(
+        reviewId: summary.id,
+        choices: choices,
+      );
       if (!mounted) return;
 
       setState(() {
         _pendingReviews = _pendingReviews
-            .where((review) => review.id != summary.id)
+            .where((pending) => pending.id != summary.id)
             .toList(growable: false);
       });
-      unawaited(widget.onRefreshAfterMutation());
+      await widget.onRefreshAfterMutation();
+      if (!mounted) return;
 
-      await ExpeditionResultDialog.show(
-        context,
-        review: reviewed,
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _text(
+              context,
+              'Expedición resuelta.',
+              'Expedition resolved.',
+            ),
+          ),
+        ),
       );
     } catch (_) {
       if (!mounted) return;
@@ -164,8 +186,8 @@ class _HubExpeditionsState extends State<HubExpeditions> {
           content: Text(
             _text(
               context,
-              'No se ha podido abrir el informe de expedición.',
-              'The expedition report could not be opened.',
+              'No se ha podido completar la revisión de la expedición.',
+              'The expedition review could not be completed.',
             ),
           ),
         ),
@@ -372,8 +394,8 @@ class _ResolvedExpeditionCard extends StatelessWidget {
                       Text(
                         _text(
                           context,
-                          'Informe pendiente de revisar',
-                          'Report waiting to be reviewed',
+                          'Resolución automática completada · pendiente de decisión',
+                          'Automatic resolution complete · waiting for your decision',
                         ),
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(
                               color: const Color(0xFFE4D5B8),
