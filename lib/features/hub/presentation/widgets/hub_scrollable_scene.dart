@@ -25,6 +25,8 @@ class HubScrollableScene extends StatefulWidget {
     super.key,
     required this.characters,
     this.onCharacterTap,
+    this.onAreaTap,
+    this.tappableAreas = const <HubArea>{},
     this.backgroundState,
     this.configuration = defaultHubSceneConfiguration,
   });
@@ -33,6 +35,12 @@ class HubScrollableScene extends StatefulWidget {
   /// empty but retain their configured position for future companions.
   final Map<HubCharacterSlot, HubSceneCharacter> characters;
   final ValueChanged<HubCharacterSlot>? onCharacterTap;
+
+  /// Optional interaction for background areas. Only areas listed in
+  /// [tappableAreas] receive pointer events, so horizontal scrolling and
+  /// character taps elsewhere remain unchanged.
+  final ValueChanged<HubArea>? onAreaTap;
+  final Set<HubArea> tappableAreas;
 
   /// Runtime visual state for the background tiles. When omitted, the static
   /// state from [configuration] is used.
@@ -124,6 +132,8 @@ class _HubScrollableSceneState extends State<HubScrollableScene> {
                         segments: backgroundSegments,
                         canvasHeight: configuration.canvasSize.height,
                         showCoordinateGrid: configuration.showCoordinateGrid,
+                        onAreaTap: widget.onAreaTap,
+                        tappableAreas: widget.tappableAreas,
                       ),
                     ),
                     for (final entry in widget.characters.entries)
@@ -269,11 +279,15 @@ class _HubCanvasBackground extends StatelessWidget {
     required this.segments,
     required this.canvasHeight,
     required this.showCoordinateGrid,
+    required this.onAreaTap,
+    required this.tappableAreas,
   });
 
   final List<HubBackgroundSegment> segments;
   final double canvasHeight;
   final bool showCoordinateGrid;
+  final ValueChanged<HubArea>? onAreaTap;
+  final Set<HubArea> tappableAreas;
 
   @override
   Widget build(BuildContext context) {
@@ -310,6 +324,10 @@ class _HubCanvasBackground extends StatelessWidget {
                       _HubBackgroundSegmentImage(
                         segment: segment,
                         canvasHeight: canvasHeight,
+                        onTap: onAreaTap != null &&
+                                tappableAreas.contains(segment.area)
+                            ? () => onAreaTap!(segment.area)
+                            : null,
                       ),
                   ],
                 ),
@@ -331,10 +349,12 @@ class _HubBackgroundSegmentImage extends StatelessWidget {
   const _HubBackgroundSegmentImage({
     required this.segment,
     required this.canvasHeight,
+    required this.onTap,
   });
 
   final HubBackgroundSegment segment;
   final double canvasHeight;
+  final VoidCallback? onTap;
 
   Widget _image(String assetPath, {required Widget Function() onError}) {
     return Image.asset(
@@ -360,7 +380,7 @@ class _HubBackgroundSegmentImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _image(
+    final image = _image(
       segment.assetPath,
       onError: () {
         if (segment.assetPath == segment.defaultAssetPath) {
@@ -372,6 +392,18 @@ class _HubBackgroundSegmentImage extends StatelessWidget {
           onError: _emptySlot,
         );
       },
+    );
+
+    final tap = onTap;
+    if (tap == null) return image;
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: tap,
+        child: image,
+      ),
     );
   }
 }
