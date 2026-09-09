@@ -27,10 +27,9 @@ const {
 const {
   EXPEDITION_ACTIVITY,
   actionDefinitionsByIds,
-  aggregateExpeditionInventoryDelta,
   actionIdsFromExpeditionTaskId,
-  applyInventoryReward,
-  applyExpeditionCompletion,
+  applyExpeditionAutomaticResolution,
+  applyExpeditionInteractiveResolution,
   availableActionsAtCoordinates,
   coordinatesFromExpeditionLocation,
   expeditionDefinitionFromSnapshot,
@@ -228,27 +227,30 @@ async function resolveCompletedOccupationsForUser(db, uid) {
         );
         const executionSeed = first.executionId || groupKey;
         const outcomes = selectExpeditionOutcomes(actions, executionSeed);
-        const inventoryDelta = aggregateExpeditionInventoryDelta(outcomes);
         const expeditionType = first.expeditionType ||
           expeditionTypeForActions(actions);
         const coordinates = coordinatesFromExpeditionLocation(first.location);
         const reviewId = first.executionId || encodeURIComponent(groupKey);
 
-        workingBunker = applyExpeditionCompletion(
+        // AUTOMATIC RESOLUTION.
+        // This happens as soon as endsAt is reached, exactly like completed job
+        // tasks. Survivors return to bunker and unavoidable expedition effects
+        // belong here. For now the only unavoidable effect is energy.
+        workingBunker = applyExpeditionAutomaticResolution(
           workingBunker,
           participantIds,
           actions,
         );
 
+        // Freeze the selected outcome and every allowed interactive option at
+        // completion time. Later config edits therefore cannot change a report
+        // that is already waiting for the player.
         const reviewOutcomes = outcomes.map((outcome) => ({
           actionId: outcome.actionId,
           outcomeId: outcome.id,
           narrativeId: outcome.narrativeId,
-          inventoryDelta: outcome.inventoryDelta,
+          resolutionOptions: outcome.resolutionOptions,
           ...(outcome.imageKey ? {imageKey: outcome.imageKey} : {}),
-          ...(outcome.eventTrigger
-            ? {eventTrigger: outcome.eventTrigger}
-            : {}),
         }));
 
         const reviewSummary = {
@@ -259,12 +261,12 @@ async function resolveCompletedOccupationsForUser(db, uid) {
           survivorIds: participantIds,
           coordinates,
           completedAt: now,
+          resolutionStatus: "pending_interactive",
         };
         pendingExpeditionReviews.push(reviewSummary);
 
-        // Full outcome details live in a backend-only subcollection. Firestore
-        // rules do not grant the client access to this path; the report is
-        // returned exactly once by reviewExpeditionResult.
+        // The outcome and its choices stay backend-only. Opening the report
+        // merely reads this document; only resolveExpeditionReview consumes it.
         const privateReviewRef = db
           .collection("users")
           .doc(uid)
@@ -274,16 +276,21 @@ async function resolveCompletedOccupationsForUser(db, uid) {
           ref: privateReviewRef,
           data: {
             ...reviewSummary,
-            inventoryDelta,
+            automaticResolution: {
+              status: "resolved",
+              resolvedAt: now,
+            },
+            interactiveResolution: {
+              status: "pending",
+            },
             outcomes: reviewOutcomes,
-            rewardApplied: false,
           },
         });
 
         resolvedExecutions.push({
           executionId: first.executionId || null,
           taskId: first.taskId,
-          result: "pending_review",
+          result: "automatic_resolution_complete",
           triggeredRandomOutcomeIds: [],
           survivorIds: participantIds,
         });
@@ -1010,23 +1017,152 @@ exports.startExpedition = onCall(
   },
 );
 
-exports.reviewExpeditionResult = onCall(
+function normalizedExpeditionReviewId(data) {
+  const reviewId = typeof data?.reviewId === "string"
+    ? data.reviewId.trim()
+    : "";
+  if (!reviewId || reviewId.length > 200) {
+    throw new HttpsError("invalid-argument", "Invalid expedition review ID.");
+  }
+  return reviewId;
+}
+
+function legacyInteractiveOutcomes(privateReview) {
+  if (!Array.isArray(privateReview?.outcomes)) return [];
+
+  return privateReview.outcomes.map((outcome) => {
+    if (
+      outcome &&
+      typeof outcome === "object" &&
+      outcome.resolutionOptions &&
+      typeof outcome.resolutionOptions === "object"
+    ) {
+      return outcome;
+    }
+
+    // Compatibility with the brief development schema where reward/event
+    // effects were stored directly on the outcome and opening consumed it.
+    return {
+      ...outcome,
+      resolutionOptions: {
+        accept: {
+          id: "accept",
+          labelId: "accept",
+          inventoryDelta: outcome?.inventoryDelta || {},
+          ...(outcome?.eventTrigger
+            ? {eventTrigger: outcome.eventTrigger}
+            : {}),
+        },
+      },
+    };
+  });
+}
+
+function serializedExpeditionReview(privateReview) {
+  const completedAt = truncateToSecond(privateReview?.completedAt);
+  if (!completedAt) {
+    throw new HttpsError(
+      "failed-precondition",
+      "The expedition report has an invalid completion date.",
+    );
+  }
+
+  const automaticResolvedAt = truncateToSecond(
+    privateReview?.automaticResolution?.resolvedAt,
+  );
+
+  return {
+    ...privateReview,
+    completedAt: completedAt.toISOString(),
+    automaticResolution: {
+      status: "resolved",
+      ...(automaticResolvedAt
+        ? {resolvedAt: automaticResolvedAt.toISOString()}
+        : {resolvedAt: completedAt.toISOString()}),
+    },
+    interactiveResolution: {
+      status: "pending",
+    },
+    outcomes: legacyInteractiveOutcomes(privateReview),
+  };
+}
+
+exports.getExpeditionReview = onCall(
   CALLABLE_OPTIONS,
   async (request) => {
     if (!request.auth) {
       throw new HttpsError(
         "unauthenticated",
-        "Authentication is required to review an expedition.",
+        "Authentication is required to open an expedition report.",
       );
     }
 
-    const reviewId = typeof request.data?.reviewId === "string"
-      ? request.data.reviewId.trim()
-      : "";
-    if (!reviewId || reviewId.length > 200) {
-      throw new HttpsError("invalid-argument", "Invalid expedition review ID.");
+    const reviewId = normalizedExpeditionReviewId(request.data);
+    const db = getFirestore();
+    const userRef = db.collection("users").doc(request.auth.uid);
+    const [bunkerSnapshot, privateReviewSnapshot] = await Promise.all([
+      userRef.collection("state").doc("bunker").get(),
+      userRef.collection("expeditionReviews").doc(reviewId).get(),
+    ]);
+
+    if (!bunkerSnapshot.exists) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Bunker is not initialized.",
+      );
     }
 
+    const bunker = bunkerSnapshot.data() || {};
+    const reviews = normalizedPendingExpeditionReviews(
+      bunker.pendingExpeditionReviews,
+    );
+    if (!reviews.some((review) => review.id === reviewId)) {
+      throw new HttpsError(
+        "not-found",
+        "This expedition is no longer pending interactive resolution.",
+      );
+    }
+
+    // Compatibility for the brief schema that stored the full report directly
+    // inside BunkerState.
+    const rawLegacyReview = Array.isArray(bunker.pendingExpeditionReviews)
+      ? bunker.pendingExpeditionReviews.find((entry) =>
+        entry && typeof entry === "object" && entry.id === reviewId)
+      : null;
+    const privateReview = privateReviewSnapshot.exists
+      ? privateReviewSnapshot.data()
+      : rawLegacyReview &&
+        Array.isArray(rawLegacyReview.outcomes) &&
+        rawLegacyReview.outcomes.length > 0
+        ? rawLegacyReview
+        : null;
+
+    if (!privateReview) {
+      throw new HttpsError(
+        "failed-precondition",
+        "The private expedition report is missing.",
+      );
+    }
+
+    // READ ONLY: opening/closing the popup has no gameplay effect.
+    return {
+      review: serializedExpeditionReview(privateReview),
+    };
+  },
+);
+
+exports.resolveExpeditionReview = onCall(
+  CALLABLE_OPTIONS,
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError(
+        "unauthenticated",
+        "Authentication is required to resolve an expedition report.",
+      );
+    }
+
+    const reviewId = normalizedExpeditionReviewId(request.data);
+    const choiceSelections = request.data?.choices;
     const db = getFirestore();
     const userRef = db.collection("users").doc(request.auth.uid);
     const bunkerRef = userRef.collection("state").doc("bunker");
@@ -1054,12 +1190,10 @@ exports.reviewExpeditionResult = onCall(
       if (reviewIndex < 0) {
         throw new HttpsError(
           "not-found",
-          "This expedition result is no longer pending review.",
+          "This expedition is no longer pending interactive resolution.",
         );
       }
 
-      // Compatibility for any report produced by the brief development version
-      // that stored full outcomes directly in BunkerState.
       const rawLegacyReview = Array.isArray(bunker.pendingExpeditionReviews)
         ? bunker.pendingExpeditionReviews.find((entry) =>
           entry && typeof entry === "object" && entry.id === reviewId)
@@ -1071,7 +1205,6 @@ exports.reviewExpeditionResult = onCall(
           rawLegacyReview.outcomes.length > 0
           ? rawLegacyReview
           : null;
-
       if (!privateReview) {
         throw new HttpsError(
           "failed-precondition",
@@ -1079,21 +1212,33 @@ exports.reviewExpeditionResult = onCall(
         );
       }
 
+      const outcomes = legacyInteractiveOutcomes(privateReview);
+      let interactive;
+      try {
+        interactive = applyExpeditionInteractiveResolution(
+          bunker,
+          outcomes,
+          choiceSelections,
+        );
+      } catch (error) {
+        throw new HttpsError(
+          "failed-precondition",
+          error instanceof Error
+            ? error.message
+            : "Invalid expedition resolution choice.",
+        );
+      }
+
+      // INTERACTIVE RESOLUTION.
+      // Only this phase applies effects that depend on the player's choice.
       reviews.splice(reviewIndex, 1);
-      const inventory = privateReview.rewardApplied === false
-        ? applyInventoryReward(
-          bunker.inventory,
-          privateReview.inventoryDelta || {},
-        )
-        : bunker.inventory;
       const now = truncateToSecond(new Date()) || new Date();
       const fixed = await fixStatus({
         transaction,
         db,
         now,
         bunker: {
-          ...bunker,
-          inventory,
+          ...interactive.bunker,
           pendingExpeditionReviews: reviews,
         },
       });
@@ -1103,19 +1248,18 @@ exports.reviewExpeditionResult = onCall(
         transaction.delete(privateReviewRef);
       }
 
-      const completedAt = truncateToSecond(privateReview.completedAt);
-      if (!completedAt) {
-        throw new HttpsError(
-          "failed-precondition",
-          "The expedition report has an invalid completion date.",
-        );
-      }
-
+      // eventTriggers are deliberately returned but not processed yet. This is
+      // the seam for the future event system.
       return {
-        review: {
-          ...privateReview,
-          completedAt: completedAt.toISOString(),
-        },
+        resolved: true,
+        reviewId,
+        choices: interactive.selectedOptions.map((option) => ({
+          actionId: option.actionId,
+          outcomeId: option.outcomeId,
+          optionId: option.id,
+        })),
+        inventoryDelta: interactive.inventoryDelta,
+        eventTriggers: interactive.eventTriggers,
         revision: fixed.revision,
       };
     });
