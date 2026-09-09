@@ -43,7 +43,7 @@ class FirebaseFunctionsExpeditionService implements ExpeditionService {
   }
 
   @override
-  Future<List<ExpeditionReview>> fetchPendingReviews() async {
+  Future<List<ExpeditionReviewSummary>> fetchPendingReviews() async {
     final snapshot = await _firestore
         .collection('users')
         .doc(_userId)
@@ -56,26 +56,26 @@ class FirebaseFunctionsExpeditionService implements ExpeditionService {
     }
 
     final rawReviews = data['pendingExpeditionReviews'];
-    if (rawReviews == null) return const <ExpeditionReview>[];
+    if (rawReviews == null) return const <ExpeditionReviewSummary>[];
     if (rawReviews is! List) {
       throw const FormatException(
         'pendingExpeditionReviews must be a list.',
       );
     }
 
-    final reviews = <ExpeditionReview>[];
+    final reviews = <ExpeditionReviewSummary>[];
     for (final raw in rawReviews) {
       if (raw is! Map) {
         throw const FormatException('Invalid pending expedition review.');
       }
       reviews.add(
-        ExpeditionReview.fromMap(
+        ExpeditionReviewSummary.fromMap(
           _normalizeMap(Map<String, dynamic>.from(raw)),
         ),
       );
     }
     reviews.sort((a, b) => b.completedAt.compareTo(a.completedAt));
-    return List<ExpeditionReview>.unmodifiable(reviews);
+    return List<ExpeditionReviewSummary>.unmodifiable(reviews);
   }
 
   @override
