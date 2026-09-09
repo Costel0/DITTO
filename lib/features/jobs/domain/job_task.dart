@@ -10,6 +10,16 @@ class JobTaskDefinition {
   final JobArea area;
 }
 
+const cleanKitchenTask = JobTaskDefinition(
+  id: 'clean_kitchen',
+  area: JobArea.kitchen,
+);
+
+const craftElectronicsFromScrapTask = JobTaskDefinition(
+  id: 'craft_electronics_from_scrap',
+  area: JobArea.workshop,
+);
+
 const prepareGardenTask = JobTaskDefinition(
   id: 'prepare_garden',
   area: JobArea.garden,
@@ -46,6 +56,8 @@ const upgradeGarden6Task = JobTaskDefinition(
 );
 
 const jobTasks = <JobTaskDefinition>[
+  cleanKitchenTask,
+  craftElectronicsFromScrapTask,
   prepareGardenTask,
   upgradeGardenTask,
   upgradeGarden2Task,
