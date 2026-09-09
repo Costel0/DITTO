@@ -61,8 +61,11 @@ class FirestoreBunkerStateService implements BunkerStateService {
   bool _hasLocallyExpiredOccupation(BunkerState state) {
     final now = DateTime.now().toUtc();
     return state.busySurvivors.any(
-      (occupation) => !occupation.endsAt.isAfter(now),
-    );
+          (occupation) => !occupation.endsAt.isAfter(now),
+        ) ||
+        state.activeBackgroundTasks.any(
+          (task) => !task.endsAt.isAfter(now),
+        );
   }
 
   Map<String, dynamic> _normalizeFirestoreMap(Map<String, dynamic> source) {
