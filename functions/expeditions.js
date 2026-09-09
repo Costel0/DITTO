@@ -67,6 +67,80 @@ function normalizedEventTrigger(value, label) {
   return {poolId};
 }
 
+function normalizedResolutionOption(
+  rawOption,
+  actionId,
+  outcomeId,
+  optionId,
+) {
+  if (!isPlainObject(rawOption)) {
+    throw new Error(
+      `Expedition resolution option ${actionId}.${outcomeId}.${optionId} must be an object.`,
+    );
+  }
+
+  const labelId = typeof rawOption.labelId === "string"
+    ? rawOption.labelId.trim()
+    : "";
+  if (!labelId || !EXPEDITION_ID_PATTERN.test(labelId)) {
+    throw new Error(
+      `Expedition resolution option ${actionId}.${outcomeId}.${optionId} requires a safe labelId slug.`,
+    );
+  }
+
+  return {
+    id: optionId,
+    labelId,
+    inventoryDelta: normalizedInventoryReward(
+      rawOption.inventoryDelta,
+      `Expedition resolution option ${actionId}.${outcomeId}.${optionId}.inventoryDelta`,
+    ),
+    eventTrigger: normalizedEventTrigger(
+      rawOption.eventTrigger,
+      `Expedition resolution option ${actionId}.${outcomeId}.${optionId}.eventTrigger`,
+    ),
+  };
+}
+
+function normalizedResolutionOptions(rawOptions, actionId, outcomeId, rawOutcome) {
+  // Compatibility with the short-lived schema where the outcome itself owned
+  // the reward/event. New data always uses explicit interactive options.
+  const source = isPlainObject(rawOptions)
+    ? rawOptions
+    : {
+      accept: {
+        labelId: "accept",
+        inventoryDelta: rawOutcome.inventoryDelta || {},
+        ...(rawOutcome.eventTrigger
+          ? {eventTrigger: rawOutcome.eventTrigger}
+          : {}),
+      },
+    };
+
+  if (Object.keys(source).length === 0) {
+    throw new Error(
+      `Expedition outcome ${actionId}.${outcomeId} must define at least one resolution option.`,
+    );
+  }
+
+  const options = {};
+  for (const [optionIdRaw, rawOption] of Object.entries(source)) {
+    const optionId = optionIdRaw.trim();
+    if (!optionId || !EXPEDITION_ID_PATTERN.test(optionId)) {
+      throw new Error(
+        `Expedition outcome ${actionId}.${outcomeId} contains an invalid resolution option ID.`,
+      );
+    }
+    options[optionId] = normalizedResolutionOption(
+      rawOption,
+      actionId,
+      outcomeId,
+      optionId,
+    );
+  }
+  return options;
+}
+
 function normalizedOutcomeDefinition(rawOutcome, actionId, outcomeId) {
   if (!isPlainObject(rawOutcome)) {
     throw new Error(
@@ -109,13 +183,11 @@ function normalizedOutcomeDefinition(rawOutcome, actionId, outcomeId) {
     id: outcomeId,
     probability,
     narrativeId,
-    inventoryDelta: normalizedInventoryReward(
-      rawOutcome.inventoryDelta,
-      `Expedition outcome ${actionId}.${outcomeId}.inventoryDelta`,
-    ),
-    eventTrigger: normalizedEventTrigger(
-      rawOutcome.eventTrigger,
-      `Expedition outcome ${actionId}.${outcomeId}.eventTrigger`,
+    resolutionOptions: normalizedResolutionOptions(
+      rawOutcome.resolutionOptions,
+      actionId,
+      outcomeId,
+      rawOutcome,
     ),
     ...(imageKey ? {imageKey} : {}),
   };
@@ -345,11 +417,69 @@ function selectExpeditionOutcomes(actions, executionSeed) {
   }));
 }
 
-function aggregateExpeditionInventoryDelta(outcomes) {
-  const aggregate = {};
+function normalizedChoiceSelections(value) {
+  if (!isPlainObject(value)) {
+    throw new Error("Expedition choices must be an object.");
+  }
+
+  const selections = {};
+  for (const [actionIdRaw, optionIdRaw] of Object.entries(value)) {
+    const actionId = actionIdRaw.trim();
+    const optionId = typeof optionIdRaw === "string"
+      ? optionIdRaw.trim()
+      : "";
+    if (
+      !actionId ||
+      !optionId ||
+      !EXPEDITION_ID_PATTERN.test(actionId) ||
+      !EXPEDITION_ID_PATTERN.test(optionId)
+    ) {
+      throw new Error("Expedition choices contain an invalid selection.");
+    }
+    selections[actionId] = optionId;
+  }
+  return selections;
+}
+
+function selectedResolutionOptions(outcomes, choiceSelections) {
+  if (!Array.isArray(outcomes) || outcomes.length === 0) {
+    throw new Error("Expedition report must contain outcomes.");
+  }
+  const choices = normalizedChoiceSelections(choiceSelections);
+  const selected = [];
+
   for (const outcome of outcomes) {
+    const actionId = typeof outcome?.actionId === "string"
+      ? outcome.actionId.trim()
+      : "";
+    const options = isPlainObject(outcome?.resolutionOptions)
+      ? outcome.resolutionOptions
+      : {};
+    const optionId = choices[actionId];
+    if (!actionId || !optionId || !options[optionId]) {
+      throw new Error(
+        `A valid resolution option is required for expedition action ${actionId || "unknown"}.`,
+      );
+    }
+    selected.push({
+      actionId,
+      outcomeId: outcome.outcomeId || outcome.id || "",
+      ...options[optionId],
+      id: optionId,
+    });
+  }
+
+  if (Object.keys(choices).length !== selected.length) {
+    throw new Error("Expedition choices contain unexpected action IDs.");
+  }
+  return selected;
+}
+
+function aggregateExpeditionResolutionInventoryDelta(selectedOptions) {
+  const aggregate = {};
+  for (const option of selectedOptions) {
     for (const [itemId, quantity] of Object.entries(
-      outcome.inventoryDelta || {},
+      option.inventoryDelta || {},
     )) {
       aggregate[itemId] = (aggregate[itemId] || 0) + quantity;
     }
@@ -418,7 +548,7 @@ function coordinatesFromExpeditionLocation(location) {
   });
 }
 
-function applyExpeditionCompletion(
+function applyExpeditionAutomaticResolution(
   bunker,
   participantIds,
   actions,
@@ -456,12 +586,45 @@ function applyExpeditionCompletion(
   };
 }
 
+function applyExpeditionInteractiveResolution(
+  bunker,
+  outcomes,
+  choiceSelections,
+) {
+  const selectedOptions = selectedResolutionOptions(
+    outcomes,
+    choiceSelections,
+  );
+  const inventoryDelta = aggregateExpeditionResolutionInventoryDelta(
+    selectedOptions,
+  );
+  const eventTriggers = selectedOptions
+    .filter((option) => option.eventTrigger)
+    .map((option) => ({
+      actionId: option.actionId,
+      outcomeId: option.outcomeId,
+      optionId: option.id,
+      eventTrigger: option.eventTrigger,
+    }));
+
+  return {
+    bunker: {
+      ...bunker,
+      inventory: applyInventoryReward(bunker.inventory, inventoryDelta),
+    },
+    inventoryDelta,
+    selectedOptions,
+    eventTriggers,
+  };
+}
+
 module.exports = {
   EXPEDITION_ACTIVITY,
   actionDefinitionsByIds,
   actionIdsFromExpeditionTaskId,
-  aggregateExpeditionInventoryDelta,
-  applyExpeditionCompletion,
+  aggregateExpeditionResolutionInventoryDelta,
+  applyExpeditionAutomaticResolution,
+  applyExpeditionInteractiveResolution,
   applyInventoryReward,
   availableActionsAtCoordinates,
   canonicalActionId,
@@ -473,8 +636,10 @@ module.exports = {
   expeditionTaskId,
   expeditionTypeForActions,
   normalizedActionIds,
+  normalizedChoiceSelections,
   normalizedCoordinates,
   sameCoordinates,
   selectExpeditionOutcomes,
+  selectedResolutionOptions,
   selectedActionDefinitions,
 };
