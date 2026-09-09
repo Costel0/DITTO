@@ -245,7 +245,7 @@ function validateTaskResults(task, filename, taskId) {
   }
 }
 
-function validateExpeditions(data, filename) {
+function validateExpeditions(data, filename, knownItemIds) {
   if (!isPlainObject(data.actions)) {
     throw new Error(`${filename}.actions must be an object.`);
   }
@@ -319,6 +319,13 @@ function validateExpeditions(data, filename) {
         `${filename}.actions.${actionId}.outcomes.${outcomeId}.inventoryDelta`,
         {positiveOnly: true},
       );
+      for (const itemId of Object.keys(outcome.inventoryDelta)) {
+        if (!knownItemIds.has(itemId)) {
+          throw new Error(
+            `${filename}.actions.${actionId}.outcomes.${outcomeId}.inventoryDelta references unknown item ${itemId}.`,
+          );
+        }
+      }
 
       if (outcome.imageKey != null && (
         typeof outcome.imageKey !== "string" ||
@@ -488,7 +495,27 @@ function documentIdFromFilename(filename) {
   );
 }
 
-function loadServerData() {
+function loadKnownItemIds() {
+  const itemsPath = path.resolve(__dirname, "../../game_data/items.json");
+  const catalog = JSON.parse(fs.readFileSync(itemsPath, "utf8"));
+  if (!Array.isArray(catalog.items)) {
+    throw new Error("game_data/items.json.items must be an array.");
+  }
+
+  const ids = new Set();
+  for (const item of catalog.items) {
+    const id = typeof item?.id === "string" ? item.id.trim() : "";
+    if (!id || ids.has(id)) {
+      throw new Error(
+        "game_data/items.json contains an invalid or duplicate item ID.",
+      );
+    }
+    ids.add(id);
+  }
+  return ids;
+}
+
+function loadServerData(knownItemIds) {
   const dataDirectory = path.resolve(__dirname, "../../game_data/server");
   if (!fs.existsSync(dataDirectory)) {
     throw new Error(`Server data directory not found: ${dataDirectory}`);
@@ -522,7 +549,7 @@ function loadServerData() {
     if (documentId === "jobTasks") {
       validateJobTasks(data, filename);
     } else if (documentId === "expeditions") {
-      validateExpeditions(data, filename);
+      validateExpeditions(data, filename, knownItemIds);
     }
 
     documents.set(documentId, {filename, data});
@@ -533,7 +560,8 @@ function loadServerData() {
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
-  const documents = loadServerData();
+  const knownItemIds = loadKnownItemIds();
+  const documents = loadServerData(knownItemIds);
   const projectId = resolveProjectId(options.projectId);
 
   console.log(`Validated ${documents.size} server data file(s):`);
