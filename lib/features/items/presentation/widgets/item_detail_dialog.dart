@@ -44,6 +44,8 @@ class ItemDetailDialog extends StatelessWidget {
         return l10n.itemTypeResource;
       case 'food':
         return l10n.itemTypeFood;
+      case 'misc':
+        return l10n.itemTypeMisc;
       default:
         return type;
     }
