@@ -3,12 +3,27 @@ const {
   normalizedStatMods,
 } = require("./survivor_progression");
 
-const BUNKER_SCHEMA_VERSION = 6;
+const BUNKER_SCHEMA_VERSION = 7;
 const DEFAULT_SURVIVOR_ENERGY = 50;
 const DEFAULT_SLEEPING_SECONDS_PER_NEGATIVE_ENERGY = 60;
 const SLEEPING_ACTIVITY = "sleeping";
 const SLEEPING_LOCATION = "beds";
 const UNKNOWN_LOCATION = "unknown";
+const DEFAULT_BUNKER_COORDINATES = Object.freeze({x: 0, y: 0, z: 0});
+
+function normalizedBunkerCoordinates(source) {
+  const value = source && typeof source === "object" ? source : {};
+  const result = {};
+  for (const axis of ["x", "y", "z"]) {
+    const coordinate = value[axis];
+    result[axis] = Number.isInteger(coordinate) &&
+      coordinate >= 0 &&
+      coordinate <= 999
+      ? coordinate
+      : DEFAULT_BUNKER_COORDINATES[axis];
+  }
+  return result;
+}
 
 function normalizedSurvivor(source, survivorId, duplicateId) {
   const healthHistory = Array.isArray(source?.healthHistory)
@@ -224,17 +239,20 @@ async function fixStatus({transaction, db, bunker, now = new Date()}) {
     idleSurvivors: [...idleSurvivors],
     busySurvivors: [...busyBySurvivorId.values()],
     completedTaskIds: uniqueStringList(bunker.completedTaskIds),
+    bunkerCoordinates: normalizedBunkerCoordinates(bunker.bunkerCoordinates),
   };
 }
 
 module.exports = {
   BUNKER_SCHEMA_VERSION,
+  DEFAULT_BUNKER_COORDINATES,
   DEFAULT_SURVIVOR_ENERGY,
   DEFAULT_SLEEPING_SECONDS_PER_NEGATIVE_ENERGY,
   SLEEPING_ACTIVITY,
   SLEEPING_LOCATION,
   fixStatus,
   normalizedBunkerSurvivors,
+  normalizedBunkerCoordinates,
   normalizedBusySurvivors,
   normalizedSurvivor,
   truncateToSecond,
