@@ -107,8 +107,9 @@ class _ExpeditionLauncherDialogState extends State<ExpeditionLauncherDialog> {
 
   String _actionTitle(BuildContext context, String actionId) {
     switch (actionId) {
+      case 'scavenge':
       case 'scout_surroundings':
-        return context.l10n.expeditionScoutSurroundingsTitle;
+        return context.l10n.expeditionScavengeTitle;
       default:
         return actionId;
     }
