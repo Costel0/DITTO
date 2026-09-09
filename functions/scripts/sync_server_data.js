@@ -431,9 +431,21 @@ function validateJobTasks(data, filename) {
       throw new Error(`${filename}.${taskId}.execution must be an object.`);
     }
     const executionType = execution.type ?? "single";
-    if (executionType !== "single" && executionType !== "batch") {
+    if (
+      executionType !== "single" &&
+      executionType !== "background" &&
+      executionType !== "batch"
+    ) {
       throw new Error(
-        `${filename}.${taskId}.execution.type must be single or batch.`,
+        `${filename}.${taskId}.execution.type must be single, background or batch.`,
+      );
+    }
+    if (
+      executionType === "background" &&
+      (min !== 1 || max !== 1)
+    ) {
+      throw new Error(
+        `${filename}.${taskId} background tasks require exactly one Survivor.`,
       );
     }
     if (executionType === "batch") {
