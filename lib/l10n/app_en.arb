@@ -130,5 +130,11 @@
         "type": "String"
       }
     }
-  }
+  },
+  "jobResourceSelectionTitle": "Crafting resources",
+  "jobResourceSelectionDescription": "Select inventory resources to cover the required value. Items reserved by fixed costs cannot be reused.",
+  "jobResourceValueLabel": "Selected value",
+  "jobResourcePerUnitLabel": "value/unit",
+  "jobResourceAvailableLabel": "available",
+  "jobNoEligibleResources": "You have no eligible crafting resources available."
 }
