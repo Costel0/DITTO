@@ -16,11 +16,27 @@ const {
   normalizedResourceSelection,
   selectTaskResult,
   taskDefinitionFromSnapshot,
+  taskEnergyCostPerSurvivor,
 } = require("./job_tasks");
 const {
   VALID_DUPLICATE_IDS,
   survivorMeetsStatRequirements,
 } = require("./survivor_progression");
+const {
+  EXPEDITION_ACTIVITY,
+  actionIdsFromExpeditionTaskId,
+  applyExpeditionCompletion,
+  availableActionsAtCoordinates,
+  coordinatesFromExpeditionLocation,
+  expeditionDefinitionFromSnapshot,
+  expeditionDurationSeconds,
+  expeditionEnergyDelta,
+  expeditionLocation,
+  expeditionTaskId,
+  normalizedActionIds,
+  normalizedCoordinates,
+  selectedActionDefinitions,
+} = require("./expeditions");
 
 initializeApp();
 
@@ -112,11 +128,17 @@ async function resolveCompletedOccupationsForUser(db, uid) {
     .collection("state")
     .doc("bunker");
   const taskCatalogRef = db.collection("serverData").doc("jobTasks");
+  const expeditionCatalogRef = db.collection("serverData").doc("expeditions");
 
   return db.runTransaction(async (transaction) => {
-    const [bunkerSnapshot, taskCatalogSnapshot] = await Promise.all([
+    const [
+      bunkerSnapshot,
+      taskCatalogSnapshot,
+      expeditionCatalogSnapshot,
+    ] = await Promise.all([
       transaction.get(bunkerRef),
       transaction.get(taskCatalogRef),
+      transaction.get(expeditionCatalogRef),
     ]);
     if (!bunkerSnapshot.exists) {
       throw new HttpsError("failed-precondition", "Bunker is not initialized.");
@@ -181,6 +203,29 @@ async function resolveCompletedOccupationsForUser(db, uid) {
           executionId: null,
           taskId: SLEEPING_ACTIVITY,
           result: "rested",
+          triggeredRandomOutcomeIds: [],
+          survivorIds: participantIds,
+        });
+      } else if (first.activity === EXPEDITION_ACTIVITY) {
+        const expeditionDefinition = expeditionDefinitionFromSnapshot(
+          expeditionCatalogSnapshot,
+        );
+        const coordinates = coordinatesFromExpeditionLocation(first.location);
+        const actionIds = actionIdsFromExpeditionTaskId(first.taskId);
+        const actions = selectedActionDefinitions(
+          expeditionDefinition,
+          coordinates,
+          actionIds,
+        );
+        workingBunker = applyExpeditionCompletion(
+          workingBunker,
+          participantIds,
+          actions,
+        );
+        resolvedExecutions.push({
+          executionId: first.executionId || null,
+          taskId: first.taskId,
+          result: "completed",
           triggeredRandomOutcomeIds: [],
           survivorIds: participantIds,
         });
@@ -440,6 +485,7 @@ exports.getJobTaskStartInfo = onCall(
       statRequirements: task.survivorRequirements.statRequirements,
       costInventory: task.cost.inventory,
       resourceCraftingValueCost: task.cost.resources.craftingValue,
+      energyCostPerSurvivor: taskEnergyCostPerSurvivor(task),
       requiredTaskIds: task.requiredTaskIds,
       storable: task.storable,
     };
@@ -656,6 +702,204 @@ exports.startJobTask = onCall(
         executionId,
         survivorIds,
         durationSeconds: effectiveDurationSeconds,
+        revision: fixed.revision,
+      };
+    });
+  },
+);
+
+exports.getExpeditionLauncherInfo = onCall(
+  CALLABLE_OPTIONS,
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError(
+        "unauthenticated",
+        "Authentication is required to inspect expeditions.",
+      );
+    }
+
+    const snapshot = await getFirestore()
+      .collection("serverData")
+      .doc("expeditions")
+      .get();
+
+    let definition;
+    try {
+      definition = expeditionDefinitionFromSnapshot(snapshot);
+    } catch (error) {
+      throw new HttpsError(
+        "failed-precondition",
+        error instanceof Error
+          ? error.message
+          : "Invalid expedition configuration.",
+      );
+    }
+
+    const actions = availableActionsAtCoordinates(
+      definition,
+      definition.bunkerCoordinates,
+    ).map((action) => ({
+      id: action.id,
+      durationSeconds: action.durationSeconds,
+      energyCostPerSurvivor:
+        action.energyDelta < 0 ? Math.abs(action.energyDelta) : 0,
+    }));
+
+    return {
+      bunkerCoordinates: definition.bunkerCoordinates,
+      bunkerActions: actions,
+    };
+  },
+);
+
+exports.startExpedition = onCall(
+  CALLABLE_OPTIONS,
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError(
+        "unauthenticated",
+        "Authentication is required to start an expedition.",
+      );
+    }
+
+    const survivorIds = normalizedRequestedSurvivorIds(request.data);
+    let coordinates;
+    let actionIds;
+    try {
+      coordinates = normalizedCoordinates(request.data?.coordinates);
+      actionIds = normalizedActionIds(request.data?.actionIds);
+    } catch (error) {
+      throw new HttpsError(
+        "invalid-argument",
+        error instanceof Error ? error.message : "Invalid expedition request.",
+      );
+    }
+
+    const db = getFirestore();
+    const executionId = randomUUID();
+    const bunkerRef = db
+      .collection("users")
+      .doc(request.auth.uid)
+      .collection("state")
+      .doc("bunker");
+    const expeditionCatalogRef = db.collection("serverData").doc("expeditions");
+
+    return db.runTransaction(async (transaction) => {
+      const [bunkerSnapshot, expeditionCatalogSnapshot] = await Promise.all([
+        transaction.get(bunkerRef),
+        transaction.get(expeditionCatalogRef),
+      ]);
+      if (!bunkerSnapshot.exists) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Bunker is not initialized.",
+        );
+      }
+
+      let definition;
+      let actions;
+      try {
+        definition = expeditionDefinitionFromSnapshot(
+          expeditionCatalogSnapshot,
+        );
+        actions = selectedActionDefinitions(
+          definition,
+          coordinates,
+          actionIds,
+        );
+      } catch (error) {
+        throw new HttpsError(
+          "failed-precondition",
+          error instanceof Error
+            ? error.message
+            : "Expedition cannot be launched.",
+        );
+      }
+
+      const bunker = bunkerSnapshot.data() || {};
+      const survivors = Array.isArray(bunker.survivors)
+        ? bunker.survivors
+        : [];
+      const survivorById = new Map(
+        survivors
+          .filter((entry) => typeof entry?.id === "string")
+          .map((entry) => [entry.id, entry]),
+      );
+      const idleSurvivors = Array.isArray(bunker.idleSurvivors)
+        ? bunker.idleSurvivors.filter((id) => typeof id === "string")
+        : [];
+      const idleSet = new Set(idleSurvivors);
+
+      for (const survivorId of survivorIds) {
+        const survivor = survivorById.get(survivorId);
+        if (!survivor) {
+          throw new HttpsError(
+            "not-found",
+            `Survivor ${survivorId} does not exist in bunker.`,
+          );
+        }
+        if (!idleSet.has(survivorId)) {
+          throw new HttpsError(
+            "failed-precondition",
+            `Survivor ${survivorId} is not idle.`,
+          );
+        }
+        if (Number.isInteger(survivor.energy) && survivor.energy < 0) {
+          throw new HttpsError(
+            "failed-precondition",
+            `Survivor ${survivorId} must recover before an expedition.`,
+          );
+        }
+      }
+
+      const now = truncateToSecond(new Date()) || new Date();
+      const durationSeconds = expeditionDurationSeconds(actions);
+      const endsAt = new Date(now.getTime() + durationSeconds * 1000);
+      const busySurvivors = normalizedBusySurvivors(
+        bunker.busySurvivors,
+        now,
+      );
+      const taskId = expeditionTaskId(actionIds);
+      const location = expeditionLocation(coordinates);
+
+      for (const survivorId of survivorIds) {
+        busySurvivors.push({
+          survivorId,
+          executionId,
+          taskId,
+          activity: EXPEDITION_ACTIVITY,
+          location,
+          startedAt: now,
+          endsAt,
+        });
+      }
+
+      const selectedSet = new Set(survivorIds);
+      const fixed = await fixStatus({
+        transaction,
+        db,
+        now,
+        bunker: {
+          ...bunker,
+          idleSurvivors: idleSurvivors.filter(
+            (id) => !selectedSet.has(id),
+          ),
+          busySurvivors,
+        },
+      });
+      transaction.set(bunkerRef, fixed);
+
+      return {
+        started: true,
+        executionId,
+        survivorIds,
+        actionIds,
+        coordinates,
+        durationSeconds,
+        energyCostPerSurvivor: Math.max(
+          0,
+          -expeditionEnergyDelta(actions),
+        ),
         revision: fixed.revision,
       };
     });
