@@ -485,18 +485,46 @@ class _JobAreaContent extends StatelessWidget {
   }
 }
 
+class _TaskAssignmentSelection {
+  const _TaskAssignmentSelection({
+    required this.survivors,
+    required this.resourceItems,
+  });
+
+  final List<Survivor> survivors;
+  final Map<String, int> resourceItems;
+}
+
+class _ResourceOption {
+  const _ResourceOption({
+    required this.item,
+    required this.availableQuantity,
+    required this.craftingValue,
+  });
+
+  final Item item;
+  final int availableQuantity;
+  final int craftingValue;
+}
+
 class _SurvivorTaskDialog extends StatefulWidget {
   const _SurvivorTaskDialog({
     required this.survivors,
     required this.minSurvivors,
     required this.maxSurvivors,
     required this.statRequirements,
+    required this.inventory,
+    required this.fixedInventoryCost,
+    required this.resourceCraftingValueRequired,
   });
 
   final List<Survivor> survivors;
   final int minSurvivors;
   final int maxSurvivors;
   final Map<String, int> statRequirements;
+  final Map<String, int> inventory;
+  final Map<String, int> fixedInventoryCost;
+  final int resourceCraftingValueRequired;
 
   @override
   State<_SurvivorTaskDialog> createState() => _SurvivorTaskDialogState();
@@ -504,10 +532,59 @@ class _SurvivorTaskDialog extends StatefulWidget {
 
 class _SurvivorTaskDialogState extends State<_SurvivorTaskDialog> {
   final Set<String> _selectedIds = <String>{};
+  final Map<String, int> _selectedResourceQuantities = <String, int>{};
+  late final Stream<Map<String, Item>> _catalogStream;
 
-  bool get _canConfirm =>
+  @override
+  void initState() {
+    super.initState();
+    _catalogStream = FirestoreItemCatalogService.instance.watchCatalog();
+  }
+
+  bool get _survivorsCanConfirm =>
       _selectedIds.length >= widget.minSurvivors &&
       _selectedIds.length <= widget.maxSurvivors;
+
+  int _selectedResourceValue(Map<String, Item> catalog) {
+    var total = 0;
+    for (final entry in _selectedResourceQuantities.entries) {
+      final craftingValue = catalog[entry.key]?.craftingValue;
+      if (craftingValue == null) continue;
+      total += craftingValue * entry.value;
+    }
+    return total;
+  }
+
+  bool _canConfirm(Map<String, Item> catalog) {
+    if (!_survivorsCanConfirm) return false;
+    if (widget.resourceCraftingValueRequired <= 0) return true;
+    return _selectedResourceValue(catalog) >=
+        widget.resourceCraftingValueRequired;
+  }
+
+  List<_ResourceOption> _resourceOptions(Map<String, Item> catalog) {
+    final options = <_ResourceOption>[];
+    for (final inventoryEntry in widget.inventory.entries) {
+      final item = catalog[inventoryEntry.key];
+      final craftingValue = item?.craftingValue;
+      if (item == null || !item.isCraftingResource || craftingValue == null) {
+        continue;
+      }
+
+      final reserved = widget.fixedInventoryCost[inventoryEntry.key] ?? 0;
+      final available = inventoryEntry.value - reserved;
+      if (available <= 0) continue;
+
+      options.add(
+        _ResourceOption(
+          item: item,
+          availableQuantity: available,
+          craftingValue: craftingValue,
+        ),
+      );
+    }
+    return options;
+  }
 
   void _toggle(Survivor survivor) {
     if (!_survivorMeetsStatRequirements(survivor, widget.statRequirements)) {
@@ -522,152 +599,379 @@ class _SurvivorTaskDialogState extends State<_SurvivorTaskDialog> {
     });
   }
 
-  void _confirm() {
-    if (!_canConfirm) return;
-    final selected = widget.survivors
+  void _changeResourceQuantity(
+    String itemId,
+    int delta,
+    int availableQuantity,
+  ) {
+    setState(() {
+      final current = _selectedResourceQuantities[itemId] ?? 0;
+      final next = (current + delta).clamp(0, availableQuantity);
+      if (next == 0) {
+        _selectedResourceQuantities.remove(itemId);
+      } else {
+        _selectedResourceQuantities[itemId] = next;
+      }
+    });
+  }
+
+  void _confirm(Map<String, Item> catalog) {
+    if (!_canConfirm(catalog)) return;
+    final selectedSurvivors = widget.survivors
         .where((survivor) => _selectedIds.contains(survivor.id))
         .toList(growable: false);
-    Navigator.of(context).pop(selected);
+    final selectedResources = Map<String, int>.fromEntries(
+      _selectedResourceQuantities.entries.where((entry) => entry.value > 0),
+    );
+    Navigator.of(context).pop(
+      _TaskAssignmentSelection(
+        survivors: selectedSurvivors,
+        resourceItems: selectedResources,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final requiresResources = widget.resourceCraftingValueRequired > 0;
 
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 560, maxHeight: 680),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: const Color(0xFF181713),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: const Color(0xFF5A4E3C)),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x88000000),
-                blurRadius: 28,
-                offset: Offset(0, 14),
+    return StreamBuilder<Map<String, Item>>(
+      stream: requiresResources ? _catalogStream : null,
+      builder: (context, snapshot) {
+        final catalog = snapshot.data ?? const <String, Item>{};
+        final resourceOptions = _resourceOptions(catalog);
+        final languageCode = Localizations.localeOf(context).languageCode;
+        resourceOptions.sort(
+          (a, b) => a.item
+              .nameForLanguage(languageCode)
+              .compareTo(b.item.nameForLanguage(languageCode)),
+        );
+        final selectedResourceValue = _selectedResourceValue(catalog);
+
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560, maxHeight: 760),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: const Color(0xFF181713),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFF5A4E3C)),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x88000000),
+                    blurRadius: 28,
+                    offset: Offset(0, 14),
+                  ),
+                ],
               ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(9),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 18, 12, 14),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        width: 42,
-                        height: 42,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF2A261E),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: const Color(0xFF514634)),
-                        ),
-                        child: const Icon(
-                          Icons.groups_2_outlined,
-                          color: Color(0xFFC7A970),
-                        ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(9),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 18, 12, 14),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: 42,
+                            height: 42,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF2A261E),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: const Color(0xFF514634),
+                              ),
+                            ),
+                            child: const Icon(
+                              Icons.groups_2_outlined,
+                              color: Color(0xFFC7A970),
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  context.l10n.jobChooseSurvivorTitle,
+                                  style: theme.textTheme.titleLarge?.copyWith(
+                                    color: const Color(0xFFE6D8BD),
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  context.l10n.jobChooseSurvivorDescription,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: const Color(0xFF9B9284),
+                                    height: 1.4,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  '${_selectedIds.length} / '
+                                  '${widget.minSurvivors}-'
+                                  '${widget.maxSurvivors}',
+                                  style:
+                                      theme.textTheme.labelMedium?.copyWith(
+                                    color: const Color(0xFFC7A970),
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            icon: const Icon(Icons.close_rounded),
+                            color: const Color(0xFF9E9586),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
+                    ),
+                    const Divider(height: 1, color: Color(0xFF4A4134)),
+                    Flexible(
+                      child: ListView(
+                        shrinkWrap: true,
+                        padding: const EdgeInsets.all(14),
+                        children: [
+                          for (var index = 0;
+                              index < widget.survivors.length;
+                              index++) ...[
+                            Builder(
+                              builder: (context) {
+                                final survivor = widget.survivors[index];
+                                final selected =
+                                    _selectedIds.contains(survivor.id);
+                                final meetsRequirements =
+                                    _survivorMeetsStatRequirements(
+                                  survivor,
+                                  widget.statRequirements,
+                                );
+                                final enabled = meetsRequirements &&
+                                    (selected ||
+                                        _selectedIds.length <
+                                            widget.maxSurvivors);
+                                return _SurvivorChoice(
+                                  survivor: survivor,
+                                  selected: selected,
+                                  enabled: enabled,
+                                  restrictionText: meetsRequirements
+                                      ? null
+                                      : _missingStatRequirementText(
+                                          context,
+                                          survivor,
+                                          widget.statRequirements,
+                                        ),
+                                  onTap: () => _toggle(survivor),
+                                );
+                              },
+                            ),
+                            if (index + 1 < widget.survivors.length)
+                              const SizedBox(height: 10),
+                          ],
+                          if (requiresResources) ...[
+                            const SizedBox(height: 20),
+                            const Divider(
+                              height: 1,
+                              color: Color(0xFF4A4134),
+                            ),
+                            const SizedBox(height: 18),
                             Text(
-                              context.l10n.jobChooseSurvivorTitle,
-                              style: theme.textTheme.titleLarge?.copyWith(
+                              context.l10n.jobResourceSelectionTitle,
+                              style: theme.textTheme.titleMedium?.copyWith(
                                 color: const Color(0xFFE6D8BD),
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
-                            const SizedBox(height: 4),
+                            const SizedBox(height: 5),
                             Text(
-                              context.l10n.jobChooseSurvivorDescription,
+                              context.l10n.jobResourceSelectionDescription,
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: const Color(0xFF9B9284),
                                 height: 1.4,
                               ),
                             ),
-                            const SizedBox(height: 6),
+                            const SizedBox(height: 10),
                             Text(
-                              '${_selectedIds.length} / '
-                              '${widget.minSurvivors}-${widget.maxSurvivors}',
-                              style: theme.textTheme.labelMedium?.copyWith(
-                                color: const Color(0xFFC7A970),
-                                fontWeight: FontWeight.w700,
+                              '${context.l10n.jobResourceValueLabel}: '
+                              '$selectedResourceValue / '
+                              '${widget.resourceCraftingValueRequired}',
+                              style: theme.textTheme.labelLarge?.copyWith(
+                                color: selectedResourceValue >=
+                                        widget.resourceCraftingValueRequired
+                                    ? const Color(0xFF9FC493)
+                                    : const Color(0xFFC7A970),
+                                fontWeight: FontWeight.w800,
                               ),
                             ),
+                            const SizedBox(height: 12),
+                            if (!snapshot.hasData)
+                              const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(14),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                              )
+                            else if (resourceOptions.isEmpty)
+                              Text(
+                                context.l10n.jobNoEligibleResources,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: const Color(0xFFB08C75),
+                                ),
+                              )
+                            else
+                              for (var index = 0;
+                                  index < resourceOptions.length;
+                                  index++) ...[
+                                _ResourceChoice(
+                                  option: resourceOptions[index],
+                                  selectedQuantity:
+                                      _selectedResourceQuantities[
+                                              resourceOptions[index].item.id]
+                                          ??
+                                          0,
+                                  onChanged: (delta) =>
+                                      _changeResourceQuantity(
+                                    resourceOptions[index].item.id,
+                                    delta,
+                                    resourceOptions[index]
+                                        .availableQuantity,
+                                  ),
+                                ),
+                                if (index + 1 < resourceOptions.length)
+                                  const SizedBox(height: 8),
+                              ],
                           ],
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1, color: Color(0xFF4A4134)),
+                    Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          onPressed: _canConfirm(catalog)
+                              ? () => _confirm(catalog)
+                              : null,
+                          child: Text(context.l10n.jobTaskStartButton),
                         ),
                       ),
-                      IconButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        icon: const Icon(Icons.close_rounded),
-                        color: const Color(0xFF9E9586),
-                      ),
-                    ],
-                  ),
-                ),
-                const Divider(height: 1, color: Color(0xFF4A4134)),
-                Flexible(
-                  child: ListView.separated(
-                    shrinkWrap: true,
-                    padding: const EdgeInsets.all(14),
-                    itemCount: widget.survivors.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 10),
-                    itemBuilder: (context, index) {
-                      final survivor = widget.survivors[index];
-                      final selected = _selectedIds.contains(survivor.id);
-                      final meetsRequirements = _survivorMeetsStatRequirements(
-                        survivor,
-                        widget.statRequirements,
-                      );
-                      final enabled = meetsRequirements &&
-                          (selected ||
-                              _selectedIds.length < widget.maxSurvivors);
-                      return _SurvivorChoice(
-                        survivor: survivor,
-                        selected: selected,
-                        enabled: enabled,
-                        restrictionText: meetsRequirements
-                            ? null
-                            : _missingStatRequirementText(
-                                context,
-                                survivor,
-                                widget.statRequirements,
-                              ),
-                        onTap: () => _toggle(survivor),
-                      );
-                    },
-                  ),
-                ),
-                const Divider(height: 1, color: Color(0xFF4A4134)),
-                Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: _canConfirm ? _confirm : null,
-                      child: Text(context.l10n.jobTaskStartButton),
                     ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ResourceChoice extends StatelessWidget {
+  const _ResourceChoice({
+    required this.option,
+    required this.selectedQuantity,
+    required this.onChanged,
+  });
+
+  final _ResourceOption option;
+  final int selectedQuantity;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final languageCode = Localizations.localeOf(context).languageCode;
+    final item = option.item;
+
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF211F19),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: selectedQuantity > 0
+              ? const Color(0xFF8D7A54)
+              : const Color(0xFF443D31),
+        ),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 44,
+            height: 44,
+            child: Image.asset(
+              item.assetPath,
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) => const Icon(
+                Icons.construction_rounded,
+                color: Color(0xFFB79B68),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.nameForLanguage(languageCode),
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: const Color(0xFFE0D1B5),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '${option.availableQuantity} '
+                  '${context.l10n.jobResourceAvailableLabel} · '
+                  '${option.craftingValue} '
+                  '${context.l10n.jobResourcePerUnitLabel}',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: const Color(0xFF9B9284),
                   ),
                 ),
               ],
             ),
           ),
-        ),
+          IconButton(
+            onPressed:
+                selectedQuantity > 0 ? () => onChanged(-1) : null,
+            icon: const Icon(Icons.remove_circle_outline_rounded),
+          ),
+          SizedBox(
+            width: 24,
+            child: Text(
+              '$selectedQuantity',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: const Color(0xFFE0D1B5),
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          IconButton(
+            onPressed: selectedQuantity < option.availableQuantity
+                ? () => onChanged(1)
+                : null,
+            icon: const Icon(Icons.add_circle_outline_rounded),
+          ),
+        ],
       ),
     );
   }
 }
-
 class _SurvivorChoice extends StatelessWidget {
   const _SurvivorChoice({
     required this.survivor,
