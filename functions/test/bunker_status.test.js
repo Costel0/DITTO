@@ -169,3 +169,20 @@ test("pending expedition summaries never expose outcome details", () => {
   assert.equal("outcomes" in summary, false);
   assert.equal("resolutionOptions" in summary, false);
 });
+
+
+test("busy normalization preserves positive taskExecutionCount", () => {
+  const [busy] = normalizedBusySurvivors([
+    {
+      survivorId: "s1",
+      activity: "craft_electronics_from_scrap",
+      location: "workshop",
+      taskId: "craft_electronics_from_scrap",
+      taskExecutionCount: 7,
+      startedAt: new Date("2026-09-09T12:00:00Z"),
+      endsAt: new Date("2026-09-09T12:03:30Z"),
+    },
+  ]);
+
+  assert.equal(busy.taskExecutionCount, 7);
+});
