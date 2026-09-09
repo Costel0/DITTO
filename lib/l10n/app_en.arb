@@ -137,5 +137,8 @@
   "jobResourcePerUnitLabel": "value/unit",
   "jobResourceAvailableLabel": "available",
   "jobNoEligibleResources": "You have no eligible crafting resources available.",
-  "itemTypeMisc": "Miscellaneous"
+  "itemTypeMisc": "Miscellaneous",
+  "jobRequirementsLabel": "Requirements",
+  "jobGenericResourcesLabel": "Resources",
+  "jobRequirementsMissingHint": "Some requirements are still missing before the task can start."
 }
