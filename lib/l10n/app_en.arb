@@ -189,5 +189,8 @@
       }
     }
   },
-  "expeditionScavengeInProgressTitle": "Searching for salvageable materials"
+  "expeditionScavengeInProgressTitle": "Searching for salvageable materials",
+  "hubBedsTitle": "Beds",
+  "hubBedsDescription": "Survivors currently resting in the shelter.",
+  "hubBedsEmpty": "There are no Survivors sleeping right now."
 }
