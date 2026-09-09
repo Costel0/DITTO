@@ -1023,7 +1023,7 @@ exports.reviewExpeditionResult = onCall(
     const reviewId = typeof request.data?.reviewId === "string"
       ? request.data.reviewId.trim()
       : "";
-    if (!reviewId) {
+    if (!reviewId || reviewId.length > 200) {
       throw new HttpsError("invalid-argument", "Invalid expedition review ID.");
     }
 
