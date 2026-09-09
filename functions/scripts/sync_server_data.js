@@ -74,6 +74,14 @@ function validateInventoryMap(value, label, {positiveOnly = false} = {}) {
   }
 }
 
+function validateKnownInventoryItems(value, label, knownItemIds) {
+  for (const itemId of Object.keys(value)) {
+    if (!knownItemIds.has(itemId)) {
+      throw new Error(`${label} references unknown item ${itemId}.`);
+    }
+  }
+}
+
 function validateResourceCost(value, label) {
   if (value == null) return;
   if (!isPlainObject(value)) {
@@ -127,7 +135,7 @@ function validateStatExperienceDelta(value, label) {
   }
 }
 
-function validateEffects(value, label) {
+function validateEffects(value, label, knownItemIds) {
   if (!isPlainObject(value)) {
     throw new Error(`${label} must be an object.`);
   }
@@ -135,13 +143,18 @@ function validateEffects(value, label) {
     throw new Error(`${label}.energyDelta must be an integer.`);
   }
   validateInventoryMap(value.inventoryDelta, `${label}.inventoryDelta`);
+  validateKnownInventoryItems(
+    value.inventoryDelta,
+    `${label}.inventoryDelta`,
+    knownItemIds,
+  );
   validateStatExperienceDelta(
     value.statExperienceDelta,
     `${label}.statExperienceDelta`,
   );
 }
 
-function validateTaskResults(task, filename, taskId) {
+function validateTaskResults(task, filename, taskId, knownItemIds) {
   const label = `${filename}.${taskId}`;
   if (!isPlainObject(task.results) || Object.keys(task.results).length === 0) {
     throw new Error(`${label}.results must contain at least one result.`);
@@ -156,6 +169,7 @@ function validateTaskResults(task, filename, taskId) {
     validateEffects(
       result.guaranteedOutcomes,
       `${label}.results.${resultId}.guaranteedOutcomes`,
+      knownItemIds,
     );
 
     if (!isPlainObject(result.randomOutcomes)) {
@@ -177,7 +191,11 @@ function validateTaskResults(task, filename, taskId) {
       ) {
         throw new Error(`${outcomeLabel}.probability must be 0..1.`);
       }
-      validateEffects(outcome.effects, `${outcomeLabel}.effects`);
+      validateEffects(
+        outcome.effects,
+        `${outcomeLabel}.effects`,
+        knownItemIds,
+      );
     }
   }
 
@@ -392,7 +410,7 @@ function validateExpeditions(data, filename, knownItemIds) {
   }
 }
 
-function validateJobTasks(data, filename) {
+function validateJobTasks(data, filename, knownItemIds) {
   if (!isPlainObject(data.tasks)) {
     throw new Error(`${filename}.tasks must be an object.`);
   }
@@ -500,12 +518,17 @@ function validateJobTasks(data, filename) {
       `${filename}.${taskId}.cost.inventory`,
       {positiveOnly: true},
     );
+    validateKnownInventoryItems(
+      task.cost.inventory,
+      `${filename}.${taskId}.cost.inventory`,
+      knownItemIds,
+    );
     validateResourceCost(
       task.cost.resources,
       `${filename}.${taskId}.cost.resources`,
     );
 
-    validateTaskResults(task, filename, taskId);
+    validateTaskResults(task, filename, taskId, knownItemIds);
     if ((task.execution?.type ?? "single") === "batch") {
       if (task.resultResolver?.type !== "fixed") {
         throw new Error(
@@ -635,7 +658,7 @@ function loadServerData(knownItemIds) {
       throw new Error(`${filename}.dataVersion must be a positive integer.`);
     }
     if (documentId === "jobTasks") {
-      validateJobTasks(data, filename);
+      validateJobTasks(data, filename, knownItemIds);
     } else if (documentId === "expeditions") {
       validateExpeditions(data, filename, knownItemIds);
     }
