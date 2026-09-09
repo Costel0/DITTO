@@ -189,5 +189,8 @@
       }
     }
   },
-  "expeditionScavengeInProgressTitle": "Buscando materiales aprovechables"
+  "expeditionScavengeInProgressTitle": "Buscando materiales aprovechables",
+  "hubBedsTitle": "Camas",
+  "hubBedsDescription": "Supervivientes que están descansando en el refugio.",
+  "hubBedsEmpty": "Ahora mismo no hay ningún superviviente durmiendo."
 }
