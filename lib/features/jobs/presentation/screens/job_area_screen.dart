@@ -940,7 +940,7 @@ class _SurvivorTaskDialogState extends State<_SurvivorTaskDialog> {
     final requiresResources = widget.resourceCraftingValueRequired > 0;
     final needsCatalog = requiresResources ||
         widget.fixedInventoryCost.isNotEmpty ||
-        widget.outputInventoryPerExecution.isNotEmpty;
+        (_isBatch && widget.outputInventoryPerExecution.isNotEmpty);
 
     return StreamBuilder<Map<String, Item>>(
       stream: needsCatalog ? _catalogStream : null,
