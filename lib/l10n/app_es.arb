@@ -220,5 +220,6 @@
   "expeditionNoAdditionalEffects": "Sin efectos adicionales.",
   "expeditionCloseWithoutResolving": "Cerrar sin resolver",
   "expeditionResolveButton": "Resolver expedición",
-  "expeditionCloseDecideLater": "Cerrar y decidir más tarde"
+  "expeditionCloseDecideLater": "Cerrar y decidir más tarde",
+  "expeditionRewardUnknown": "Objeto"
 }
