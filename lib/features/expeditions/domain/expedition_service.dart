@@ -6,7 +6,12 @@ abstract interface class ExpeditionService {
 
   Future<List<ExpeditionReviewSummary>> fetchPendingReviews();
 
-  Future<ExpeditionReview> reviewExpeditionResult(String reviewId);
+  Future<ExpeditionReview> fetchExpeditionReview(String reviewId);
+
+  Future<ExpeditionResolutionResult> resolveExpeditionReview({
+    required String reviewId,
+    required Map<String, String> choices,
+  });
 
   Future<void> startExpedition({
     required List<String> survivorIds,
