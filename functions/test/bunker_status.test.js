@@ -3,6 +3,7 @@ const test = require("node:test");
 const {
   BUNKER_SCHEMA_VERSION,
   fixStatus,
+  normalizedActiveBackgroundTasks,
   normalizedBusySurvivors,
   normalizedPendingExpeditionReviews,
   normalizedSurvivor,
@@ -185,4 +186,46 @@ test("busy normalization preserves positive taskExecutionCount", () => {
   ]);
 
   assert.equal(busy.taskExecutionCount, 7);
+});
+
+
+test("background task normalization preserves timing without occupying starter", async () => {
+  const now = new Date("2026-09-09T12:00:00Z");
+  const background = normalizedActiveBackgroundTasks([
+    {
+      executionId: "crop-1",
+      taskId: "plant_potatoes",
+      activity: "plant_potatoes",
+      location: "garden",
+      startedBySurvivorId: "s1",
+      startedAt: now,
+      endsAt: new Date("2026-09-09T12:01:00Z"),
+    },
+  ]);
+
+  assert.equal(background.length, 1);
+  assert.equal(background[0].startedBySurvivorId, "s1");
+
+  const fixed = await fixStatus({
+    transaction: fakeTransaction(10),
+    db: fakeDb(),
+    now,
+    bunker: {
+      revision: 1,
+      survivors: [normalizedSurvivor({energy: 50}, "s1", "01")],
+      idleSurvivors: ["s1"],
+      busySurvivors: [],
+      activeBackgroundTasks: background,
+      completedTaskIds: [],
+      inventory: {},
+    },
+  });
+
+  assert.deepEqual(fixed.idleSurvivors, ["s1"]);
+  assert.deepEqual(fixed.busySurvivors, []);
+  assert.equal(fixed.activeBackgroundTasks.length, 1);
+  assert.equal(
+    fixed.activeBackgroundTasks[0].endsAt.toISOString(),
+    "2026-09-09T12:01:00.000Z",
+  );
 });
