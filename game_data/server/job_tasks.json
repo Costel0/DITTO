@@ -1,6 +1,6 @@
 {
-  "schemaVersion": 6,
-  "dataVersion": 10,
+  "schemaVersion": 7,
+  "dataVersion": 11,
   "tasks": {
     "prepare_garden": {
       "activity": "prepare_garden",
@@ -323,6 +323,45 @@
             "energyDelta": -5,
             "inventoryDelta": {
               "electronics": 1
+            }
+          },
+          "randomOutcomes": {}
+        }
+      }
+    },
+    "plant_potatoes": {
+      "activity": "plant_potatoes",
+      "location": "garden",
+      "durationSeconds": 60,
+      "storable": false,
+      "execution": {
+        "type": "background"
+      },
+      "survivorRequirements": {
+        "min": 1,
+        "max": 1,
+        "statRequirements": {
+          "care": {
+            "greaterThan": 3
+          }
+        }
+      },
+      "requiredTaskIds": [
+        "prepare_garden"
+      ],
+      "cost": {
+        "inventory": {}
+      },
+      "resultResolver": {
+        "type": "fixed",
+        "resultId": "success"
+      },
+      "results": {
+        "success": {
+          "guaranteedOutcomes": {
+            "energyDelta": 0,
+            "inventoryDelta": {
+              "food": 10
             }
           },
           "randomOutcomes": {}
