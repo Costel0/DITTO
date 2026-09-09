@@ -245,6 +245,13 @@ class _JobAreaScreenState extends State<JobAreaScreen> {
             .map((busy) => busy.taskId ?? busy.activity)
             .toSet() ??
         <String>{};
+    final activeExecutionCountByTaskId = <String, int>{};
+    for (final busy in bunkerState?.busySurvivors ?? const <BusySurvivor>[]) {
+      final taskId = busy.taskId ?? busy.activity;
+      final count = busy.taskExecutionCount ?? 1;
+      final current = activeExecutionCountByTaskId[taskId] ?? 1;
+      if (count > current) activeExecutionCountByTaskId[taskId] = count;
+    }
     final tasks = jobTasksForArea(area).where((task) {
       if (completedTaskIds.contains(task.id)) return false;
       final startInfo = _startInfoByTaskId[task.id];
@@ -308,6 +315,8 @@ class _JobAreaScreenState extends State<JobAreaScreen> {
                                         area: area,
                                         tasks: tasks,
                                         activeTaskIds: activeTaskIds,
+                                        activeExecutionCountByTaskId:
+                                            activeExecutionCountByTaskId,
                                         startingTaskId: _startingTaskId,
                                         taskInfoLoading: _isLoadingTaskInfo,
                                         taskInfoError: _taskInfoError,
@@ -458,6 +467,7 @@ class _JobAreaContent extends StatelessWidget {
     required this.area,
     required this.tasks,
     required this.activeTaskIds,
+    required this.activeExecutionCountByTaskId,
     required this.startingTaskId,
     required this.taskInfoLoading,
     required this.taskInfoError,
@@ -471,6 +481,7 @@ class _JobAreaContent extends StatelessWidget {
   final JobArea area;
   final List<JobTaskDefinition> tasks;
   final Set<String> activeTaskIds;
+  final Map<String, int> activeExecutionCountByTaskId;
   final String? startingTaskId;
   final bool taskInfoLoading;
   final Object? taskInfoError;
@@ -587,6 +598,9 @@ class _JobAreaContent extends StatelessWidget {
                           requirements: requirements,
                           energyCostPerSurvivor:
                               startInfo?.energyCostPerSurvivor ?? 0,
+                          isBatch: startInfo?.isBatch ?? false,
+                          activeExecutionCount:
+                              activeExecutionCountByTaskId[task.id] ?? 1,
                           isStarting: startingTaskId == task.id,
                           isActive: activeTaskIds.contains(task.id),
                           onTap: startingTaskId == null &&
@@ -1552,6 +1566,7 @@ class _TaskTile extends StatelessWidget {
     required this.requirements,
     required this.energyCostPerSurvivor,
     required this.isBatch,
+    required this.activeExecutionCount,
     required this.isStarting,
     required this.isActive,
     required this.onTap,
@@ -1562,6 +1577,7 @@ class _TaskTile extends StatelessWidget {
   final List<_TaskRequirementStatus> requirements;
   final int energyCostPerSurvivor;
   final bool isBatch;
+  final int activeExecutionCount;
   final bool isStarting;
   final bool isActive;
   final VoidCallback? onTap;
@@ -1708,7 +1724,9 @@ class _TaskTile extends StatelessWidget {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      context.l10n.jobTaskInProgress,
+                      activeExecutionCount > 1
+                          ? '${context.l10n.jobTaskInProgress} ×$activeExecutionCount'
+                          : context.l10n.jobTaskInProgress,
                       style: theme.textTheme.labelLarge?.copyWith(
                         color: const Color(0xFFC7A970),
                         fontWeight: FontWeight.w800,
