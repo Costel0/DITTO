@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../../app/navigation/app_routes.dart';
+import '../../../../core/firebase/firebase_functions_expedition_service.dart';
 import '../../../../core/firebase/firebase_functions_job_task_service.dart';
 import '../../../../core/firebase/firestore_bunker_state_service.dart';
 import '../../../../core/localization/l10n.dart';
@@ -13,6 +14,8 @@ import '../../../bunker/domain/bunker_state.dart';
 import '../../../hub/domain/hub_background_configuration.dart';
 import '../../../hub/domain/hub_scene_configuration.dart';
 import '../../../hub/presentation/widgets/hub_character_info.dart';
+import '../../../expeditions/domain/expedition_service.dart';
+import '../../../expeditions/presentation/widgets/hub_expeditions.dart';
 import '../../../hub/presentation/widgets/hub_debug_controls.dart';
 import '../../../hub/presentation/widgets/hub_inventory.dart';
 import '../../../hub/presentation/widgets/hub_jobs.dart';
@@ -46,6 +49,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   BunkerStateController? _bunkerStateController;
   final FirebaseFunctionsJobTaskService _jobTaskService =
       FirebaseFunctionsJobTaskService();
+  final FirebaseFunctionsExpeditionService _expeditionService =
+      FirebaseFunctionsExpeditionService();
 
   SessionController get sessionController => widget.sessionController;
 
@@ -146,7 +151,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   void _selectSection(_HubSection section) {
     setState(() => _selectedSection = section);
     final controller = _bunkerStateController;
-    if (section == _HubSection.jobs && controller != null) {
+    if ((section == _HubSection.jobs ||
+            section == _HubSection.expeditions) &&
+        controller != null) {
       unawaited(controller.refresh());
     }
   }
@@ -318,6 +325,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                                       bunkerLoadError:
                                           bunkerController?.lastError,
                                       onOpenJobArea: _openJobArea,
+                                      expeditionService: _expeditionService,
+                                      onRefreshAfterMutation:
+                                          _refreshBunkerAfterDebugMutation,
                                       onResolveCompletedOccupations:
                                           _resolveCompletedOccupationsFromCountdown,
                                       onPreviousSurvivor:
@@ -598,6 +608,8 @@ class _HubSectionView extends StatelessWidget {
     required this.bunkerIsRefreshing,
     required this.bunkerLoadError,
     required this.onOpenJobArea,
+    required this.expeditionService,
+    required this.onRefreshAfterMutation,
     required this.onResolveCompletedOccupations,
     required this.onPreviousSurvivor,
     required this.onNextSurvivor,
@@ -611,6 +623,8 @@ class _HubSectionView extends StatelessWidget {
   final bool bunkerIsRefreshing;
   final Object? bunkerLoadError;
   final ValueChanged<JobArea> onOpenJobArea;
+  final ExpeditionService expeditionService;
+  final Future<void> Function() onRefreshAfterMutation;
   final Future<void> Function() onResolveCompletedOccupations;
   final VoidCallback? onPreviousSurvivor;
   final VoidCallback? onNextSurvivor;
@@ -646,11 +660,14 @@ class _HubSectionView extends StatelessWidget {
           onResolveCompletedOccupations: onResolveCompletedOccupations,
         );
       case _HubSection.expeditions:
-        return _HubSectionContent(
+        return HubExpeditions(
           key: const ValueKey(_HubSection.expeditions),
-          icon: Icons.explore_outlined,
-          title: l10n.hubExpeditionsTitle,
-          description: l10n.hubExpeditionsDescription,
+          bunkerState: bunkerState,
+          isRefreshing: bunkerIsRefreshing,
+          loadError: bunkerLoadError,
+          expeditionService: expeditionService,
+          onRefreshAfterMutation: onRefreshAfterMutation,
+          onResolveCompletedOccupations: onResolveCompletedOccupations,
         );
     }
   }
