@@ -228,6 +228,13 @@ class _ActiveExpeditionCard extends StatelessWidget {
   final Future<void> Function() onFinished;
 
   String get _typeId {
+    final explicitType = entries.first.expeditionType;
+    if (explicitType != null && explicitType.isNotEmpty) {
+      return explicitType;
+    }
+
+    // Legacy fallback for expeditions created before expeditionType was stored
+    // separately in busySurvivors.
     final taskId = entries.first.taskId;
     if (taskId == null || !taskId.startsWith('expedition:')) {
       return 'unknown';
@@ -236,7 +243,10 @@ class _ActiveExpeditionCard extends StatelessWidget {
         .substring('expedition:'.length)
         .split('+')
         .firstWhere((id) => id.isNotEmpty, orElse: () => 'unknown');
-    return firstId == 'scout_surroundings' ? 'scavenge' : firstId;
+    if (firstId == 'scout_surroundings' || firstId == 'scavenge') {
+      return 'scavenge';
+    }
+    return firstId;
   }
 
   @override
