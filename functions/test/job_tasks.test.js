@@ -3,6 +3,7 @@ const test = require("node:test");
 const {
   applyTaskCompletionEffects,
   applyTaskStartCost,
+  hasActiveTaskExecution,
   missingRequiredTaskIds,
   normalizedTaskExecutionCount,
   selectTaskResult,
@@ -696,4 +697,46 @@ test("background tasks reject multi-Survivor definitions", () => {
     ),
     /requires exactly one Survivor/,
   );
+});
+
+
+test("active-task detection covers single, batch and background executions", () => {
+  const bunker = {
+    busySurvivors: [
+      {
+        survivorId: "s1",
+        taskId: "single_task",
+        activity: "single_task",
+      },
+      {
+        survivorId: "s2",
+        taskId: "batch_task",
+        activity: "batch_task",
+        taskExecutionCount: 4,
+      },
+      {
+        survivorId: "s3",
+        activity: "legacy_task",
+      },
+    ],
+    activeBackgroundTasks: [
+      {
+        executionId: "background-1",
+        taskId: "background_task",
+      },
+    ],
+  };
+
+  assert.equal(hasActiveTaskExecution(bunker, "single_task"), true);
+  assert.equal(hasActiveTaskExecution(bunker, "batch_task"), true);
+  assert.equal(hasActiveTaskExecution(bunker, "legacy_task"), true);
+  assert.equal(hasActiveTaskExecution(bunker, "background_task"), true);
+  assert.equal(hasActiveTaskExecution(bunker, "other_task"), false);
+});
+
+test("active-task detection is safe for missing or malformed state", () => {
+  assert.equal(hasActiveTaskExecution({}, "task"), false);
+  assert.equal(hasActiveTaskExecution(null, "task"), false);
+  assert.equal(hasActiveTaskExecution({busySurvivors: [null]}, "task"), false);
+  assert.equal(hasActiveTaskExecution({}, ""), false);
 });
