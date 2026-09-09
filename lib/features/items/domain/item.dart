@@ -31,6 +31,19 @@ class Item {
   /// durability, crafting tags or status effects.
   final Map<String, dynamic> stats;
 
+  /// Positive crafting contribution used when a task accepts generic
+  /// resources. Items must also include "resource" in [type] to be eligible.
+  int? get craftingValue {
+    final raw = stats['craftingValue'];
+    if (raw is! num || !raw.isFinite || raw <= 0 || raw != raw.toInt()) {
+      return null;
+    }
+    return raw.toInt();
+  }
+
+  bool get isCraftingResource =>
+      type.contains('resource') && craftingValue != null;
+
   /// Artwork is the only item definition intentionally kept in the app bundle.
   String get assetPath => 'assets/items/item_$id.png';
 
