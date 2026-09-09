@@ -293,6 +293,98 @@ test("task start cost rejects insufficient inventory", () => {
   );
 });
 
+test("generic resource cost uses selected item crafting values", () => {
+  const task = taskDefinitionFromSnapshot(
+    snapshotWithTasks({
+      build: {
+        location: "workshop",
+        durationSeconds: 10,
+        cost: {
+          inventory: {fixed_component: 2},
+          resources: {craftingValue: 5},
+        },
+        resultResolver: {type: "fixed", resultId: "done"},
+        results: {
+          done: {
+            guaranteedOutcomes: {energyDelta: 0, inventoryDelta: {}},
+            randomOutcomes: {},
+          },
+        },
+      },
+    }),
+    "build",
+  );
+
+  const result = applyTaskStartCost(
+    {
+      inventory: {
+        fixed_component: 3,
+        low_resource: 1,
+        high_resource: 2,
+      },
+    },
+    task,
+    {
+      resourceSelection: {
+        low_resource: 1,
+        high_resource: 2,
+      },
+      itemDefinitions: {
+        low_resource: {
+          type: ["resource"],
+          stats: {craftingValue: 1},
+        },
+        high_resource: {
+          type: ["resource"],
+          stats: {craftingValue: 2},
+        },
+      },
+    },
+  );
+
+  assert.deepEqual(result.inventory, {fixed_component: 1});
+});
+
+test("generic resource cost rejects insufficient crafting value", () => {
+  const task = taskDefinitionFromSnapshot(
+    snapshotWithTasks({
+      build: {
+        location: "workshop",
+        durationSeconds: 10,
+        cost: {
+          inventory: {},
+          resources: {craftingValue: 5},
+        },
+        resultResolver: {type: "fixed", resultId: "done"},
+        results: {
+          done: {
+            guaranteedOutcomes: {energyDelta: 0, inventoryDelta: {}},
+            randomOutcomes: {},
+          },
+        },
+      },
+    }),
+    "build",
+  );
+
+  assert.throws(
+    () => applyTaskStartCost(
+      {inventory: {resource_a: 2}},
+      task,
+      {
+        resourceSelection: {resource_a: 2},
+        itemDefinitions: {
+          resource_a: {
+            type: ["resource"],
+            stats: {craftingValue: 2},
+          },
+        },
+      },
+    ),
+    /requires 5/,
+  );
+});
+
 test("missingRequiredTaskIds checks stored task history", () => {
   const task = exampleTask();
   assert.deepEqual(missingRequiredTaskIds({completedTaskIds: []}, task), [
