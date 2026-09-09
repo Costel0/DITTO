@@ -27,14 +27,28 @@ extension JobAreaDefinition on JobArea {
     }
   }
 
-  String get coverAssetPath {
+  String get coverAssetPath => coverAssetPathFor();
+
+  String coverAssetPathFor({bool gardenPrepared = false}) {
     switch (this) {
       case JobArea.workshop:
         return 'assets/jobs/workshop_cover.png';
       case JobArea.kitchen:
         return 'assets/jobs/kitchen_cover.png';
       case JobArea.garden:
+        return gardenPrepared
+            ? 'assets/jobs/garden_cover_prepared.png'
+            : 'assets/jobs/garden_cover_unprepared.png';
+    }
+  }
+
+  String? get legacyCoverAssetPath {
+    switch (this) {
+      case JobArea.garden:
         return 'assets/jobs/garden_cover.png';
+      case JobArea.workshop:
+      case JobArea.kitchen:
+        return null;
     }
   }
 }
