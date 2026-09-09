@@ -1,37 +1,40 @@
 # `expeditions.json`
 
-Configuración autoritativa compartida de **tipos/acciones de expedición**.
+Configuración autoritativa compartida de expediciones.
 
 Archivo: `game_data/server/expeditions.json`
 
 Se sincroniza con Firestore en `/serverData/expeditions`.
 
-## Importante: las coordenadas no viven aquí
+## Coordenadas del bunker
 
-La posición del bunker es específica de cada jugador y se guarda en su estado autoritativo:
+La posición del bunker es específica de cada jugador y **no** vive en este JSON. Se guarda en:
 
 ```text
 /users/{uid}/state/bunker.bunkerCoordinates
 ```
 
-Actualmente, hasta que implementemos la asignación real de posiciones, el backend normaliza cualquier bunker que todavía no tenga coordenadas a:
+Actualmente no existe todavía el asignador real de posiciones. Al crear o normalizar un bunker, el backend usa temporalmente:
 
 ```json
 {"x": 0, "y": 0, "z": 0}
 ```
 
-El launcher pide las coordenadas al backend. Flutter no decide ni inventa la posición del bunker.
+El launcher pide siempre la posición al backend. Cuando se implemente el asignador de coordenadas, solo habrá que sustituir esa asignación temporal al crear el bunker; la disponibilidad y validación de expediciones ya usa el campo individual del jugador.
 
-Cuando más adelante se implemente la asignación de coordenadas, bastará con inicializar/actualizar `bunkerCoordinates` para cada usuario; el sistema de expediciones ya compara el destino contra la posición real de ese bunker.
+## Tipos y acciones
 
-## Estructura compartida
+`expeditionType` y la acción son conceptos distintos.
+
+La configuración actual es:
 
 ```json
 {
   "schemaVersion": 1,
-  "dataVersion": 2,
+  "dataVersion": 3,
   "actions": {
-    "scavenge": {
+    "scout_surroundings": {
+      "expeditionType": "scavenge",
       "availability": "bunker",
       "durationSeconds": 60,
       "energyDelta": -20
@@ -40,31 +43,46 @@ Cuando más adelante se implemente la asignación de coordenadas, bastará con i
 }
 ```
 
-- `actions`: tipos/acciones que puede ofrecer el lanzador.
-- `availability: "bunker"`: la acción solo aparece si el destino elegido coincide exactamente con `bunkerCoordinates` del jugador.
-- `durationSeconds`: duración.
-- `energyDelta`: cambio de energía aplicado a cada Survivor al resolver la expedición. Un valor negativo consume energía.
+Actualmente existe un solo tipo:
 
-El tipo inicial es `scavenge`. La UI de expediciones activas puede tener una card específica por tipo; actualmente solo existe la card de `scavenge`.
+```text
+scavenge
+```
 
-Si en el futuro una expedición selecciona varias acciones, la duración y el cambio de energía se acumulan.
+y dentro de él una sola acción:
 
-## Flujo
+```text
+scout_surroundings
+```
+
+Esta separación permite que más adelante un tipo de expedición tenga varias acciones y, a la vez, que la lista de expediciones activas use una presentación específica para cada `expeditionType`.
+
+### Campos
+
+- `expeditionType`: tipo visual/lógico de la expedición. Actualmente `scavenge`.
+- `availability: "bunker"`: la acción solo está disponible si el destino coincide con `bunkerCoordinates` del jugador.
+- `durationSeconds`: duración de la acción.
+- `energyDelta`: cambio de energía aplicado a cada Survivor al resolverla. Un valor negativo consume energía.
+
+Si se seleccionan varias acciones, todas deben pertenecer al mismo `expeditionType`. La duración y el cambio de energía se acumulan.
+
+## Flujo actual
 
 1. Flutter solicita el launcher al backend.
-2. El backend carga `/users/{uid}/state/bunker` y devuelve sus `bunkerCoordinates`.
-3. El popup usa esas coordenadas como destino inicial.
-4. Flutter solo muestra `scavenge` cuando el destino coincide con el bunker.
-5. Al lanzar, el backend vuelve a leer el bunker y vuelve a comparar el destino contra sus coordenadas actuales.
-6. Los Survivors pasan a `busySurvivors` con `activity: "expedition"`.
-7. Al llegar `endsAt`, el resolver aplica los efectos y devuelve los Survivors al bunker.
-
-La validación real está en backend: aunque un cliente manipulado intente lanzar una acción no disponible en unas coordenadas, la Cloud Function la rechaza.
+2. El backend lee `/users/{uid}/state/bunker.bunkerCoordinates`.
+3. Esas coordenadas llegan al popup y son el destino inicial.
+4. Si el jugador cambia el destino, Flutter oculta las acciones que no son válidas allí.
+5. Al lanzar, el backend vuelve a leer las coordenadas reales del bunker y repite la validación.
+6. Cada ocupación guarda tanto las acciones como `expeditionType`.
+7. La UI de expediciones activas escoge una card específica según `expeditionType`.
+8. Al llegar `endsAt`, el resolver aplica los efectos y devuelve los Survivors.
 
 ## Compatibilidad
 
-El antiguo ID `scout_surroundings` se normaliza internamente a `scavenge` para que una expedición que estuviera activa durante la migración pueda terminar correctamente.
+Durante el desarrollo existió brevemente `expedition:scavenge` como si `scavenge` fuera la acción. El backend lo normaliza a `scout_surroundings` para que esas ocupaciones puedan resolverse si existieran.
+
+Las expediciones anteriores sin `expeditionType` también se reconocen mediante su `taskId`.
 
 ## Después de modificarlo
 
-Ejecuta el flujo descrito en `game_data/README_WORKFLOW.md`. Se recomienda `hard_deploy.cmd`, ya que hay que sincronizar `serverData` y desplegar Functions cuando cambie la lógica asociada.
+Ejecuta el flujo descrito en `game_data/README_WORKFLOW.md`. Se recomienda `hard_deploy.cmd` cuando cambie este archivo o su lógica, porque hay que sincronizar `serverData` y Functions.
