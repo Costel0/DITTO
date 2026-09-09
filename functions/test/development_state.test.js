@@ -73,3 +73,33 @@ test("resetTaskTreeStateForTesting does not resolve or mutate task effects", () 
   assert.deepEqual(result.bunker.inventory, {field_ration: 2});
   assert.equal(result.bunker.survivors[0].energy, 17);
 });
+
+test("resetTaskTreeStateForTesting preserves active expeditions", () => {
+  const now = new Date("2026-08-20T10:00:00Z");
+  const expedition = {
+    survivorId: "s1",
+    taskId: "expedition:example_action",
+    executionId: "expedition-1",
+    activity: "expedition",
+    location: "0,0,0",
+    startedAt: now,
+    endsAt: new Date(now.getTime() + 60000),
+  };
+  const bunker = {
+    completedTaskIds: ["old_job"],
+    idleSurvivors: ["s2"],
+    busySurvivors: [expedition],
+    inventory: {},
+    survivors: [
+      {id: "s1", energy: 30},
+      {id: "s2", energy: 30},
+    ],
+  };
+
+  const result = resetTaskTreeStateForTesting(bunker, now);
+
+  assert.equal(result.cancelledOccupationCount, 0);
+  assert.equal(result.bunker.busySurvivors.length, 1);
+  assert.equal(result.bunker.busySurvivors[0].activity, "expedition");
+  assert.deepEqual(result.bunker.idleSurvivors, ["s2"]);
+});
