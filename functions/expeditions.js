@@ -1,3 +1,5 @@
+const EXPEDITION_ACTIVITY = "expedition";
+
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -224,6 +226,7 @@ function applyExpeditionCompletion(
 }
 
 module.exports = {
+  EXPEDITION_ACTIVITY,
   actionIdsFromExpeditionTaskId,
   applyExpeditionCompletion,
   availableActionsAtCoordinates,
