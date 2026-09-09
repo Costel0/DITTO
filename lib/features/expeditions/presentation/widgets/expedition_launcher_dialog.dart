@@ -531,11 +531,9 @@ class _ExpeditionActionChoice extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          context.l10n.jobEnergyCostLabel +
-                              ': ' +
-                              action.energyCostPerSurvivor.toString() +
-                              ' ' +
-                              context.l10n.jobPerSurvivorLabel,
+                          '${context.l10n.jobEnergyCostLabel}: '
+                          '${action.energyCostPerSurvivor} '
+                          '${context.l10n.jobPerSurvivorLabel}',
                           style: theme.textTheme.labelSmall?.copyWith(
                             color: const Color(0xFFC8A968),
                             fontWeight: FontWeight.w700,
