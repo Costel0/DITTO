@@ -152,8 +152,11 @@ class _JobAreaScreenState extends State<JobAreaScreen> {
     }
 
     final alreadyActive = current.busySurvivors.any(
-      (busy) => (busy.taskId ?? busy.activity) == task.id,
-    );
+          (busy) => (busy.taskId ?? busy.activity) == task.id,
+        ) ||
+        current.activeBackgroundTasks.any(
+          (active) => active.taskId == task.id,
+        );
     if (alreadyActive) return;
 
     final startInfo = _startInfoByTaskId[task.id];
@@ -204,6 +207,7 @@ class _JobAreaScreenState extends State<JobAreaScreen> {
         outputInventoryPerExecution: startInfo.outputInventoryPerExecution,
         executionMode: startInfo.executionMode,
         maxExecutionCount: startInfo.maxExecutionCount,
+        isBackground: startInfo.isBackground,
       ),
     );
     if (selected == null || selected.survivors.isEmpty || !mounted) return;
@@ -242,10 +246,12 @@ class _JobAreaScreenState extends State<JobAreaScreen> {
     final area = widget.area;
     final bunkerState = widget.bunkerStateController.state;
     final completedTaskIds = bunkerState?.completedTaskIds.toSet() ?? <String>{};
-    final activeTaskIds = bunkerState?.busySurvivors
-            .map((busy) => busy.taskId ?? busy.activity)
-            .toSet() ??
-        <String>{};
+    final activeTaskIds = <String>{
+      ...?bunkerState?.busySurvivors
+          .map((busy) => busy.taskId ?? busy.activity),
+      ...?bunkerState?.activeBackgroundTasks
+          .map((active) => active.taskId),
+    };
     final activeExecutionCountByTaskId = <String, int>{};
     for (final busy in bunkerState?.busySurvivors ?? const <BusySurvivor>[]) {
       final taskId = busy.taskId ?? busy.activity;
@@ -600,6 +606,7 @@ class _JobAreaContent extends StatelessWidget {
                           energyCostPerSurvivor:
                               startInfo?.energyCostPerSurvivor ?? 0,
                           isBatch: startInfo?.isBatch ?? false,
+                          isBackground: startInfo?.isBackground ?? false,
                           activeExecutionCount:
                               activeExecutionCountByTaskId[task.id] ?? 1,
                           isStarting: startingTaskId == task.id,
@@ -659,6 +666,7 @@ class _SurvivorTaskDialog extends StatefulWidget {
     required this.outputInventoryPerExecution,
     required this.executionMode,
     required this.maxExecutionCount,
+    required this.isBackground,
   });
 
   final List<Survivor> survivors;
@@ -673,6 +681,7 @@ class _SurvivorTaskDialog extends StatefulWidget {
   final Map<String, int> outputInventoryPerExecution;
   final JobTaskExecutionMode executionMode;
   final int maxExecutionCount;
+  final bool isBackground;
 
   @override
   State<_SurvivorTaskDialog> createState() => _SurvivorTaskDialogState();
@@ -1076,6 +1085,56 @@ class _SurvivorTaskDialogState extends State<_SurvivorTaskDialog> {
                         shrinkWrap: true,
                         padding: const EdgeInsets.all(14),
                         children: [
+                          if (widget.isBackground) ...[
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF211F19),
+                                borderRadius: BorderRadius.circular(7),
+                                border: Border.all(
+                                  color: const Color(0xFF4A4134),
+                                ),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Icon(
+                                    Icons.spa_outlined,
+                                    size: 19,
+                                    color: Color(0xFFC7A970),
+                                  ),
+                                  const SizedBox(width: 9),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          context.l10n.jobBackgroundModeLabel,
+                                          style: theme.textTheme.titleSmall
+                                              ?.copyWith(
+                                            color: const Color(0xFFE6D8BD),
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          context.l10n
+                                              .jobBackgroundModeDescription,
+                                          style:
+                                              theme.textTheme.bodySmall?.copyWith(
+                                            color: const Color(0xFF9B9284),
+                                            height: 1.4,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 18),
+                          ],
                           if (_isBatch) ...[
                             Container(
                               padding: const EdgeInsets.all(12),
@@ -1595,6 +1654,7 @@ class _TaskTile extends StatelessWidget {
     required this.requirements,
     required this.energyCostPerSurvivor,
     required this.isBatch,
+    required this.isBackground,
     required this.activeExecutionCount,
     required this.isStarting,
     required this.isActive,
@@ -1606,6 +1666,7 @@ class _TaskTile extends StatelessWidget {
   final List<_TaskRequirementStatus> requirements;
   final int energyCostPerSurvivor;
   final bool isBatch;
+  final bool isBackground;
   final int activeExecutionCount;
   final bool isStarting;
   final bool isActive;
@@ -1664,7 +1725,7 @@ class _TaskTile extends StatelessWidget {
                         ),
                       ),
                     ],
-                    if (isBatch) ...[
+                    if (isBatch || isBackground) ...[
                       const SizedBox(height: 8),
                       Align(
                         alignment: Alignment.centerLeft,
@@ -1681,7 +1742,9 @@ class _TaskTile extends StatelessWidget {
                             ),
                           ),
                           child: Text(
-                            context.l10n.jobBatchModeLabel,
+                            isBatch
+                                ? context.l10n.jobBatchModeLabel
+                                : context.l10n.jobBackgroundModeLabel,
                             style: theme.textTheme.labelSmall?.copyWith(
                               color: const Color(0xFFC7A970),
                               fontWeight: FontWeight.w800,
