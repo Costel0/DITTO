@@ -416,7 +416,6 @@ function applyExpeditionCompletion(
   bunker,
   participantIds,
   actions,
-  outcomes = [],
 ) {
   const participantSet = new Set(participantIds);
   const survivors = Array.isArray(bunker.survivors)
@@ -445,11 +444,9 @@ function applyExpeditionCompletion(
     };
   }
 
-  const inventoryDelta = aggregateExpeditionInventoryDelta(outcomes);
   return {
     ...bunker,
     survivors,
-    inventory: applyInventoryReward(bunker.inventory, inventoryDelta),
   };
 }
 
