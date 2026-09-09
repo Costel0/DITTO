@@ -353,12 +353,12 @@ function normalizedExecution(value, taskId) {
   }
 
   const type = typeof value.type === "string" ? value.type.trim() : "";
-  if (type === "single") {
+  if (type === "single" || type === "background") {
     return {type, maxCount: 1};
   }
   if (type !== "batch") {
     throw new Error(
-      `Task ${taskId} execution.type must be single or batch.`,
+      `Task ${taskId} execution.type must be single, background or batch.`,
     );
   }
 
@@ -376,7 +376,7 @@ function normalizedTaskExecutionCount(task, value) {
   if (!Number.isInteger(count) || count < 1) {
     throw new Error(`Task ${task.id} executionCount must be a positive integer.`);
   }
-  if (task.execution.type === "single" && count !== 1) {
+  if (task.execution.type !== "batch" && count !== 1) {
     throw new Error(`Task ${task.id} does not support batch execution.`);
   }
   if (count > task.execution.maxCount) {
@@ -480,6 +480,18 @@ function taskDefinitionFromSnapshot(snapshot, taskId) {
 
   const resultDefinition = normalizedResults(rawTask, normalizedTaskId);
   const execution = normalizedExecution(rawTask.execution, normalizedTaskId);
+
+  if (execution.type === "background") {
+    if (
+      rawTask.survivorRequirements != null &&
+      (rawTask.survivorRequirements.min !== 1 ||
+        rawTask.survivorRequirements.max !== 1)
+    ) {
+      throw new Error(
+        `Task ${normalizedTaskId} background execution requires exactly one Survivor.`,
+      );
+    }
+  }
 
   if (execution.type === "batch") {
     if (storable) {
