@@ -140,7 +140,10 @@ String _selectedPngForArea({
   required String defaultPng,
 }) {
   if (area == HubArea.beds && state.sleepingSurvivorCount > 0) {
-    return 'background_beds_${state.sleepingSurvivorCount}.png';
+    // The current art set keeps the empty room as "default" and the
+    // successive occupied variants as default_2, default_3, ...
+    // 1 sleeper -> default_2, 2 sleepers -> default_3, etc.
+    return 'background_beds_default_${state.sleepingSurvivorCount + 1}.png';
   }
 
   return stateMapping[state.areaStates[area]] ?? defaultPng;
