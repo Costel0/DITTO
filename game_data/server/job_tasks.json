@@ -1,6 +1,6 @@
 {
-  "schemaVersion": 5,
-  "dataVersion": 9,
+  "schemaVersion": 6,
+  "dataVersion": 10,
   "tasks": {
     "prepare_garden": {
       "activity": "prepare_garden",
@@ -259,6 +259,70 @@
             "statExperienceDelta": {
               "care": 5,
               "strength": 1
+            }
+          },
+          "randomOutcomes": {}
+        }
+      }
+    },
+    "clean_kitchen": {
+      "activity": "clean_kitchen",
+      "location": "kitchen",
+      "durationSeconds": 30,
+      "storable": true,
+      "survivorRequirements": {
+        "min": 1,
+        "max": 1
+      },
+      "requiredTaskIds": [],
+      "cost": {
+        "inventory": {}
+      },
+      "resultResolver": {
+        "type": "fixed",
+        "resultId": "success"
+      },
+      "results": {
+        "success": {
+          "guaranteedOutcomes": {
+            "energyDelta": -5,
+            "inventoryDelta": {
+              "scrap_metal": 3
+            }
+          },
+          "randomOutcomes": {}
+        }
+      }
+    },
+    "craft_electronics_from_scrap": {
+      "activity": "craft_electronics_from_scrap",
+      "location": "workshop",
+      "durationSeconds": 30,
+      "storable": false,
+      "execution": {
+        "type": "batch",
+        "maxCount": 999
+      },
+      "survivorRequirements": {
+        "min": 1,
+        "max": 1
+      },
+      "requiredTaskIds": [],
+      "cost": {
+        "inventory": {
+          "scrap_metal": 4
+        }
+      },
+      "resultResolver": {
+        "type": "fixed",
+        "resultId": "success"
+      },
+      "results": {
+        "success": {
+          "guaranteedOutcomes": {
+            "energyDelta": -5,
+            "inventoryDelta": {
+              "electronics": 1
             }
           },
           "randomOutcomes": {}
