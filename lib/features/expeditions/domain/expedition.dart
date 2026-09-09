@@ -53,21 +53,29 @@ class ExpeditionCoordinates {
 class ExpeditionActionDefinition {
   const ExpeditionActionDefinition({
     required this.id,
+    required this.expeditionType,
     required this.durationSeconds,
     required this.energyCostPerSurvivor,
   });
 
   final String id;
+  final String expeditionType;
   final int durationSeconds;
   final int energyCostPerSurvivor;
 
   factory ExpeditionActionDefinition.fromMap(Map<String, dynamic> map) {
     final id = map['id'];
+    final expeditionType = map['expeditionType'];
     final duration = map['durationSeconds'];
     final energyCost = map['energyCostPerSurvivor'];
 
     if (id is! String || id.trim().isEmpty) {
       throw const FormatException('Expedition action has an invalid ID.');
+    }
+    if (expeditionType is! String || expeditionType.trim().isEmpty) {
+      throw const FormatException(
+        'Expedition action has an invalid expedition type.',
+      );
     }
     if (duration is! num ||
         !duration.isFinite ||
@@ -88,6 +96,7 @@ class ExpeditionActionDefinition {
 
     return ExpeditionActionDefinition(
       id: id.trim(),
+      expeditionType: expeditionType.trim(),
       durationSeconds: duration.toInt(),
       energyCostPerSurvivor: energyCost.toInt(),
     );
