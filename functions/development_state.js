@@ -2,6 +2,7 @@ const {
   SLEEPING_ACTIVITY,
   normalizedBusySurvivors,
 } = require("./bunker_status");
+const {EXPEDITION_ACTIVITY} = require("./expeditions");
 
 function uniqueStringList(source) {
   if (!Array.isArray(source)) return [];
@@ -15,25 +16,30 @@ function uniqueStringList(source) {
  * Development-only task-tree reset.
  *
  * Completed job IDs are forgotten and active job occupations are cancelled
- * without resolving them, so no completion outcomes are applied. Sleeping is
- * intentionally preserved because it is a bunker status, not a job task.
+ * without resolving them, so no completion outcomes are applied. Sleeping and
+ * expeditions are intentionally preserved because neither belongs to the job
+ * task tree.
  * Inventory, Survivor energy and every other gameplay field are left intact.
  */
 function resetTaskTreeStateForTesting(bunker, now = new Date()) {
   const busySurvivors = normalizedBusySurvivors(bunker.busySurvivors, now);
-  const sleepingOccupations = busySurvivors.filter(
-    (entry) => entry.activity === SLEEPING_ACTIVITY,
+  const preservedOccupations = busySurvivors.filter(
+    (entry) =>
+      entry.activity === SLEEPING_ACTIVITY ||
+      entry.activity === EXPEDITION_ACTIVITY,
   );
   const cancelledTaskOccupations = busySurvivors.filter(
-    (entry) => entry.activity !== SLEEPING_ACTIVITY,
+    (entry) =>
+      entry.activity !== SLEEPING_ACTIVITY &&
+      entry.activity !== EXPEDITION_ACTIVITY,
   );
-  const sleepingSurvivorIds = new Set(
-    sleepingOccupations.map((entry) => entry.survivorId),
+  const preservedSurvivorIds = new Set(
+    preservedOccupations.map((entry) => entry.survivorId),
   );
   const idleSurvivors = new Set(uniqueStringList(bunker.idleSurvivors));
 
   for (const occupation of cancelledTaskOccupations) {
-    if (!sleepingSurvivorIds.has(occupation.survivorId)) {
+    if (!preservedSurvivorIds.has(occupation.survivorId)) {
       idleSurvivors.add(occupation.survivorId);
     }
   }
@@ -43,7 +49,7 @@ function resetTaskTreeStateForTesting(bunker, now = new Date()) {
       ...bunker,
       completedTaskIds: [],
       idleSurvivors: [...idleSurvivors],
-      busySurvivors: sleepingOccupations,
+      busySurvivors: preservedOccupations,
     },
     cancelledOccupationCount: cancelledTaskOccupations.length,
     clearedCompletedTaskCount: uniqueStringList(bunker.completedTaskIds).length,
