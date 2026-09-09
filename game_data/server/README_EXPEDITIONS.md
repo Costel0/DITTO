@@ -107,3 +107,6 @@ Durante el desarrollo existió brevemente `expedition:scavenge` como si `scaveng
 ## Después de modificarlo
 
 Ejecuta el flujo descrito en `game_data/README_WORKFLOW.md`. Se recomienda `hard_deploy.cmd` cuando cambie este archivo o su lógica, porque hay que sincronizar `serverData` y Functions.
+
+
+La recompensa material se entrega al revisar el informe, no al terminar la expedición, para mantener el outcome oculto hasta ese momento.
