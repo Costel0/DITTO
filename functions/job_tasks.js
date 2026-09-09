@@ -567,6 +567,15 @@ function selectTaskResult(task, executionId, externallyResolvedResultId = null) 
   );
 }
 
+function taskEnergyCostPerSurvivor(task) {
+  if (task.resultResolver.type !== "fixed") return 0;
+  const result = task.results[task.resultResolver.resultId];
+  const energyDelta = result?.guaranteedOutcomes?.energyDelta;
+  return Number.isInteger(energyDelta) && energyDelta < 0
+    ? Math.abs(energyDelta)
+    : 0;
+}
+
 function applyEffects(bunker, participantIds, effects) {
   const participantSet = new Set(participantIds);
   const survivors = Array.isArray(bunker.survivors)
@@ -663,4 +672,5 @@ module.exports = {
   normalizedResourceSelection,
   selectTaskResult,
   taskDefinitionFromSnapshot,
+  taskEnergyCostPerSurvivor,
 };
