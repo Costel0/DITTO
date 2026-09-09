@@ -288,8 +288,8 @@ function expeditionDefinitionFromSnapshot(snapshot) {
   const actions = {};
   for (const [actionIdRaw, rawAction] of Object.entries(data.actions)) {
     const actionId = actionIdRaw.trim();
-    if (!actionId) {
-      throw new Error("Expedition action IDs cannot be empty.");
+    if (!actionId || !EXPEDITION_ID_PATTERN.test(actionId)) {
+      throw new Error("Expedition action IDs must be safe slugs.");
     }
     actions[actionId] = normalizedActionDefinition(rawAction, actionId);
   }
