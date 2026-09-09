@@ -121,6 +121,12 @@ function normalizedBusySurvivors(source, fallbackDate = new Date()) {
         ) {
           normalized.executionId = entry.executionId.trim();
         }
+        if (
+          typeof entry.expeditionType === "string" &&
+          entry.expeditionType.trim().length > 0
+        ) {
+          normalized.expeditionType = entry.expeditionType.trim();
+        }
         return normalized;
       });
   }
