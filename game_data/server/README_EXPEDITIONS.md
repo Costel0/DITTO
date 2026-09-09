@@ -149,25 +149,40 @@ Las reglas de Firestore bloquean lectura/escritura del cliente sobre esa subcole
 
 ## Imágenes
 
-General por tipo:
+La imagen general por tipo sigue siendo:
 
 ```text
 assets/expeditions/results/scavenge.png
 ```
 
-Especial por outcome:
+Cada outcome puede definir `imageKey`. Flutter intenta primero:
 
 ```text
-assets/expeditions/results/scavenge_<imageKey>.png
+assets/expeditions/results/<expeditionType>_<imageKey>.png
 ```
 
-Ejemplo actual de comida:
+Para los outcomes actuales de `scout_surroundings`:
 
 ```text
-assets/expeditions/results/scavenge_dead_bird.png
+nothing          -> assets/expeditions/results/scavenge_nothing_found.png
+scrap_and_trash  -> assets/expeditions/results/scavenge_scrap_and_trash.png
+scrap_metal_2    -> assets/expeditions/results/scavenge_scrap_metal.png
+wood_plank       -> assets/expeditions/results/scavenge_wood_plank.png
+food             -> assets/expeditions/results/scavenge_dead_bird.png
+common_event     -> assets/expeditions/results/scavenge_common_event.png
 ```
 
-Si falta la especial, Flutter usa la general. Si falta también la general, usa la ilustración fallback.
+Fallback:
+
+```text
+imagen específica
+        ↓ si falta
+assets/expeditions/results/scavenge.png
+        ↓ si falta
+ilustración fallback de Flutter
+```
+
+Por tanto, una imagen específica ausente nunca rompe el popup.
 
 ## Compatibilidad
 
