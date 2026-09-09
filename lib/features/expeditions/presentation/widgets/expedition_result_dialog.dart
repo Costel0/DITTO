@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../expeditions/domain/expedition_review.dart';
+import '../../domain/expedition_review.dart';
 
 class ExpeditionResultDialog extends StatelessWidget {
   const ExpeditionResultDialog({
