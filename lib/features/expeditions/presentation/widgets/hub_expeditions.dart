@@ -565,7 +565,26 @@ class _ScavengeVisualState extends State<_ScavengeVisual>
   late final AnimationController _controller = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 1500),
-  )..repeat(reverse: true);
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (!widget.resolved) {
+      _controller.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _ScavengeVisual oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.resolved == widget.resolved) return;
+    if (widget.resolved) {
+      _controller.stop();
+    } else {
+      _controller.repeat(reverse: true);
+    }
+  }
 
   @override
   void dispose() {
@@ -575,6 +594,26 @@ class _ScavengeVisualState extends State<_ScavengeVisual>
 
   @override
   Widget build(BuildContext context) {
+    if (widget.resolved) {
+      return SizedBox.square(
+        dimension: widget.size,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: const Color(0xFF242219),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFF5C513D)),
+          ),
+          child: const Center(
+            child: Icon(
+              Icons.check_circle_outline_rounded,
+              size: 36,
+              color: Color(0xFFD0B36F),
+            ),
+          ),
+        ),
+      );
+    }
+
     return SizedBox.square(
       dimension: widget.size,
       child: DecoratedBox(
@@ -609,32 +648,23 @@ class _ScavengeVisualState extends State<_ScavengeVisual>
                       color: Color(0xFF8B7957),
                     ),
                   ),
-                  if (!widget.resolved)
-                    Positioned(
-                      left: sweepLeft,
-                      top: 6,
-                      bottom: 6,
-                      child: Container(
-                        width: 2,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFD0B36F),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Color(0x88D0B36F),
-                              blurRadius: 7,
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
-                  else
-                    const Center(
-                      child: Icon(
-                        Icons.check_circle_outline_rounded,
-                        size: 36,
+                  Positioned(
+                    left: sweepLeft,
+                    top: 6,
+                    bottom: 6,
+                    child: Container(
+                      width: 2,
+                      decoration: const BoxDecoration(
                         color: Color(0xFFD0B36F),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Color(0x88D0B36F),
+                            blurRadius: 7,
+                          ),
+                        ],
                       ),
                     ),
+                  ),
                 ],
               );
             },
