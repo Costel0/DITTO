@@ -339,6 +339,7 @@ class _HubBackgroundSegmentImage extends StatelessWidget {
   Widget _image(String assetPath, {required Widget Function() onError}) {
     return Image.asset(
       assetPath,
+      key: ValueKey<String>(assetPath),
       width: segment.width,
       height: canvasHeight,
       fit: BoxFit.cover,
