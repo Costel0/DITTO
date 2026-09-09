@@ -63,8 +63,8 @@ const upgradeGarden6Task = JobTaskDefinition(
 const jobTasks = <JobTaskDefinition>[
   cleanKitchenTask,
   craftElectronicsFromScrapTask,
-  plantPotatoesTask,
   prepareGardenTask,
+  plantPotatoesTask,
   upgradeGardenTask,
   upgradeGarden2Task,
   upgradeGarden3Task,
