@@ -1,12 +1,57 @@
 {
-  "schemaVersion": 1,
-  "dataVersion": 3,
+  "schemaVersion": 2,
+  "dataVersion": 4,
   "actions": {
     "scout_surroundings": {
       "expeditionType": "scavenge",
       "availability": "bunker",
       "durationSeconds": 60,
-      "energyDelta": -20
+      "energyDelta": -20,
+      "outcomes": {
+        "nothing": {
+          "probability": 0.2,
+          "narrativeId": "scavenge_nothing",
+          "inventoryDelta": {}
+        },
+        "scrap_and_trash": {
+          "probability": 0.3,
+          "narrativeId": "scavenge_scrap_and_trash",
+          "inventoryDelta": {
+            "scrap_metal": 1,
+            "trash": 5
+          }
+        },
+        "scrap_metal_2": {
+          "probability": 0.3,
+          "narrativeId": "scavenge_scrap_metal_2",
+          "inventoryDelta": {
+            "scrap_metal": 2
+          }
+        },
+        "wood_plank": {
+          "probability": 0.1,
+          "narrativeId": "scavenge_wood_plank",
+          "inventoryDelta": {
+            "wood_plank": 1
+          }
+        },
+        "food": {
+          "probability": 0.09,
+          "narrativeId": "scavenge_food",
+          "inventoryDelta": {
+            "food": 1
+          },
+          "imageKey": "dead_bird"
+        },
+        "common_event": {
+          "probability": 0.01,
+          "narrativeId": "scavenge_common_event",
+          "inventoryDelta": {},
+          "eventTrigger": {
+            "poolId": "evento_comun"
+          }
+        }
+      }
     }
   }
 }
