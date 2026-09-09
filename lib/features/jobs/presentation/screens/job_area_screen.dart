@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../../core/firebase/firestore_item_catalog_service.dart';
 import '../../../../core/localization/l10n.dart';
@@ -685,8 +686,54 @@ class _SurvivorTaskDialogState extends State<_SurvivorTaskDialog> {
       _selectedIds.length >= widget.minSurvivors &&
       _selectedIds.length <= widget.maxSurvivors;
 
+  bool get _isBatch => widget.executionMode == JobTaskExecutionMode.batch;
+
+  int? get _executionCount {
+    final parsed = int.tryParse(_executionCountController.text.trim());
+    if (parsed == null ||
+        parsed < 1 ||
+        parsed > widget.maxExecutionCount) {
+      return null;
+    }
+    return parsed;
+  }
+
+  Map<String, int> _scaledInventory(
+    Map<String, int> source, {
+    int? count,
+  }) {
+    final multiplier = count ?? _executionCount ?? 0;
+    return <String, int>{
+      for (final entry in source.entries)
+        entry.key: entry.value * multiplier,
+    };
+  }
+
+  Map<String, int> get _scaledFixedInventoryCost =>
+      _scaledInventory(widget.fixedInventoryCost);
+
+  Map<String, int> get _scaledOutputInventory =>
+      _scaledInventory(widget.outputInventoryPerExecution);
+
+  int get _scaledResourceCraftingValueRequired =>
+      widget.resourceCraftingValueRequired * (_executionCount ?? 0);
+
+  int get _scaledEnergyCost =>
+      widget.energyCostPerSurvivor * (_executionCount ?? 0);
+
+  int get _estimatedDurationSeconds {
+    final count = _executionCount;
+    if (count == null) return 0;
+    final survivorCount =
+        _selectedIds.isEmpty ? widget.minSurvivors : _selectedIds.length;
+    return ((widget.durationSecondsPerExecution * count) / survivorCount)
+        .ceil()
+        .clamp(1, 1 << 31)
+        .toInt();
+  }
+
   bool get _fixedInventorySatisfied =>
-      widget.fixedInventoryCost.entries.every(
+      _scaledFixedInventoryCost.entries.every(
         (entry) => (widget.inventory[entry.key] ?? 0) >= entry.value,
       );
 
@@ -707,7 +754,7 @@ class _SurvivorTaskDialogState extends State<_SurvivorTaskDialog> {
     final languageCode = Localizations.localeOf(context).languageCode;
     final result = <_TaskRequirementStatus>[];
 
-    for (final entry in widget.fixedInventoryCost.entries) {
+    for (final entry in _scaledFixedInventoryCost.entries) {
       result.add(
         _TaskRequirementStatus(
           label: catalog[entry.key]?.nameForLanguage(languageCode) ?? entry.key,
@@ -717,12 +764,12 @@ class _SurvivorTaskDialogState extends State<_SurvivorTaskDialog> {
       );
     }
 
-    if (widget.resourceCraftingValueRequired > 0) {
+    if (_scaledResourceCraftingValueRequired > 0) {
       result.add(
         _TaskRequirementStatus(
           label: context.l10n.jobGenericResourcesLabel,
           current: _selectedResourceValue(catalog),
-          required: widget.resourceCraftingValueRequired,
+          required: _scaledResourceCraftingValueRequired,
         ),
       );
     }
@@ -731,10 +778,23 @@ class _SurvivorTaskDialogState extends State<_SurvivorTaskDialog> {
   }
 
   bool _canConfirm(Map<String, Item> catalog) {
-    if (!_survivorsCanConfirm || !_fixedInventorySatisfied) return false;
-    if (widget.resourceCraftingValueRequired <= 0) return true;
+    if (_executionCount == null ||
+        !_survivorsCanConfirm ||
+        !_fixedInventorySatisfied) {
+      return false;
+    }
+
+    final optionsById = <String, _ResourceOption>{
+      for (final option in _resourceOptions(catalog)) option.item.id: option,
+    };
+    for (final entry in _selectedResourceQuantities.entries) {
+      final available = optionsById[entry.key]?.availableQuantity ?? 0;
+      if (entry.value > available) return false;
+    }
+
+    if (_scaledResourceCraftingValueRequired <= 0) return true;
     return _selectedResourceValue(catalog) >=
-        widget.resourceCraftingValueRequired;
+        _scaledResourceCraftingValueRequired;
   }
 
   List<_ResourceOption> _resourceOptions(Map<String, Item> catalog) {
@@ -746,7 +806,7 @@ class _SurvivorTaskDialogState extends State<_SurvivorTaskDialog> {
         continue;
       }
 
-      final reserved = widget.fixedInventoryCost[inventoryEntry.key] ?? 0;
+      final reserved = _scaledFixedInventoryCost[inventoryEntry.key] ?? 0;
       final available = inventoryEntry.value - reserved;
       if (available <= 0) continue;
 
@@ -802,6 +862,7 @@ class _SurvivorTaskDialogState extends State<_SurvivorTaskDialog> {
       _TaskAssignmentSelection(
         survivors: selectedSurvivors,
         resourceItems: selectedResources,
+        executionCount: _executionCount!,
       ),
     );
   }
@@ -810,8 +871,9 @@ class _SurvivorTaskDialogState extends State<_SurvivorTaskDialog> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final requiresResources = widget.resourceCraftingValueRequired > 0;
-    final needsCatalog =
-        requiresResources || widget.fixedInventoryCost.isNotEmpty;
+    final needsCatalog = requiresResources ||
+        widget.fixedInventoryCost.isNotEmpty ||
+        widget.outputInventoryPerExecution.isNotEmpty;
 
     return StreamBuilder<Map<String, Item>>(
       stream: needsCatalog ? _catalogStream : null,
@@ -1044,10 +1106,10 @@ class _SurvivorTaskDialogState extends State<_SurvivorTaskDialog> {
                             Text(
                               '${context.l10n.jobResourceValueLabel}: '
                               '$selectedResourceValue / '
-                              '${widget.resourceCraftingValueRequired}',
+                              '$_scaledResourceCraftingValueRequired',
                               style: theme.textTheme.labelLarge?.copyWith(
                                 color: selectedResourceValue >=
-                                        widget.resourceCraftingValueRequired
+                                        _scaledResourceCraftingValueRequired
                                     ? const Color(0xFF9FC493)
                                     : const Color(0xFFC7A970),
                                 fontWeight: FontWeight.w800,
