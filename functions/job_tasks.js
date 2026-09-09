@@ -645,8 +645,7 @@ function deterministicUnitInterval(seed) {
 function selectTaskResult(task, executionId, externallyResolvedResultId = null) {
   if (externallyResolvedResultId != null) {
     const resultId = String(externallyResolvedResultId).trim();
-    const count = normalizedTaskExecutionCount(task, executionCount);
-  const result = task.results[resultId];
+    const result = task.results[resultId];
     if (!result) {
       throw new Error(`Task ${task.id} does not define result ${resultId}.`);
     }
@@ -749,6 +748,7 @@ function applyTaskCompletionEffects(
     throw new Error(`Task ${task.id} requires unique Survivor participants.`);
   }
 
+  const count = normalizedTaskExecutionCount(task, executionCount);
   const result = task.results[resultId];
   if (!result) {
     throw new Error(`Task ${task.id} does not define result ${resultId}.`);
