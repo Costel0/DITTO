@@ -221,5 +221,16 @@
   "expeditionCloseWithoutResolving": "Cerrar sin resolver",
   "expeditionResolveButton": "Resolver expedición",
   "expeditionCloseDecideLater": "Cerrar y decidir más tarde",
-  "expeditionRewardUnknown": "Objeto"
+  "expeditionRewardUnknown": "Objeto",
+  "jobCleanKitchenTitle": "Limpiar la cocina",
+  "jobCleanKitchenDescription": "Retira suciedad, restos y materiales inservibles para dejar la cocina en condiciones.",
+  "jobCraftElectronicsTitle": "Fabricar componentes electrónicos",
+  "jobCraftElectronicsDescription": "Reaprovecha chatarra metálica para fabricar componentes electrónicos básicos.",
+  "jobBatchModeLabel": "Producción por lotes",
+  "jobBatchQuantityLabel": "Cantidad",
+  "jobBatchQuantityHint": "Número de veces",
+  "jobBatchDurationLabel": "Duración estimada",
+  "jobBatchInputsLabel": "Consumirá",
+  "jobBatchOutputsLabel": "Producirá",
+  "jobBatchInvalidQuantity": "Introduce una cantidad válida."
 }
