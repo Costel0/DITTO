@@ -4,7 +4,7 @@ import 'expedition_review.dart';
 abstract interface class ExpeditionService {
   Future<ExpeditionLauncherInfo> fetchLauncherInfo();
 
-  Future<List<ExpeditionReview>> fetchPendingReviews();
+  Future<List<ExpeditionReviewSummary>> fetchPendingReviews();
 
   Future<ExpeditionReview> reviewExpeditionResult(String reviewId);
 
