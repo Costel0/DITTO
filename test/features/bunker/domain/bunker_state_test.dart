@@ -58,6 +58,35 @@ void main() {
     );
   });
 
+  test('parses expedition type from active occupation', () {
+    final state = BunkerState.fromJson(<String, dynamic>{
+      'schemaVersion': BunkerState.supportedSchemaVersion,
+      'revision': 11,
+      'serverUpdatedAt': '2026-09-09T10:00:00Z',
+      'survivors': <dynamic>[
+        survivor(id: 's1', duplicateId: '01', energy: 30),
+      ],
+      'idleSurvivors': <String>[],
+      'busySurvivors': <dynamic>[
+        <String, dynamic>{
+          'survivorId': 's1',
+          'taskId': 'expedition:test_action',
+          'executionId': 'exp-1',
+          'activity': 'expedition',
+          'expeditionType': 'test_type',
+          'location': '1,2,3',
+          'startedAt': '2026-09-09T10:00:00Z',
+          'endsAt': '2026-09-09T10:01:00Z',
+        },
+      ],
+      'completedTaskIds': <String>[],
+      'inventory': <String, int>{},
+      'bunkerCoordinates': <String, int>{'x': 1, 'y': 2, 'z': 3},
+    });
+
+    expect(state.busySurvivors.single.expeditionType, 'test_type');
+  });
+
   test('parses schema v6 task execution and completed task registry', () {
     final state = BunkerState.fromJson(<String, dynamic>{
       'schemaVersion': 6,
