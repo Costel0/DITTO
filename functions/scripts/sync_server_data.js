@@ -246,18 +246,6 @@ function validateTaskResults(task, filename, taskId) {
 }
 
 function validateExpeditions(data, filename) {
-  if (!isPlainObject(data.bunkerCoordinates)) {
-    throw new Error(`${filename}.bunkerCoordinates must be an object.`);
-  }
-  for (const axis of ["x", "y", "z"]) {
-    const value = data.bunkerCoordinates[axis];
-    if (!Number.isInteger(value) || value < 0 || value > 999) {
-      throw new Error(
-        `${filename}.bunkerCoordinates.${axis} must be an integer from 0 to 999.`,
-      );
-    }
-  }
-
   if (!isPlainObject(data.actions)) {
     throw new Error(`${filename}.actions must be an object.`);
   }
