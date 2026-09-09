@@ -17,6 +17,47 @@ void main() {
     };
   }
 
+  test('parses server-authoritative bunker coordinates in current schema', () {
+    final state = BunkerState.fromJson(<String, dynamic>{
+      'schemaVersion': BunkerState.supportedSchemaVersion,
+      'revision': 10,
+      'serverUpdatedAt': '2026-09-09T10:00:00Z',
+      'survivors': <dynamic>[],
+      'idleSurvivors': <String>[],
+      'busySurvivors': <dynamic>[],
+      'completedTaskIds': <String>[],
+      'inventory': <String, int>{},
+      'bunkerCoordinates': <String, int>{
+        'x': 12,
+        'y': 34,
+        'z': 56,
+      },
+    });
+
+    expect(
+      state.bunkerCoordinates,
+      const BunkerCoordinates(x: 12, y: 34, z: 56),
+    );
+  });
+
+  test('older bunker schemas use the temporary coordinate fallback', () {
+    final state = BunkerState.fromJson(<String, dynamic>{
+      'schemaVersion': 6,
+      'revision': 9,
+      'serverUpdatedAt': '2026-08-20T09:00:00Z',
+      'survivors': <dynamic>[],
+      'idleSurvivors': <String>[],
+      'busySurvivors': <dynamic>[],
+      'completedTaskIds': <String>[],
+      'inventory': <String, int>{},
+    });
+
+    expect(
+      state.bunkerCoordinates,
+      BunkerCoordinates.temporaryDefault,
+    );
+  });
+
   test('parses schema v6 task execution and completed task registry', () {
     final state = BunkerState.fromJson(<String, dynamic>{
       'schemaVersion': 6,
