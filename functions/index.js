@@ -7,6 +7,7 @@ const {
   fixStatus,
   normalizedBunkerCoordinates,
   normalizedBusySurvivors,
+  normalizedPendingExpeditionReviews,
   normalizedSurvivor,
   truncateToSecond,
 } = require("./bunker_status");
@@ -26,9 +27,11 @@ const {
 const {
   EXPEDITION_ACTIVITY,
   actionDefinitionsByIds,
+  aggregateExpeditionInventoryDelta,
   actionIdsFromExpeditionTaskId,
   applyExpeditionCompletion,
   availableActionsAtCoordinates,
+  coordinatesFromExpeditionLocation,
   expeditionDefinitionFromSnapshot,
   expeditionDurationSeconds,
   expeditionEnergyDelta,
@@ -37,6 +40,7 @@ const {
   expeditionTypeForActions,
   normalizedActionIds,
   normalizedCoordinates,
+  selectExpeditionOutcomes,
   selectedActionDefinitions,
 } = require("./expeditions");
 
@@ -178,6 +182,9 @@ async function resolveCompletedOccupationsForUser(db, uid) {
         ? bunker.completedTaskIds.filter((id) => typeof id === "string")
         : [],
     );
+    const pendingExpeditionReviews = normalizedPendingExpeditionReviews(
+      bunker.pendingExpeditionReviews,
+    );
     const resolvedGroupKeys = new Set();
     const resolvedSurvivorIds = new Set();
     const resolvedExecutions = [];
@@ -217,15 +224,47 @@ async function resolveCompletedOccupationsForUser(db, uid) {
           expeditionDefinition,
           actionIds,
         );
+        const executionSeed = first.executionId || groupKey;
+        const outcomes = selectExpeditionOutcomes(actions, executionSeed);
+        const inventoryDelta = aggregateExpeditionInventoryDelta(outcomes);
+        const expeditionType = first.expeditionType ||
+          expeditionTypeForActions(actions);
+        const coordinates = coordinatesFromExpeditionLocation(first.location);
+
         workingBunker = applyExpeditionCompletion(
           workingBunker,
           participantIds,
           actions,
+          outcomes,
         );
+
+        const reviewOutcomes = outcomes.map((outcome) => ({
+          actionId: outcome.actionId,
+          outcomeId: outcome.id,
+          narrativeId: outcome.narrativeId,
+          inventoryDelta: outcome.inventoryDelta,
+          ...(outcome.imageKey ? {imageKey: outcome.imageKey} : {}),
+          ...(outcome.eventTrigger
+            ? {eventTrigger: outcome.eventTrigger}
+            : {}),
+        }));
+
+        pendingExpeditionReviews.push({
+          id: first.executionId || groupKey,
+          ...(first.executionId ? {executionId: first.executionId} : {}),
+          expeditionType,
+          actionIds,
+          survivorIds: participantIds,
+          coordinates,
+          completedAt: now,
+          inventoryDelta,
+          outcomes: reviewOutcomes,
+        });
+
         resolvedExecutions.push({
           executionId: first.executionId || null,
           taskId: first.taskId,
-          result: "completed",
+          result: reviewOutcomes.map((outcome) => outcome.outcomeId),
           triggeredRandomOutcomeIds: [],
           survivorIds: participantIds,
         });
@@ -264,6 +303,7 @@ async function resolveCompletedOccupationsForUser(db, uid) {
     workingBunker = {
       ...workingBunker,
       completedTaskIds: [...completedTaskIds],
+      pendingExpeditionReviews,
       idleSurvivors: [...idleSurvivors],
       busySurvivors: busySurvivors.filter(
         (entry) => !resolvedGroupKeys.has(occupationGroupKey(entry)),
@@ -942,6 +982,75 @@ exports.startExpedition = onCall(
           0,
           -expeditionEnergyDelta(actions),
         ),
+        revision: fixed.revision,
+      };
+    });
+  },
+);
+
+exports.reviewExpeditionResult = onCall(
+  CALLABLE_OPTIONS,
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError(
+        "unauthenticated",
+        "Authentication is required to review an expedition.",
+      );
+    }
+
+    const reviewId = typeof request.data?.reviewId === "string"
+      ? request.data.reviewId.trim()
+      : "";
+    if (!reviewId) {
+      throw new HttpsError("invalid-argument", "Invalid expedition review ID.");
+    }
+
+    const db = getFirestore();
+    const bunkerRef = db
+      .collection("users")
+      .doc(request.auth.uid)
+      .collection("state")
+      .doc("bunker");
+
+    return db.runTransaction(async (transaction) => {
+      const bunkerSnapshot = await transaction.get(bunkerRef);
+      if (!bunkerSnapshot.exists) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Bunker is not initialized.",
+        );
+      }
+
+      const bunker = bunkerSnapshot.data() || {};
+      const reviews = normalizedPendingExpeditionReviews(
+        bunker.pendingExpeditionReviews,
+      );
+      const reviewIndex = reviews.findIndex((review) => review.id === reviewId);
+      if (reviewIndex < 0) {
+        throw new HttpsError(
+          "not-found",
+          "This expedition result is no longer pending review.",
+        );
+      }
+
+      const [review] = reviews.splice(reviewIndex, 1);
+      const now = truncateToSecond(new Date()) || new Date();
+      const fixed = await fixStatus({
+        transaction,
+        db,
+        now,
+        bunker: {
+          ...bunker,
+          pendingExpeditionReviews: reviews,
+        },
+      });
+      transaction.set(bunkerRef, fixed);
+
+      return {
+        review: {
+          ...review,
+          completedAt: review.completedAt.toISOString(),
+        },
         revision: fixed.revision,
       };
     });
