@@ -5,6 +5,7 @@ class JobTaskStartInfo {
     required this.maxSurvivors,
     required this.statRequirements,
     required this.costInventory,
+    required this.resourceCraftingValueCost,
     required this.requiredTaskIds,
     required this.storable,
   });
@@ -18,6 +19,11 @@ class JobTaskStartInfo {
   final Map<String, int> statRequirements;
 
   final Map<String, int> costInventory;
+
+  /// Minimum total craftingValue that must be supplied with selected
+  /// inventory items whose type contains "resource".
+  final int resourceCraftingValueCost;
+
   final List<String> requiredTaskIds;
   final bool storable;
 
@@ -27,6 +33,8 @@ class JobTaskStartInfo {
     final maxSurvivors = map['maxSurvivors'];
     final statRequirementsRaw = map['statRequirements'];
     final costRaw = map['costInventory'];
+    final resourceCraftingValueCostRaw =
+        map['resourceCraftingValueCost'] ?? 0;
     final requiredRaw = map['requiredTaskIds'];
     final storable = map['storable'];
 
@@ -45,6 +53,14 @@ class JobTaskStartInfo {
     }
     if (costRaw is! Map) {
       throw const FormatException('Task start info cost must be a map.');
+    }
+    if (resourceCraftingValueCostRaw is! num ||
+        !resourceCraftingValueCostRaw.isFinite ||
+        resourceCraftingValueCostRaw != resourceCraftingValueCostRaw.toInt() ||
+        resourceCraftingValueCostRaw < 0) {
+      throw const FormatException(
+        'Task resource crafting value cost must be a non-negative integer.',
+      );
     }
     if (requiredRaw is! List || requiredRaw.any((value) => value is! String)) {
       throw const FormatException('Task prerequisites must be string IDs.');
@@ -88,6 +104,7 @@ class JobTaskStartInfo {
       maxSurvivors: maxSurvivors.toInt(),
       statRequirements: Map<String, int>.unmodifiable(statRequirements),
       costInventory: Map<String, int>.unmodifiable(costInventory),
+      resourceCraftingValueCost: resourceCraftingValueCostRaw.toInt(),
       requiredTaskIds: List<String>.unmodifiable(requiredRaw.cast<String>()),
       storable: storable,
     );
@@ -100,5 +117,6 @@ abstract class JobTaskService {
   Future<void> startTask({
     required String taskId,
     required List<String> survivorIds,
+    Map<String, int> resourceItems = const <String, int>{},
   });
 }
