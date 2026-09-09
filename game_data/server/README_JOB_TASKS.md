@@ -10,8 +10,8 @@ Se sincroniza con `/serverData/jobTasks`. La app no puede leer este documento di
 
 ```json
 {
-  "schemaVersion": 6,
-  "dataVersion": 10,
+  "schemaVersion": 7,
+  "dataVersion": 11,
   "tasks": {}
 }
 ```
@@ -107,6 +107,30 @@ Para mantener este nuevo modo aislado de las tareas normales, por ahora una tare
 - ningún `randomOutcome`.
 
 Las tareas `single` existentes no cambian de formato ni de comportamiento.
+
+
+### Tareas pasivas / `background`
+
+Para trabajos que necesitan un Survivor disponible solo en el momento de iniciarlos, pero que después continúan por sí solos:
+
+```json
+"execution": {
+  "type": "background"
+}
+```
+
+Reglas actuales:
+
+- requieren exactamente un Survivor (`min: 1`, `max: 1`);
+- el backend exige que ese Survivor esté en `idleSurvivors` al iniciar;
+- también valida normalmente sus requisitos de estadísticas;
+- **no** se elimina de `idleSurvivors`;
+- **no** se crea ninguna entrada en `busySurvivors`;
+- la ejecución se guarda en `activeBackgroundTasks` con `startedAt`, `endsAt` y el ID del Survivor que la inició;
+- el Survivor puede empezar otra tarea inmediatamente;
+- al llegar `endsAt`, el resolver autoritativo aplica el resultado y elimina la entrada pasiva.
+
+Este modo es apropiado para cultivos, fermentaciones, secados y otros procesos que continúan sin atención permanente.
 
 ### `storable`
 
@@ -421,6 +445,22 @@ Con esta configuración:
 - Solo se pueden seleccionar Survivors con `care > 3`.
 - Cada participante recibe `+5` XP de `care` y `+1` XP de `strength` al completar la tarea.
 - Con 1/2/3 Survivors dura 300/150/100 segundos respectivamente.
+
+## Ejemplo actual de tarea pasiva: patatas
+
+```text
+taskId: plant_potatoes
+tipo: background
+prerrequisito: prepare_garden
+Survivor: exactamente 1 disponible
+care: > 3
+duración: 60 s
+energía: 0
+resultado: +10 food
+storable: false
+```
+
+El Survivor se valida al arrancar, pero permanece disponible durante todo el crecimiento. Mientras exista una ejecución activa de `plant_potatoes`, no se puede iniciar una segunda copia de esa misma tarea.
 
 ## Ejemplos actuales de cocina y taller
 
