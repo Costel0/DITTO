@@ -865,6 +865,29 @@ class _SurvivorTaskDialogState extends State<_SurvivorTaskDialog> {
     }).join(' · ');
   }
 
+  String _batchInputSummary(
+    BuildContext context,
+    Map<String, Item> catalog,
+  ) {
+    final parts = <String>[];
+    if (_scaledFixedInventoryCost.isNotEmpty) {
+      parts.add(
+        _inventorySummary(
+          context,
+          catalog,
+          _scaledFixedInventoryCost,
+        ),
+      );
+    }
+    if (_scaledResourceCraftingValueRequired > 0) {
+      parts.add(
+        '$_scaledResourceCraftingValueRequired '
+        '${context.l10n.jobGenericResourcesLabel}',
+      );
+    }
+    return parts.isEmpty ? '—' : parts.join(' · ');
+  }
+
   void _toggle(Survivor survivor) {
     if (!_survivorMeetsStatRequirements(survivor, widget.statRequirements)) {
       return;
@@ -1118,10 +1141,9 @@ class _SurvivorTaskDialogState extends State<_SurvivorTaskDialog> {
                                   const SizedBox(height: 6),
                                   _BatchSummaryRow(
                                     label: context.l10n.jobBatchInputsLabel,
-                                    value: _inventorySummary(
+                                    value: _batchInputSummary(
                                       context,
                                       catalog,
-                                      _scaledFixedInventoryCost,
                                     ),
                                   ),
                                   const SizedBox(height: 6),
