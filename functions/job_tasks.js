@@ -478,19 +478,20 @@ function taskDefinitionFromSnapshot(snapshot, taskId) {
     throw new Error(`Task ${normalizedTaskId} cost must be an object.`);
   }
 
+  const survivorRequirements = normalizedSurvivorRequirements(
+    rawTask.survivorRequirements,
+    normalizedTaskId,
+  );
   const resultDefinition = normalizedResults(rawTask, normalizedTaskId);
   const execution = normalizedExecution(rawTask.execution, normalizedTaskId);
 
-  if (execution.type === "background") {
-    if (
-      rawTask.survivorRequirements != null &&
-      (rawTask.survivorRequirements.min !== 1 ||
-        rawTask.survivorRequirements.max !== 1)
-    ) {
-      throw new Error(
-        `Task ${normalizedTaskId} background execution requires exactly one Survivor.`,
-      );
-    }
+  if (
+    execution.type === "background" &&
+    (survivorRequirements.min !== 1 || survivorRequirements.max !== 1)
+  ) {
+    throw new Error(
+      `Task ${normalizedTaskId} background execution requires exactly one Survivor.`,
+    );
   }
 
   if (execution.type === "batch") {
@@ -521,10 +522,7 @@ function taskDefinitionFromSnapshot(snapshot, taskId) {
     storable,
     execution,
     requiredTaskIds,
-    survivorRequirements: normalizedSurvivorRequirements(
-      rawTask.survivorRequirements,
-      normalizedTaskId,
-    ),
+    survivorRequirements,
     cost: {
       inventory: normalizedInventoryMap(
         rawCost.inventory,
@@ -539,6 +537,37 @@ function taskDefinitionFromSnapshot(snapshot, taskId) {
     resultResolver: resultDefinition.resolver,
     results: resultDefinition.results,
   };
+}
+
+function hasActiveTaskExecution(bunker, taskId) {
+  const normalizedTaskId =
+    typeof taskId === "string" ? taskId.trim() : "";
+  if (!normalizedTaskId) return false;
+
+  const busySurvivors = Array.isArray(bunker?.busySurvivors)
+    ? bunker.busySurvivors
+    : [];
+  if (busySurvivors.some((entry) => {
+    if (!entry || typeof entry !== "object") return false;
+    const entryTaskId = typeof entry.taskId === "string" && entry.taskId.trim()
+      ? entry.taskId.trim()
+      : typeof entry.activity === "string"
+        ? entry.activity.trim()
+        : "";
+    return entryTaskId === normalizedTaskId;
+  })) {
+    return true;
+  }
+
+  const backgroundTasks = Array.isArray(bunker?.activeBackgroundTasks)
+    ? bunker.activeBackgroundTasks
+    : [];
+  return backgroundTasks.some((entry) =>
+    entry &&
+    typeof entry === "object" &&
+    typeof entry.taskId === "string" &&
+    entry.taskId.trim() === normalizedTaskId,
+  );
 }
 
 function missingRequiredTaskIds(bunker, task) {
@@ -799,6 +828,7 @@ function applyTaskCompletionEffects(
 module.exports = {
   applyTaskCompletionEffects,
   applyTaskStartCost,
+  hasActiveTaskExecution,
   missingRequiredTaskIds,
   normalizedResourceSelection,
   normalizedTaskExecutionCount,
