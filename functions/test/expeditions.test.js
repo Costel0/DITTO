@@ -1,9 +1,8 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const {
-  aggregateExpeditionInventoryDelta,
-  applyExpeditionCompletion,
-  applyInventoryReward,
+  applyExpeditionAutomaticResolution,
+  applyExpeditionInteractiveResolution,
   availableActionsAtCoordinates,
   expeditionDefinitionFromSnapshot,
   expeditionDurationSeconds,
@@ -16,12 +15,26 @@ function testOutcomes() {
     empty: {
       probability: 0.5,
       narrativeId: "test_empty",
-      inventoryDelta: {},
+      resolutionOptions: {
+        accept: {
+          labelId: "accept",
+          inventoryDelta: {},
+        },
+      },
     },
     reward: {
       probability: 0.5,
       narrativeId: "test_reward",
-      inventoryDelta: {test_item: 2},
+      resolutionOptions: {
+        accept: {
+          labelId: "accept",
+          inventoryDelta: {test_item: 2},
+        },
+        decline: {
+          labelId: "decline",
+          inventoryDelta: {},
+        },
+      },
     },
   };
 }
@@ -44,8 +57,8 @@ function exampleDefinition() {
 
 test("expedition actions are only available at their configured location", () => {
   const definition = exampleDefinition();
-
   const bunkerCoordinates = {x: 4, y: 5, z: 6};
+
   assert.equal(
     availableActionsAtCoordinates(
       definition,
@@ -64,7 +77,7 @@ test("expedition actions are only available at their configured location", () =>
   );
 });
 
-test("selected expedition actions determine duration and completion energy", () => {
+test("selected expedition actions determine duration and automatic energy", () => {
   const definition = exampleDefinition();
   const bunkerCoordinates = {x: 4, y: 5, z: 6};
   const actions = selectedActionDefinitions(
@@ -74,8 +87,8 @@ test("selected expedition actions determine duration and completion energy", () 
     ["inspect"],
   );
   const survivor = {id: "s1", energy: 30};
-  const result = applyExpeditionCompletion(
-    {survivors: [survivor], inventory: {}},
+  const result = applyExpeditionAutomaticResolution(
+    {survivors: [survivor], inventory: {test_item: 3}},
     ["s1"],
     actions,
   );
@@ -84,6 +97,11 @@ test("selected expedition actions determine duration and completion energy", () 
   assert.equal(
     result.survivors[0].energy,
     survivor.energy + actions[0].energyDelta,
+  );
+  assert.deepEqual(
+    result.inventory,
+    {test_item: 3},
+    "automatic resolution must not apply interactive rewards",
   );
 });
 
@@ -140,31 +158,75 @@ test("server outcome selection is deterministic for the same execution seed", ()
   assert.ok(["empty", "reward"].includes(first[0].id));
 });
 
-test("expedition completion does not reveal or grant rewards before review", () => {
-  const definition = exampleDefinition();
-  const action = definition.actions.inspect;
-  const result = applyExpeditionCompletion(
+test("interactive resolution applies only the selected option", () => {
+  const outcomes = [
     {
-      survivors: [{id: "s1", energy: 20}],
-      inventory: {test_item: 3},
+      actionId: "inspect",
+      outcomeId: "reward",
+      narrativeId: "test_reward",
+      resolutionOptions: {
+        accept: {
+          id: "accept",
+          labelId: "accept",
+          inventoryDelta: {test_item: 2},
+          eventTrigger: null,
+        },
+        decline: {
+          id: "decline",
+          labelId: "decline",
+          inventoryDelta: {},
+          eventTrigger: null,
+        },
+      },
     },
-    ["s1"],
-    [action],
+  ];
+
+  const accepted = applyExpeditionInteractiveResolution(
+    {inventory: {test_item: 3}},
+    outcomes,
+    {inspect: "accept"},
+  );
+  const declined = applyExpeditionInteractiveResolution(
+    {inventory: {test_item: 3}},
+    outcomes,
+    {inspect: "decline"},
   );
 
-  assert.deepEqual(result.inventory, {test_item: 3});
+  assert.equal(accepted.bunker.inventory.test_item, 5);
+  assert.equal(declined.bunker.inventory.test_item, 3);
+  assert.deepEqual(accepted.inventoryDelta, {test_item: 2});
+  assert.deepEqual(declined.inventoryDelta, {});
 });
 
-test("expedition rewards are aggregated and claimed separately", () => {
-  const rewardOutcome = {
-    actionId: "inspect",
-    id: "reward",
-    narrativeId: "test_reward",
-    inventoryDelta: {test_item: 2},
-  };
-  const delta = aggregateExpeditionInventoryDelta([rewardOutcome]);
-  const inventory = applyInventoryReward({test_item: 3}, delta);
+test("interactive resolution requires one valid choice per outcome", () => {
+  const outcomes = [
+    {
+      actionId: "inspect",
+      outcomeId: "reward",
+      resolutionOptions: {
+        accept: {
+          id: "accept",
+          labelId: "accept",
+          inventoryDelta: {test_item: 2},
+        },
+      },
+    },
+  ];
 
-  assert.deepEqual(delta, {test_item: 2});
-  assert.equal(inventory.test_item, 5);
+  assert.throws(
+    () => applyExpeditionInteractiveResolution(
+      {inventory: {}},
+      outcomes,
+      {},
+    ),
+    /valid resolution option/,
+  );
+  assert.throws(
+    () => applyExpeditionInteractiveResolution(
+      {inventory: {}},
+      outcomes,
+      {inspect: "unknown"},
+    ),
+    /valid resolution option/,
+  );
 });
