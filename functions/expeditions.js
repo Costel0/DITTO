@@ -1,3 +1,4 @@
+const {createHash} = require("node:crypto");
 const EXPEDITION_ACTIVITY = "expedition";
 
 function isPlainObject(value) {
@@ -28,6 +29,124 @@ function normalizedCoordinates(value, label = "coordinates") {
 
 function sameCoordinates(left, right) {
   return left.x === right.x && left.y === right.y && left.z === right.z;
+}
+
+function normalizedInventoryReward(value, label) {
+  if (value == null) return {};
+  if (!isPlainObject(value)) {
+    throw new Error(`${label} must be an object.`);
+  }
+
+  const result = {};
+  for (const [itemIdRaw, quantity] of Object.entries(value)) {
+    const itemId = itemIdRaw.trim();
+    if (
+      !itemId ||
+      !Number.isInteger(quantity) ||
+      quantity <= 0
+    ) {
+      throw new Error(
+        `${label} must contain positive integer item quantities.`,
+      );
+    }
+    result[itemId] = quantity;
+  }
+  return result;
+}
+
+function normalizedEventTrigger(value, label) {
+  if (value == null) return null;
+  if (!isPlainObject(value)) {
+    throw new Error(`${label} must be an object.`);
+  }
+  const poolId = typeof value.poolId === "string" ? value.poolId.trim() : "";
+  if (!poolId) {
+    throw new Error(`${label}.poolId must be a non-empty string.`);
+  }
+  return {poolId};
+}
+
+function normalizedOutcomeDefinition(rawOutcome, actionId, outcomeId) {
+  if (!isPlainObject(rawOutcome)) {
+    throw new Error(
+      `Expedition outcome ${actionId}.${outcomeId} must be an object.`,
+    );
+  }
+
+  const probability = rawOutcome.probability;
+  if (
+    typeof probability !== "number" ||
+    !Number.isFinite(probability) ||
+    probability <= 0 ||
+    probability > 1
+  ) {
+    throw new Error(
+      `Expedition outcome ${actionId}.${outcomeId} probability must be in (0, 1].`,
+    );
+  }
+
+  const narrativeId = typeof rawOutcome.narrativeId === "string"
+    ? rawOutcome.narrativeId.trim()
+    : "";
+  if (!narrativeId) {
+    throw new Error(
+      `Expedition outcome ${actionId}.${outcomeId} requires narrativeId.`,
+    );
+  }
+
+  const imageKey = typeof rawOutcome.imageKey === "string" &&
+    rawOutcome.imageKey.trim().length > 0
+    ? rawOutcome.imageKey.trim()
+    : null;
+
+  return {
+    id: outcomeId,
+    probability,
+    narrativeId,
+    inventoryDelta: normalizedInventoryReward(
+      rawOutcome.inventoryDelta,
+      `Expedition outcome ${actionId}.${outcomeId}.inventoryDelta`,
+    ),
+    eventTrigger: normalizedEventTrigger(
+      rawOutcome.eventTrigger,
+      `Expedition outcome ${actionId}.${outcomeId}.eventTrigger`,
+    ),
+    ...(imageKey ? {imageKey} : {}),
+  };
+}
+
+function normalizedActionOutcomes(rawOutcomes, actionId) {
+  if (!isPlainObject(rawOutcomes) || Object.keys(rawOutcomes).length === 0) {
+    throw new Error(
+      `Expedition action ${actionId} must define at least one outcome.`,
+    );
+  }
+
+  const outcomes = {};
+  let probabilitySum = 0;
+  for (const [outcomeIdRaw, rawOutcome] of Object.entries(rawOutcomes)) {
+    const outcomeId = outcomeIdRaw.trim();
+    if (!outcomeId) {
+      throw new Error(
+        `Expedition action ${actionId} contains an empty outcome ID.`,
+      );
+    }
+    const outcome = normalizedOutcomeDefinition(
+      rawOutcome,
+      actionId,
+      outcomeId,
+    );
+    outcomes[outcomeId] = outcome;
+    probabilitySum += outcome.probability;
+  }
+
+  if (Math.abs(probabilitySum - 1) > 1e-9) {
+    throw new Error(
+      `Expedition action ${actionId} outcome probabilities must sum to 1.`,
+    );
+  }
+
+  return outcomes;
 }
 
 function normalizedActionDefinition(rawAction, actionId) {
@@ -74,6 +193,7 @@ function normalizedActionDefinition(rawAction, actionId) {
     availability,
     durationSeconds,
     energyDelta,
+    outcomes: normalizedActionOutcomes(rawAction.outcomes, actionId),
   };
 }
 
@@ -193,6 +313,57 @@ function expeditionTypeForActions(actions) {
   return actions[0].expeditionType;
 }
 
+function deterministicUnitInterval(seed) {
+  const digest = createHash("sha256").update(seed).digest();
+  return digest.readUIntBE(0, 6) / 0x1000000000000;
+}
+
+function selectActionOutcome(action, executionSeed) {
+  const roll = deterministicUnitInterval(
+    `${action.id}:${executionSeed}:expedition-outcome`,
+  );
+  let cumulative = 0;
+
+  for (const outcome of Object.values(action.outcomes)) {
+    cumulative += outcome.probability;
+    if (roll < cumulative) return outcome;
+  }
+
+  return Object.values(action.outcomes).at(-1);
+}
+
+function selectExpeditionOutcomes(actions, executionSeed) {
+  return actions.map((action) => ({
+    actionId: action.id,
+    ...selectActionOutcome(action, executionSeed),
+  }));
+}
+
+function aggregateExpeditionInventoryDelta(outcomes) {
+  const aggregate = {};
+  for (const outcome of outcomes) {
+    for (const [itemId, quantity] of Object.entries(
+      outcome.inventoryDelta || {},
+    )) {
+      aggregate[itemId] = (aggregate[itemId] || 0) + quantity;
+    }
+  }
+  return aggregate;
+}
+
+function applyInventoryReward(inventorySource, delta) {
+  const inventory = isPlainObject(inventorySource)
+    ? {...inventorySource}
+    : {};
+  for (const [itemId, quantity] of Object.entries(delta)) {
+    const current = Number.isInteger(inventory[itemId])
+      ? inventory[itemId]
+      : 0;
+    inventory[itemId] = current + quantity;
+  }
+  return inventory;
+}
+
 function expeditionDurationSeconds(actions) {
   return actions.reduce(
     (total, action) => total + action.durationSeconds,
@@ -245,6 +416,7 @@ function applyExpeditionCompletion(
   bunker,
   participantIds,
   actions,
+  outcomes = [],
 ) {
   const participantSet = new Set(participantIds);
   const survivors = Array.isArray(bunker.survivors)
@@ -273,9 +445,11 @@ function applyExpeditionCompletion(
     };
   }
 
+  const inventoryDelta = aggregateExpeditionInventoryDelta(outcomes);
   return {
     ...bunker,
     survivors,
+    inventory: applyInventoryReward(bunker.inventory, inventoryDelta),
   };
 }
 
@@ -283,6 +457,7 @@ module.exports = {
   EXPEDITION_ACTIVITY,
   actionDefinitionsByIds,
   actionIdsFromExpeditionTaskId,
+  aggregateExpeditionInventoryDelta,
   applyExpeditionCompletion,
   availableActionsAtCoordinates,
   canonicalActionId,
@@ -296,5 +471,6 @@ module.exports = {
   normalizedActionIds,
   normalizedCoordinates,
   sameCoordinates,
+  selectExpeditionOutcomes,
   selectedActionDefinitions,
 };
