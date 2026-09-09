@@ -625,3 +625,75 @@ test("batch generic resource requirements scale with execution count", () => {
 
   assert.deepEqual(paid.inventory, {});
 });
+
+
+test("background tasks require one Survivor but do not support batch counts", () => {
+  const task = taskDefinitionFromSnapshot(
+    snapshotWithTasks({
+      passive_crop: {
+        location: "garden",
+        durationSeconds: 60,
+        storable: false,
+        execution: {type: "background"},
+        survivorRequirements: {
+          min: 1,
+          max: 1,
+          statRequirements: {
+            care: {greaterThan: 3},
+          },
+        },
+        requiredTaskIds: ["prepare_garden"],
+        cost: {inventory: {}},
+        resultResolver: {type: "fixed", resultId: "success"},
+        results: {
+          success: {
+            guaranteedOutcomes: {
+              energyDelta: 0,
+              inventoryDelta: {food: 10},
+            },
+            randomOutcomes: {},
+          },
+        },
+      },
+    }),
+    "passive_crop",
+  );
+
+  assert.deepEqual(task.execution, {type: "background", maxCount: 1});
+  assert.equal(normalizedTaskExecutionCount(task, 1), 1);
+  assert.equal(taskDurationSecondsForExecution(task, 1, 1), 60);
+  assert.equal(taskEnergyCostPerSurvivor(task), 0);
+  assert.deepEqual(taskFixedOutputInventory(task), {food: 10});
+  assert.deepEqual(task.requiredTaskIds, ["prepare_garden"]);
+  assert.deepEqual(task.survivorRequirements.statRequirements, {
+    care: {greaterThan: 3},
+  });
+  assert.throws(
+    () => normalizedTaskExecutionCount(task, 2),
+    /does not support batch execution/,
+  );
+});
+
+test("background tasks reject multi-Survivor definitions", () => {
+  assert.throws(
+    () => taskDefinitionFromSnapshot(
+      snapshotWithTasks({
+        invalid_passive: {
+          location: "garden",
+          durationSeconds: 60,
+          execution: {type: "background"},
+          survivorRequirements: {min: 1, max: 2},
+          resultResolver: {type: "fixed", resultId: "success"},
+          results: {
+            success: {
+              guaranteedOutcomes: {energyDelta: 0, inventoryDelta: {}},
+              randomOutcomes: {},
+            },
+          },
+        },
+      }),
+      "invalid_passive",
+    ),
+    /requires exactly one Survivor/,
+  );
+});
