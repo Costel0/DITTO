@@ -196,46 +196,6 @@ function normalizedPendingExpeditionReviews(source) {
     const completedAt = truncateToSecond(entry.completedAt);
     if (!completedAt) continue;
 
-    const outcomes = Array.isArray(entry.outcomes)
-      ? entry.outcomes
-        .filter((outcome) =>
-          outcome &&
-          typeof outcome === "object" &&
-          !Array.isArray(outcome) &&
-          typeof outcome.actionId === "string" &&
-          outcome.actionId.trim() &&
-          typeof outcome.outcomeId === "string" &&
-          outcome.outcomeId.trim() &&
-          typeof outcome.narrativeId === "string" &&
-          outcome.narrativeId.trim(),
-        )
-        .map((outcome) => {
-          const normalized = {
-            actionId: outcome.actionId.trim(),
-            outcomeId: outcome.outcomeId.trim(),
-            narrativeId: outcome.narrativeId.trim(),
-            inventoryDelta: normalizedPositiveInventoryMap(
-              outcome.inventoryDelta,
-            ),
-          };
-          if (
-            typeof outcome.imageKey === "string" &&
-            outcome.imageKey.trim()
-          ) {
-            normalized.imageKey = outcome.imageKey.trim();
-          }
-          const poolId = typeof outcome.eventTrigger?.poolId === "string"
-            ? outcome.eventTrigger.poolId.trim()
-            : "";
-          if (poolId) {
-            normalized.eventTrigger = {poolId};
-          }
-          return normalized;
-        })
-      : [];
-
-    if (outcomes.length === 0) continue;
-
     const normalized = {
       id,
       expeditionType,
@@ -243,8 +203,6 @@ function normalizedPendingExpeditionReviews(source) {
       survivorIds: uniqueStringList(entry.survivorIds),
       coordinates: normalizedBunkerCoordinates(entry.coordinates),
       completedAt,
-      inventoryDelta: normalizedPositiveInventoryMap(entry.inventoryDelta),
-      outcomes,
     };
     if (
       typeof entry.executionId === "string" &&
@@ -253,6 +211,10 @@ function normalizedPendingExpeditionReviews(source) {
       normalized.executionId = entry.executionId.trim();
     }
 
+    // Deliberately do not persist outcome IDs, narratives, rewards or event
+    // hooks in BunkerState. The client can read this document, so only an
+    // opaque summary belongs here. Full reports live in the backend-only
+    // users/{uid}/expeditionReviews collection.
     reviews.push(normalized);
     seenIds.add(id);
   }
