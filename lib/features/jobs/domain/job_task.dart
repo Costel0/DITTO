@@ -20,6 +20,11 @@ const craftElectronicsFromScrapTask = JobTaskDefinition(
   area: JobArea.workshop,
 );
 
+const plantPotatoesTask = JobTaskDefinition(
+  id: 'plant_potatoes',
+  area: JobArea.garden,
+);
+
 const prepareGardenTask = JobTaskDefinition(
   id: 'prepare_garden',
   area: JobArea.garden,
@@ -58,6 +63,7 @@ const upgradeGarden6Task = JobTaskDefinition(
 const jobTasks = <JobTaskDefinition>[
   cleanKitchenTask,
   craftElectronicsFromScrapTask,
+  plantPotatoesTask,
   prepareGardenTask,
   upgradeGardenTask,
   upgradeGarden2Task,
