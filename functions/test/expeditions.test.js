@@ -3,6 +3,7 @@ const test = require("node:test");
 const {
   aggregateExpeditionInventoryDelta,
   applyExpeditionCompletion,
+  applyInventoryReward,
   availableActionsAtCoordinates,
   expeditionDefinitionFromSnapshot,
   expeditionDurationSeconds,
@@ -139,16 +140,9 @@ test("server outcome selection is deterministic for the same execution seed", ()
   assert.ok(["empty", "reward"].includes(first[0].id));
 });
 
-test("expedition rewards are aggregated and added to inventory", () => {
+test("expedition completion does not reveal or grant rewards before review", () => {
   const definition = exampleDefinition();
   const action = definition.actions.inspect;
-  const rewardOutcome = {
-    actionId: action.id,
-    id: "reward",
-    narrativeId: "test_reward",
-    inventoryDelta: {test_item: 2},
-  };
-  const delta = aggregateExpeditionInventoryDelta([rewardOutcome]);
   const result = applyExpeditionCompletion(
     {
       survivors: [{id: "s1", energy: 20}],
@@ -156,9 +150,21 @@ test("expedition rewards are aggregated and added to inventory", () => {
     },
     ["s1"],
     [action],
-    [rewardOutcome],
   );
 
+  assert.deepEqual(result.inventory, {test_item: 3});
+});
+
+test("expedition rewards are aggregated and claimed separately", () => {
+  const rewardOutcome = {
+    actionId: "inspect",
+    id: "reward",
+    narrativeId: "test_reward",
+    inventoryDelta: {test_item: 2},
+  };
+  const delta = aggregateExpeditionInventoryDelta([rewardOutcome]);
+  const inventory = applyInventoryReward({test_item: 3}, delta);
+
   assert.deepEqual(delta, {test_item: 2});
-  assert.equal(result.inventory.test_item, 5);
+  assert.equal(inventory.test_item, 5);
 });
