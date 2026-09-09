@@ -1,6 +1,6 @@
 {
   "schemaVersion": 3,
-  "dataVersion": 6,
+  "dataVersion": 7,
   "actions": {
     "scout_surroundings": {
       "expeditionType": "scavenge",
@@ -59,10 +59,10 @@
           },
           "imageKey": "wood_plank"
         },
-        "food": {
+        "small_dead_animal": {
           "probability": 0.09,
-          "narrativeId": "scavenge_food",
-          "imageKey": "dead_bird",
+          "narrativeId": "scavenge_small_dead_animal",
+          "imageKey": "small_dead_animal",
           "resolutionOptions": {
             "accept": {
               "labelId": "accept",
