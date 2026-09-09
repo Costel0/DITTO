@@ -1,12 +1,29 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const {
+  aggregateExpeditionInventoryDelta,
   applyExpeditionCompletion,
   availableActionsAtCoordinates,
   expeditionDefinitionFromSnapshot,
   expeditionDurationSeconds,
+  selectExpeditionOutcomes,
   selectedActionDefinitions,
 } = require("../expeditions");
+
+function testOutcomes() {
+  return {
+    empty: {
+      probability: 0.5,
+      narrativeId: "test_empty",
+      inventoryDelta: {},
+    },
+    reward: {
+      probability: 0.5,
+      narrativeId: "test_reward",
+      inventoryDelta: {test_item: 2},
+    },
+  };
+}
 
 function exampleDefinition() {
   return expeditionDefinitionFromSnapshot({
@@ -17,6 +34,7 @@ function exampleDefinition() {
           availability: "bunker",
           durationSeconds: 17,
           energyDelta: -7,
+          outcomes: testOutcomes(),
         },
       },
     }),
@@ -56,7 +74,7 @@ test("selected expedition actions determine duration and completion energy", () 
   );
   const survivor = {id: "s1", energy: 30};
   const result = applyExpeditionCompletion(
-    {survivors: [survivor]},
+    {survivors: [survivor], inventory: {}},
     ["s1"],
     actions,
   );
@@ -91,6 +109,7 @@ test("intermediate scavenge action IDs resolve to scout surroundings", () => {
           availability: "bunker",
           durationSeconds: 9,
           energyDelta: -3,
+          outcomes: testOutcomes(),
         },
       },
     }),
@@ -106,4 +125,40 @@ test("intermediate scavenge action IDs resolve to scout surroundings", () => {
   assert.equal(actions.length, 1);
   assert.equal(actions[0].id, "scout_surroundings");
   assert.equal(actions[0].expeditionType, "scavenge");
+});
+
+test("server outcome selection is deterministic for the same execution seed", () => {
+  const definition = exampleDefinition();
+  const action = definition.actions.inspect;
+
+  const first = selectExpeditionOutcomes([action], "execution-123");
+  const second = selectExpeditionOutcomes([action], "execution-123");
+
+  assert.deepEqual(first, second);
+  assert.equal(first.length, 1);
+  assert.ok(["empty", "reward"].includes(first[0].id));
+});
+
+test("expedition rewards are aggregated and added to inventory", () => {
+  const definition = exampleDefinition();
+  const action = definition.actions.inspect;
+  const rewardOutcome = {
+    actionId: action.id,
+    id: "reward",
+    narrativeId: "test_reward",
+    inventoryDelta: {test_item: 2},
+  };
+  const delta = aggregateExpeditionInventoryDelta([rewardOutcome]);
+  const result = applyExpeditionCompletion(
+    {
+      survivors: [{id: "s1", energy: 20}],
+      inventory: {test_item: 3},
+    },
+    ["s1"],
+    [action],
+    [rewardOutcome],
+  );
+
+  assert.deepEqual(delta, {test_item: 2});
+  assert.equal(result.inventory.test_item, 5);
 });
