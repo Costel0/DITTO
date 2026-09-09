@@ -1,6 +1,6 @@
 {
   "schemaVersion": 3,
-  "dataVersion": 5,
+  "dataVersion": 6,
   "actions": {
     "scout_surroundings": {
       "expeditionType": "scavenge",
@@ -16,7 +16,8 @@
               "labelId": "accept",
               "inventoryDelta": {}
             }
-          }
+          },
+          "imageKey": "nothing_found"
         },
         "scrap_and_trash": {
           "probability": 0.3,
@@ -29,7 +30,8 @@
                 "trash": 5
               }
             }
-          }
+          },
+          "imageKey": "scrap_and_trash"
         },
         "scrap_metal_2": {
           "probability": 0.3,
@@ -41,7 +43,8 @@
                 "scrap_metal": 2
               }
             }
-          }
+          },
+          "imageKey": "scrap_metal"
         },
         "wood_plank": {
           "probability": 0.1,
@@ -53,7 +56,8 @@
                 "wood_plank": 1
               }
             }
-          }
+          },
+          "imageKey": "wood_plank"
         },
         "food": {
           "probability": 0.09,
@@ -79,7 +83,8 @@
                 "poolId": "evento_comun"
               }
             }
-          }
+          },
+          "imageKey": "common_event"
         }
       }
     }
