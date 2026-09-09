@@ -69,6 +69,7 @@ test("normalizedBusySurvivors preserves task and execution IDs", () => {
       survivorId: "s1",
       taskId: "test_task",
       executionId: "exec-1",
+      expeditionType: "test_expedition",
       activity: "test_task",
       location: "test_area",
       startedAt: new Date("2026-08-18T12:00:00Z"),
@@ -78,6 +79,7 @@ test("normalizedBusySurvivors preserves task and execution IDs", () => {
 
   assert.equal(busy.taskId, "test_task");
   assert.equal(busy.executionId, "exec-1");
+  assert.equal(busy.expeditionType, "test_expedition");
 });
 
 test("fixStatus leaves completed occupations untouched", async () => {
