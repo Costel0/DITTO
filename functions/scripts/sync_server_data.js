@@ -426,6 +426,30 @@ function validateJobTasks(data, filename) {
     }
     storableByTaskId.set(taskId, task.storable);
 
+    const execution = task.execution ?? {type: "single"};
+    if (!isPlainObject(execution)) {
+      throw new Error(`${filename}.${taskId}.execution must be an object.`);
+    }
+    const executionType = execution.type ?? "single";
+    if (executionType !== "single" && executionType !== "batch") {
+      throw new Error(
+        `${filename}.${taskId}.execution.type must be single or batch.`,
+      );
+    }
+    if (executionType === "batch") {
+      const maxCount = execution.maxCount ?? 999;
+      if (!Number.isInteger(maxCount) || maxCount < 1 || maxCount > 999) {
+        throw new Error(
+          `${filename}.${taskId}.execution.maxCount must be 1..999.`,
+        );
+      }
+      if (task.storable) {
+        throw new Error(
+          `${filename}.${taskId} batch tasks cannot be storable.`,
+        );
+      }
+    }
+
     if (!isPlainObject(task.survivorRequirements)) {
       throw new Error(
         `${filename}.${taskId}.survivorRequirements must be an object.`,
@@ -470,6 +494,23 @@ function validateJobTasks(data, filename) {
     );
 
     validateTaskResults(task, filename, taskId);
+    if ((task.execution?.type ?? "single") === "batch") {
+      if (task.resultResolver?.type !== "fixed") {
+        throw new Error(
+          `${filename}.${taskId} batch tasks require a fixed result.`,
+        );
+      }
+      const fixedResult = task.results?.[task.resultResolver.resultId];
+      if (
+        !isPlainObject(fixedResult) ||
+        (isPlainObject(fixedResult.randomOutcomes) &&
+          Object.keys(fixedResult.randomOutcomes).length > 0)
+      ) {
+        throw new Error(
+          `${filename}.${taskId} batch tasks cannot use random outcomes yet.`,
+        );
+      }
+    }
   }
 
   for (const [taskId, requiredTaskIds] of requirementsByTaskId) {
