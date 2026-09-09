@@ -1042,14 +1042,19 @@ function legacyInteractiveOutcomes(privateReview) {
 
     // Compatibility with the brief development schema where reward/event
     // effects were stored directly on the outcome and opening consumed it.
+    const legacyEffectsWerePending = privateReview?.rewardApplied === false;
     return {
       ...outcome,
       resolutionOptions: {
         accept: {
           id: "accept",
           labelId: "accept",
-          inventoryDelta: outcome?.inventoryDelta || {},
-          ...(outcome?.eventTrigger
+          // Only the known "rewardApplied: false" schema can safely claim the
+          // old reward here. Missing/true means it may already have been paid.
+          inventoryDelta: legacyEffectsWerePending
+            ? outcome?.inventoryDelta || {}
+            : {},
+          ...(legacyEffectsWerePending && outcome?.eventTrigger
             ? {eventTrigger: outcome.eventTrigger}
             : {}),
         },
