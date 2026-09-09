@@ -36,6 +36,7 @@ class HubExpeditions extends StatefulWidget {
 class _HubExpeditionsState extends State<HubExpeditions> {
   bool _isOpeningLauncher = false;
   bool _isLoadingReviews = false;
+  bool _reviewsReloadRequested = false;
   String? _reviewingId;
   int? _lastRevision;
   List<ExpeditionReviewSummary> _pendingReviews =
@@ -73,17 +74,31 @@ class _HubExpeditionsState extends State<HubExpeditions> {
   }
 
   Future<void> _loadPendingReviews() async {
-    if (_isLoadingReviews) return;
-    if (mounted) setState(() => _isLoadingReviews = true);
-    try {
-      final reviews = await widget.expeditionService.fetchPendingReviews();
-      if (!mounted) return;
-      setState(() => _pendingReviews = reviews);
-    } catch (_) {
-      // Keep the latest successfully loaded list. The bunker poll/revision will
-      // retry naturally without blocking active expedition rendering.
-    } finally {
-      if (mounted) setState(() => _isLoadingReviews = false);
+    if (_isLoadingReviews) {
+      _reviewsReloadRequested = true;
+      return;
+    }
+
+    do {
+      _reviewsReloadRequested = false;
+      if (mounted) setState(() => _isLoadingReviews = true);
+      try {
+        final reviews = await widget.expeditionService.fetchPendingReviews();
+        if (!mounted) return;
+        setState(() => _pendingReviews = reviews);
+      } catch (_) {
+        // Keep the latest successfully loaded list. A queued revision change
+        // will retry immediately; otherwise the next bunker revision or widget
+        // recreation provides another retry opportunity.
+      } finally {
+        if (mounted && !_reviewsReloadRequested) {
+          setState(() => _isLoadingReviews = false);
+        }
+      }
+    } while (mounted && _reviewsReloadRequested);
+
+    if (mounted && _isLoadingReviews) {
+      setState(() => _isLoadingReviews = false);
     }
   }
 
