@@ -50,6 +50,7 @@ test("fixStatus moves negative idle Survivors to sleeping", async () => {
   assert.equal(fixed.revision, 8);
   assert.deepEqual(fixed.idleSurvivors, []);
   assert.deepEqual(fixed.completedTaskIds, []);
+  assert.deepEqual(fixed.activeBackgroundTasks, []);
   assert.deepEqual(fixed.bunkerCoordinates, {x: 0, y: 0, z: 0});
   assert.equal(fixed.busySurvivors.length, 1);
   assert.equal(fixed.busySurvivors[0].survivorId, "s1");
