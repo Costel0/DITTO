@@ -168,7 +168,7 @@ nothing          -> assets/expeditions/results/scavenge_nothing_found.png
 scrap_and_trash  -> assets/expeditions/results/scavenge_scrap_and_trash.png
 scrap_metal_2    -> assets/expeditions/results/scavenge_scrap_metal.png
 wood_plank       -> assets/expeditions/results/scavenge_wood_plank.png
-food             -> assets/expeditions/results/scavenge_dead_bird.png
+small_dead_animal -> assets/expeditions/results/scavenge_small_dead_animal.png
 common_event     -> assets/expeditions/results/scavenge_common_event.png
 ```
 
