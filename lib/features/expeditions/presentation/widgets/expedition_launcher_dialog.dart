@@ -109,7 +109,7 @@ class _ExpeditionLauncherDialogState extends State<ExpeditionLauncherDialog> {
     switch (actionId) {
       case 'scavenge':
       case 'scout_surroundings':
-        return context.l10n.expeditionScavengeTitle;
+        return context.l10n.expeditionScoutSurroundingsTitle;
       default:
         return actionId;
     }
