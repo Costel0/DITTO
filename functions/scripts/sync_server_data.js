@@ -253,6 +253,14 @@ function validateExpeditions(data, filename) {
     if (!actionId.trim() || !isPlainObject(action)) {
       throw new Error(`${filename}.actions contains an invalid action.`);
     }
+    if (
+      typeof action.expeditionType !== "string" ||
+      !action.expeditionType.trim()
+    ) {
+      throw new Error(
+        `${filename}.actions.${actionId}.expeditionType must be a string.`,
+      );
+    }
     if (action.availability !== "bunker") {
       throw new Error(
         `${filename}.actions.${actionId}.availability must be bunker.`,
