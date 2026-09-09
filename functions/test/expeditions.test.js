@@ -11,7 +11,6 @@ const {
 function exampleDefinition() {
   return expeditionDefinitionFromSnapshot({
     data: () => ({
-      bunkerCoordinates: {x: 4, y: 5, z: 6},
       actions: {
         inspect: {
           availability: "bunker",
@@ -26,10 +25,12 @@ function exampleDefinition() {
 test("expedition actions are only available at their configured location", () => {
   const definition = exampleDefinition();
 
+  const bunkerCoordinates = {x: 4, y: 5, z: 6};
   assert.equal(
     availableActionsAtCoordinates(
       definition,
-      definition.bunkerCoordinates,
+      bunkerCoordinates,
+      bunkerCoordinates,
     ).length,
     1,
   );
@@ -37,6 +38,7 @@ test("expedition actions are only available at their configured location", () =>
     availableActionsAtCoordinates(
       definition,
       {x: 4, y: 5, z: 7},
+      bunkerCoordinates,
     ),
     [],
   );
@@ -44,9 +46,11 @@ test("expedition actions are only available at their configured location", () =>
 
 test("selected expedition actions determine duration and completion energy", () => {
   const definition = exampleDefinition();
+  const bunkerCoordinates = {x: 4, y: 5, z: 6};
   const actions = selectedActionDefinitions(
     definition,
-    definition.bunkerCoordinates,
+    bunkerCoordinates,
+    bunkerCoordinates,
     ["inspect"],
   );
   const survivor = {id: "s1", energy: 30};
@@ -70,8 +74,33 @@ test("expedition actions are rejected outside their available coordinates", () =
     () => selectedActionDefinitions(
       definition,
       {x: 0, y: 0, z: 0},
+      {x: 4, y: 5, z: 6},
       ["inspect"],
     ),
     /not available/,
   );
+});
+
+test("legacy scout action IDs resolve through the current scavenge type", () => {
+  const definition = expeditionDefinitionFromSnapshot({
+    data: () => ({
+      actions: {
+        scavenge: {
+          availability: "bunker",
+          durationSeconds: 9,
+          energyDelta: -3,
+        },
+      },
+    }),
+  });
+
+  const actions = selectedActionDefinitions(
+    definition,
+    {x: 2, y: 2, z: 2},
+    {x: 2, y: 2, z: 2},
+    ["scout_surroundings"],
+  );
+
+  assert.equal(actions.length, 1);
+  assert.equal(actions[0].id, "scavenge");
 });
