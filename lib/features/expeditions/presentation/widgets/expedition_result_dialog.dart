@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/expedition_review.dart';
 
-class ExpeditionResultDialog extends StatelessWidget {
+class ExpeditionResultDialog extends StatefulWidget {
   const ExpeditionResultDialog({
     super.key,
     required this.review,
@@ -10,15 +10,35 @@ class ExpeditionResultDialog extends StatelessWidget {
 
   final ExpeditionReview review;
 
-  static Future<void> show(
+  static Future<Map<String, String>?> show(
     BuildContext context, {
     required ExpeditionReview review,
   }) {
-    return showDialog<void>(
+    return showDialog<Map<String, String>>(
       context: context,
       barrierColor: const Color(0xC0000000),
       builder: (_) => ExpeditionResultDialog(review: review),
     );
+  }
+
+  @override
+  State<ExpeditionResultDialog> createState() => _ExpeditionResultDialogState();
+}
+
+class _ExpeditionResultDialogState extends State<ExpeditionResultDialog> {
+  final Map<String, String> _selectedOptions = <String, String>{};
+
+  ExpeditionReview get review => widget.review;
+
+  @override
+  void initState() {
+    super.initState();
+    for (final outcome in review.outcomes) {
+      if (outcome.resolutionOptions.length == 1) {
+        _selectedOptions[outcome.actionId] =
+            outcome.resolutionOptions.single.id;
+      }
+    }
   }
 
   String _text(BuildContext context, String es, String en) {
@@ -28,9 +48,9 @@ class ExpeditionResultDialog extends StatelessWidget {
   String _title(BuildContext context) {
     switch (review.expeditionType) {
       case 'scavenge':
-        return _text(context, 'Resultado de rebusca', 'Scavenge result');
+        return _text(context, 'Informe de rebusca', 'Scavenge report');
       default:
-        return _text(context, 'Resultado de expedición', 'Expedition result');
+        return _text(context, 'Informe de expedición', 'Expedition report');
     }
   }
 
@@ -69,15 +89,24 @@ class ExpeditionResultDialog extends StatelessWidget {
       case 'scavenge_common_event':
         return _text(
           context,
-          'Mientras registran la zona ocurre algo fuera de lo habitual. Por ahora no hay ningún evento implementado que continúe esta situación.',
-          'Something unusual happens while they search the area. There is no implemented event yet to continue this situation.',
+          'Mientras registran la zona ocurre algo fuera de lo habitual. El informe deja constancia de ello para decidir cómo proceder.',
+          'Something unusual happens while they search the area. The report records it so you can decide how to proceed.',
         );
       default:
         return _text(
           context,
-          'La expedición ha terminado y el informe ya está disponible.',
-          'The expedition is complete and its report is now available.',
+          'La expedición ha terminado y el informe está esperando una decisión.',
+          'The expedition is complete and the report is waiting for a decision.',
         );
+    }
+  }
+
+  String _optionLabel(BuildContext context, String labelId) {
+    switch (labelId) {
+      case 'accept':
+        return _text(context, 'Aceptar', 'Accept');
+      default:
+        return labelId.replaceAll('_', ' ');
     }
   }
 
@@ -96,6 +125,33 @@ class ExpeditionResultDialog extends StatelessWidget {
     }
   }
 
+  String _optionEffect(
+    BuildContext context,
+    ExpeditionResolutionOption option,
+  ) {
+    final parts = <String>[
+      for (final reward in option.inventoryDelta.entries)
+        '+${reward.value} ${_itemLabel(context, reward.key)}',
+    ];
+    if (option.eventPoolId != null) {
+      parts.add(
+        _text(
+          context,
+          'activa una posible continuación',
+          'may trigger a follow-up',
+        ),
+      );
+    }
+    if (parts.isEmpty) {
+      return _text(
+        context,
+        'Sin efectos adicionales.',
+        'No additional effects.',
+      );
+    }
+    return parts.join(' · ');
+  }
+
   String get _generalImagePath =>
       'assets/expeditions/results/${review.expeditionType}.png';
 
@@ -110,16 +166,33 @@ class ExpeditionResultDialog extends StatelessWidget {
     return null;
   }
 
+  bool get _canResolve => review.outcomes.every((outcome) {
+        final selected = _selectedOptions[outcome.actionId];
+        return selected != null &&
+            outcome.resolutionOptions.any((option) => option.id == selected);
+      });
+
+  bool get _singleAcceptPath =>
+      review.outcomes.length == 1 &&
+      review.outcomes.single.resolutionOptions.length == 1 &&
+      review.outcomes.single.resolutionOptions.single.labelId == 'accept';
+
+  void _resolve() {
+    if (!_canResolve) return;
+    Navigator.of(context).pop(
+      Map<String, String>.unmodifiable(_selectedOptions),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final rewards = review.inventoryDelta.entries.toList(growable: false);
 
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 620, maxHeight: 820),
+        constraints: const BoxConstraints(maxWidth: 620, maxHeight: 860),
         child: DecoratedBox(
           decoration: BoxDecoration(
             color: const Color(0xFF181713),
@@ -177,73 +250,71 @@ class ExpeditionResultDialog extends StatelessWidget {
                               ),
                             ),
                             IconButton(
+                              tooltip: _text(
+                                context,
+                                'Cerrar sin resolver',
+                                'Close without resolving',
+                              ),
                               onPressed: () => Navigator.of(context).pop(),
                               icon: const Icon(Icons.close_rounded),
                               color: const Color(0xFF9E9586),
                             ),
                           ],
                         ),
+                        const SizedBox(height: 10),
+                        const _ResolutionPhaseBanner(),
                         const SizedBox(height: 16),
-                        for (var index = 0;
-                            index < review.outcomes.length;
-                            index++) ...[
-                          Text(
-                            _narrative(
+                        for (var outcomeIndex = 0;
+                            outcomeIndex < review.outcomes.length;
+                            outcomeIndex++) ...[
+                          _OutcomeResolutionSection(
+                            outcome: review.outcomes[outcomeIndex],
+                            narrative: _narrative(
                               context,
-                              review.outcomes[index].narrativeId,
+                              review.outcomes[outcomeIndex].narrativeId,
                             ),
-                            style: theme.textTheme.bodyLarge?.copyWith(
-                              color: const Color(0xFFC9BDA9),
-                              height: 1.55,
-                            ),
+                            selectedOptionId:
+                                _selectedOptions[
+                                    review.outcomes[outcomeIndex].actionId],
+                            optionLabel: (option) =>
+                                _optionLabel(context, option.labelId),
+                            optionEffect: (option) =>
+                                _optionEffect(context, option),
+                            onSelected: (optionId) {
+                              setState(() {
+                                _selectedOptions[
+                                    review.outcomes[outcomeIndex].actionId] =
+                                    optionId;
+                              });
+                            },
                           ),
-                          if (index + 1 < review.outcomes.length)
-                            const SizedBox(height: 12),
+                          if (outcomeIndex + 1 < review.outcomes.length)
+                            const SizedBox(height: 18),
                         ],
-                        const SizedBox(height: 20),
-                        Text(
-                          _text(context, 'Recompensa', 'Reward'),
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            color: const Color(0xFFE0D1B5),
-                            fontWeight: FontWeight.w800,
+                        const SizedBox(height: 22),
+                        FilledButton.icon(
+                          onPressed: _canResolve ? _resolve : null,
+                          icon: const Icon(Icons.check_rounded),
+                          label: Text(
+                            _singleAcceptPath
+                                ? _text(context, 'Aceptar', 'Accept')
+                                : _text(
+                                    context,
+                                    'Resolver expedición',
+                                    'Resolve expedition',
+                                  ),
                           ),
                         ),
-                        const SizedBox(height: 10),
-                        if (rewards.isEmpty)
-                          _RewardRow(
-                            icon: Icons.remove_circle_outline_rounded,
-                            label: _text(
-                              context,
-                              'No se ha recuperado ningún objeto.',
-                              'No items were recovered.',
-                            ),
-                          )
-                        else
-                          for (final reward in rewards)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: _RewardRow(
-                                icon: Icons.inventory_2_outlined,
-                                label:
-                                    '+${reward.value} ${_itemLabel(context, reward.key)}',
-                              ),
-                            ),
-                        for (final outcome in review.outcomes)
-                          if (outcome.eventPoolId != null) ...[
-                            const SizedBox(height: 8),
-                            _RewardRow(
-                              icon: Icons.auto_awesome_outlined,
-                              label: _text(
-                                context,
-                                'Evento común detectado · todavía sin resolver',
-                                'Common event detected · not resolved yet',
-                              ),
-                            ),
-                          ],
-                        const SizedBox(height: 20),
-                        FilledButton(
+                        const SizedBox(height: 8),
+                        TextButton(
                           onPressed: () => Navigator.of(context).pop(),
-                          child: Text(_text(context, 'Cerrar informe', 'Close report')),
+                          child: Text(
+                            _text(
+                              context,
+                              'Cerrar y decidir más tarde',
+                              'Close and decide later',
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -258,36 +329,134 @@ class ExpeditionResultDialog extends StatelessWidget {
   }
 }
 
-class _RewardRow extends StatelessWidget {
-  const _RewardRow({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
+class _ResolutionPhaseBanner extends StatelessWidget {
+  const _ResolutionPhaseBanner();
 
   @override
   Widget build(BuildContext context) {
+    final es = Localizations.localeOf(context).languageCode == 'es';
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.all(11),
       decoration: BoxDecoration(
         color: const Color(0xFF211F19),
         borderRadius: BorderRadius.circular(7),
-        border: Border.all(color: const Color(0xFF463E32)),
+        border: Border.all(color: const Color(0xFF4A4134)),
       ),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: const Color(0xFFC7A970)),
-          const SizedBox(width: 9),
+          const Icon(
+            Icons.check_circle_outline_rounded,
+            size: 18,
+            color: Color(0xFF8EAD79),
+          ),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(
-              label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFFD1C3AA),
+              es
+                  ? 'Resolución automática completada. Falta tu decisión.'
+                  : 'Automatic resolution completed. Your decision is pending.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: const Color(0xFFB9AF9D),
                     fontWeight: FontWeight.w700,
                   ),
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _OutcomeResolutionSection extends StatelessWidget {
+  const _OutcomeResolutionSection({
+    required this.outcome,
+    required this.narrative,
+    required this.selectedOptionId,
+    required this.optionLabel,
+    required this.optionEffect,
+    required this.onSelected,
+  });
+
+  final ExpeditionOutcomeReview outcome;
+  final String narrative;
+  final String? selectedOptionId;
+  final String Function(ExpeditionResolutionOption option) optionLabel;
+  final String Function(ExpeditionResolutionOption option) optionEffect;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          narrative,
+          style: theme.textTheme.bodyLarge?.copyWith(
+            color: const Color(0xFFC9BDA9),
+            height: 1.55,
+          ),
+        ),
+        const SizedBox(height: 14),
+        for (final option in outcome.resolutionOptions)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Material(
+              color: selectedOptionId == option.id
+                  ? const Color(0xFF2B281F)
+                  : const Color(0xFF211F19),
+              borderRadius: BorderRadius.circular(7),
+              child: InkWell(
+                onTap: () => onSelected(option.id),
+                borderRadius: BorderRadius.circular(7),
+                child: Container(
+                  padding: const EdgeInsets.all(11),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(7),
+                    border: Border.all(
+                      color: selectedOptionId == option.id
+                          ? const Color(0xFFC6AA74)
+                          : const Color(0xFF463E32),
+                    ),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        selectedOptionId == option.id
+                            ? Icons.radio_button_checked_rounded
+                            : Icons.radio_button_off_rounded,
+                        color: const Color(0xFFC6AA74),
+                      ),
+                      const SizedBox(width: 9),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              optionLabel(option),
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                color: const Color(0xFFE0D1B5),
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              optionEffect(option),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: const Color(0xFF9F9687),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
