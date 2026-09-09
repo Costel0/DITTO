@@ -1076,8 +1076,22 @@ function serializedExpeditionReview(privateReview) {
     privateReview?.automaticResolution?.resolvedAt,
   );
 
+  const executionId = typeof privateReview?.executionId === "string" &&
+    privateReview.executionId.trim()
+    ? privateReview.executionId.trim()
+    : null;
+
   return {
-    ...privateReview,
+    id: privateReview.id,
+    ...(executionId ? {executionId} : {}),
+    expeditionType: privateReview.expeditionType,
+    actionIds: Array.isArray(privateReview.actionIds)
+      ? privateReview.actionIds
+      : [],
+    survivorIds: Array.isArray(privateReview.survivorIds)
+      ? privateReview.survivorIds
+      : [],
+    coordinates: privateReview.coordinates,
     completedAt: completedAt.toISOString(),
     automaticResolution: {
       status: "resolved",
