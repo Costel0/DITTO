@@ -1297,6 +1297,46 @@ class _SurvivorTaskDialogState extends State<_SurvivorTaskDialog> {
   }
 }
 
+class _BatchSummaryRow extends StatelessWidget {
+  const _BatchSummaryRow({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: const Color(0xFF9B9284),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: const Color(0xFFE0D1B5),
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _ResourceChoice extends StatelessWidget {
   const _ResourceChoice({
     required this.option,
@@ -1511,6 +1551,7 @@ class _TaskTile extends StatelessWidget {
     required this.description,
     required this.requirements,
     required this.energyCostPerSurvivor,
+    required this.isBatch,
     required this.isStarting,
     required this.isActive,
     required this.onTap,
@@ -1520,6 +1561,7 @@ class _TaskTile extends StatelessWidget {
   final String description;
   final List<_TaskRequirementStatus> requirements;
   final int energyCostPerSurvivor;
+  final bool isBatch;
   final bool isStarting;
   final bool isActive;
   final VoidCallback? onTap;
@@ -1574,6 +1616,32 @@ class _TaskTile extends StatelessWidget {
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: const Color(0xFF9F9687),
                           height: 1.4,
+                        ),
+                      ),
+                    ],
+                    if (isBatch) ...[
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF29251D),
+                            borderRadius: BorderRadius.circular(5),
+                            border: Border.all(
+                              color: const Color(0xFF6A5A40),
+                            ),
+                          ),
+                          child: Text(
+                            context.l10n.jobBatchModeLabel,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: const Color(0xFFC7A970),
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
                         ),
                       ),
                     ],
