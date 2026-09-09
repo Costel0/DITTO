@@ -116,3 +116,22 @@ test("fixStatus leaves completed occupations untouched", async () => {
   );
   assert.equal(fixed.survivors[0].energy, -8);
 });
+
+test("fixStatus preserves assigned bunker coordinates", async () => {
+  const assigned = {x: 7, y: 8, z: 9};
+  const fixed = await fixStatus({
+    transaction: fakeTransaction(10),
+    db: fakeDb(),
+    bunker: {
+      revision: 1,
+      survivors: [],
+      idleSurvivors: [],
+      busySurvivors: [],
+      completedTaskIds: [],
+      inventory: {},
+      bunkerCoordinates: assigned,
+    },
+  });
+
+  assert.deepEqual(fixed.bunkerCoordinates, assigned);
+});
