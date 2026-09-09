@@ -10,8 +10,8 @@ Se sincroniza con `/serverData/jobTasks`. La app no puede leer este documento di
 
 ```json
 {
-  "schemaVersion": 5,
-  "dataVersion": 5,
+  "schemaVersion": 6,
+  "dataVersion": 10,
   "tasks": {}
 }
 ```
@@ -66,6 +66,47 @@ Ejemplo para una tarea de `300` segundos:
 - 3 Survivors -> 100 s.
 
 La Cloud Function calcula esta duración de forma autoritativa al iniciar la tarea y todos los participantes reciben el mismo `endsAt`.
+
+
+### Modo de ejecución
+
+Las tareas normales no necesitan ningún campo adicional y mantienen el comportamiento histórico:
+
+```text
+execution.type = single (implícito)
+executionCount = 1
+```
+
+Para tareas de producción que puedan agrupar varias unidades en una sola ocupación:
+
+```json
+"execution": {
+  "type": "batch",
+  "maxCount": 999
+}
+```
+
+En una tarea batch el usuario escribe `executionCount`. El backend vuelve a validarlo y escala de forma autoritativa:
+
+```text
+coste fijo          = costeBase × executionCount
+coste de recursos   = costeBase × executionCount
+duración base       = durationSeconds × executionCount
+duración real       = ceil(duraciónBase / Survivors)
+energía por Survivor= energíaBase × executionCount
+output fijo         = outputBase × executionCount
+XP fijo             = xpBase × executionCount
+```
+
+El mismo `executionCount` se guarda en cada `BusySurvivor` de esa ejecución para que la resolución use exactamente la cantidad con la que se inició.
+
+Para mantener este nuevo modo aislado de las tareas normales, por ahora una tarea `batch` debe cumplir:
+
+- `storable: false`;
+- `resultResolver.type: "fixed"`;
+- ningún `randomOutcome`.
+
+Las tareas `single` existentes no cambian de formato ni de comportamiento.
 
 ### `storable`
 
@@ -380,6 +421,40 @@ Con esta configuración:
 - Solo se pueden seleccionar Survivors con `care > 3`.
 - Cada participante recibe `+5` XP de `care` y `+1` XP de `strength` al completar la tarea.
 - Con 1/2/3 Survivors dura 300/150/100 segundos respectivamente.
+
+## Ejemplos actuales de cocina y taller
+
+### Limpiar la cocina
+
+```text
+taskId: clean_kitchen
+tipo: single
+duración: 30 s
+energía: -5
+resultado: +3 scrap_metal
+storable: true
+```
+
+Al ser `storable: true`, desaparece una vez completada.
+
+### Fabricar componentes electrónicos
+
+```text
+taskId: craft_electronics_from_scrap
+tipo: batch
+base: 4 scrap_metal -> 1 electronics
+duración base: 30 s
+energía base: -5
+```
+
+Ejemplo con `executionCount = 3` y un Survivor:
+
+```text
+input:  12 scrap_metal
+tiempo: 90 s
+energía: -15
+output: 3 electronics
+```
 
 ## Añadir una nueva task
 
