@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": 3,
+  "catalogVersion": 4,
   "items": [
     {
       "id": "scrap_metal",
@@ -120,7 +120,7 @@
     {
       "id": "trash",
       "type": [
-        "resource"
+        "misc"
       ],
       "subtype": [
         "waste"
@@ -135,9 +135,7 @@
         "en": "Mixed discarded material that can still be repurposed for crude construction.",
         "es": "Desechos variados que todavía pueden reaprovecharse en construcciones rudimentarias."
       },
-      "stats": {
-        "craftingValue": 1
-      }
+      "stats": {}
     }
   ]
 }
