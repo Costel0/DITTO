@@ -13,6 +13,7 @@ const {
   applyTaskCompletionEffects,
   applyTaskStartCost,
   missingRequiredTaskIds,
+  normalizedResourceSelection,
   selectTaskResult,
   taskDefinitionFromSnapshot,
 } = require("./job_tasks");
@@ -438,6 +439,7 @@ exports.getJobTaskStartInfo = onCall(
       maxSurvivors: task.survivorRequirements.max,
       statRequirements: task.survivorRequirements.statRequirements,
       costInventory: task.cost.inventory,
+      resourceCraftingValueCost: task.cost.resources.craftingValue,
       requiredTaskIds: task.requiredTaskIds,
       storable: task.storable,
     };
@@ -458,6 +460,18 @@ exports.startJobTask = onCall(
       ? request.data.taskId.trim()
       : "";
     const survivorIds = normalizedRequestedSurvivorIds(request.data);
+
+    let resourceSelection;
+    try {
+      resourceSelection = normalizedResourceSelection(
+        request.data?.resourceItems,
+      );
+    } catch (error) {
+      throw new HttpsError(
+        "invalid-argument",
+        error instanceof Error ? error.message : "Invalid resource selection.",
+      );
+    }
 
     if (!taskId) {
       throw new HttpsError("invalid-argument", "Invalid task ID.");
@@ -482,6 +496,32 @@ exports.startJobTask = onCall(
       }
 
       const task = requiredTaskDefinition(taskCatalogSnapshot, taskId);
+      const resourceItemDefinitions = {};
+      const selectedResourceItemIds = Object.keys(resourceSelection);
+
+      if (
+        task.cost.resources.craftingValue === 0 &&
+        selectedResourceItemIds.length > 0
+      ) {
+        throw new HttpsError(
+          "invalid-argument",
+          `Task ${task.id} does not require generic resources.`,
+        );
+      }
+
+      for (const itemId of selectedResourceItemIds) {
+        const itemSnapshot = await transaction.get(
+          db.collection("items").doc(itemId),
+        );
+        if (!itemSnapshot.exists) {
+          throw new HttpsError(
+            "failed-precondition",
+            `Selected resource item ${itemId} does not exist.`,
+          );
+        }
+        resourceItemDefinitions[itemId] = itemSnapshot.data();
+      }
+
       if (
         survivorIds.length < task.survivorRequirements.min ||
         survivorIds.length > task.survivorRequirements.max
@@ -559,7 +599,14 @@ exports.startJobTask = onCall(
 
       let workingBunker;
       try {
-        workingBunker = applyTaskStartCost(bunker, task);
+        workingBunker = applyTaskStartCost(
+          bunker,
+          task,
+          {
+            resourceSelection,
+            itemDefinitions: resourceItemDefinitions,
+          },
+        );
       } catch (error) {
         throw new HttpsError(
           "failed-precondition",
