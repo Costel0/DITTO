@@ -81,10 +81,11 @@ class _ExpeditionResultDialogState extends State<ExpeditionResultDialog> {
           'Among the rubble they find a surprisingly intact wooden plank. It is dirty and splintered, but still usable.',
         );
       case 'scavenge_food':
+      case 'scavenge_small_dead_animal':
         return _text(
           context,
-          'En un rincón protegido encuentran un pequeño pájaro muerto hace poco. No es una comida agradable, pero la carne todavía parece aprovechable.',
-          'In a sheltered corner they find a small bird that died recently. It is not an appetizing meal, but the meat still appears usable.',
+          'En un rincón protegido encuentran un pequeño animal muerto hace poco. No es una comida agradable, pero la carne todavía parece aprovechable.',
+          'In a sheltered corner they find a small animal that died recently. It is not an appetizing meal, but the meat still appears usable.',
         );
       case 'scavenge_common_event':
         return _text(
