@@ -1,6 +1,6 @@
 {
-  "schemaVersion": 4,
-  "dataVersion": 7,
+  "schemaVersion": 5,
+  "dataVersion": 8,
   "tasks": {
     "prepare_garden": {
       "activity": "prepare_garden",
@@ -13,7 +13,12 @@
       },
       "requiredTaskIds": [],
       "cost": {
-        "inventory": {}
+        "inventory": {
+          "electronics": 5
+        },
+        "resources": {
+          "craftingValue": 5
+        }
       },
       "resultResolver": {
         "type": "fixed",
@@ -23,7 +28,10 @@
         "success": {
           "guaranteedOutcomes": {
             "energyDelta": -5,
-            "inventoryDelta": {}
+            "inventoryDelta": {
+              "scrap_metal": 1,
+              "trash": 5
+            }
           },
           "randomOutcomes": {}
         }
@@ -43,7 +51,9 @@
           }
         }
       },
-      "requiredTaskIds": ["prepare_garden"],
+      "requiredTaskIds": [
+        "prepare_garden"
+      ],
       "cost": {
         "inventory": {}
       },
@@ -79,7 +89,9 @@
           }
         }
       },
-      "requiredTaskIds": ["upgrade_garden"],
+      "requiredTaskIds": [
+        "upgrade_garden"
+      ],
       "cost": {
         "inventory": {}
       },
@@ -115,7 +127,9 @@
           }
         }
       },
-      "requiredTaskIds": ["upgrade_garden_2"],
+      "requiredTaskIds": [
+        "upgrade_garden_2"
+      ],
       "cost": {
         "inventory": {}
       },
@@ -151,7 +165,9 @@
           }
         }
       },
-      "requiredTaskIds": ["upgrade_garden_3"],
+      "requiredTaskIds": [
+        "upgrade_garden_3"
+      ],
       "cost": {
         "inventory": {}
       },
@@ -187,7 +203,9 @@
           }
         }
       },
-      "requiredTaskIds": ["upgrade_garden_4"],
+      "requiredTaskIds": [
+        "upgrade_garden_4"
+      ],
       "cost": {
         "inventory": {}
       },
@@ -223,7 +241,9 @@
           }
         }
       },
-      "requiredTaskIds": ["upgrade_garden_5"],
+      "requiredTaskIds": [
+        "upgrade_garden_5"
+      ],
       "cost": {
         "inventory": {}
       },
