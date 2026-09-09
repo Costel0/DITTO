@@ -426,6 +426,27 @@ function validateJobTasks(data, filename) {
     }
     storableByTaskId.set(taskId, task.storable);
 
+    if (!isPlainObject(task.survivorRequirements)) {
+      throw new Error(
+        `${filename}.${taskId}.survivorRequirements must be an object.`,
+      );
+    }
+    const {min, max} = task.survivorRequirements;
+    if (!Number.isInteger(min) || min < 1) {
+      throw new Error(
+        `${filename}.${taskId}.survivorRequirements.min must be >= 1.`,
+      );
+    }
+    if (!Number.isInteger(max) || max < min) {
+      throw new Error(
+        `${filename}.${taskId}.survivorRequirements.max must be >= min.`,
+      );
+    }
+    validateStatRequirements(
+      task.survivorRequirements.statRequirements,
+      `${filename}.${taskId}.survivorRequirements.statRequirements`,
+    );
+
     const execution = task.execution ?? {type: "single"};
     if (!isPlainObject(execution)) {
       throw new Error(`${filename}.${taskId}.execution must be an object.`);
@@ -461,27 +482,6 @@ function validateJobTasks(data, filename) {
         );
       }
     }
-
-    if (!isPlainObject(task.survivorRequirements)) {
-      throw new Error(
-        `${filename}.${taskId}.survivorRequirements must be an object.`,
-      );
-    }
-    const {min, max} = task.survivorRequirements;
-    if (!Number.isInteger(min) || min < 1) {
-      throw new Error(
-        `${filename}.${taskId}.survivorRequirements.min must be >= 1.`,
-      );
-    }
-    if (!Number.isInteger(max) || max < min) {
-      throw new Error(
-        `${filename}.${taskId}.survivorRequirements.max must be >= min.`,
-      );
-    }
-    validateStatRequirements(
-      task.survivorRequirements.statRequirements,
-      `${filename}.${taskId}.survivorRequirements.statRequirements`,
-    );
 
     const requiredTaskIds = validateStringList(
       task.requiredTaskIds,
