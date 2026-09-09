@@ -134,15 +134,6 @@ class _JobAreaScreenState extends State<JobAreaScreen> {
   String _taskDescription(BuildContext context, JobTaskDefinition task) =>
       jobTaskDescription(context, task.id);
 
-  bool _canPayTaskCost(JobTaskStartInfo startInfo) {
-    final inventory = widget.bunkerStateController.state?.inventory;
-    if (inventory == null) return false;
-
-    return startInfo.costInventory.entries.every(
-      (entry) => (inventory[entry.key] ?? 0) >= entry.value,
-    );
-  }
-
   Future<void> _startTask(JobTaskDefinition task) async {
     final bunker = widget.bunkerStateController.state;
     if (bunker == null) {
@@ -175,7 +166,7 @@ class _JobAreaScreenState extends State<JobAreaScreen> {
     final missingPrerequisite = startInfo.requiredTaskIds.any(
       (requiredId) => !completedTaskIds.contains(requiredId),
     );
-    if (missingPrerequisite || !_canPayTaskCost(startInfo)) {
+    if (missingPrerequisite) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(context.l10n.jobTaskStartError)),
       );
@@ -294,7 +285,11 @@ class _JobAreaScreenState extends State<JobAreaScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.stretch,
                                   children: [
-                                    _JobAreaCover(area: area),
+                                    _JobAreaCover(
+                                      area: area,
+                                      gardenPrepared: completedTaskIds
+                                          .contains('prepare_garden'),
+                                    ),
                                     Padding(
                                       padding: const EdgeInsets.fromLTRB(
                                         24,
@@ -309,6 +304,9 @@ class _JobAreaScreenState extends State<JobAreaScreen> {
                                         startingTaskId: _startingTaskId,
                                         taskInfoLoading: _isLoadingTaskInfo,
                                         taskInfoError: _taskInfoError,
+                                        startInfoByTaskId: _startInfoByTaskId,
+                                        inventory: bunkerState?.inventory ??
+                                            const <String, int>{},
                                         taskTitle: (task) =>
                                             _taskTitle(context, task),
                                         taskDescription: (task) =>
@@ -381,28 +379,55 @@ class _JobAreaTopBar extends StatelessWidget {
 }
 
 class _JobAreaCover extends StatelessWidget {
-  const _JobAreaCover({required this.area});
+  const _JobAreaCover({
+    required this.area,
+    required this.gardenPrepared,
+  });
 
   final JobArea area;
+  final bool gardenPrepared;
+
+  Widget _fallback(BuildContext context) {
+    final legacyAssetPath = area.legacyCoverAssetPath;
+    if (legacyAssetPath != null) {
+      return Image.asset(
+        legacyAssetPath,
+        key: ValueKey<String>(legacyAssetPath),
+        width: double.infinity,
+        fit: BoxFit.fitWidth,
+        filterQuality: FilterQuality.high,
+        errorBuilder: (context, error, stackTrace) => _emptyFallback(),
+      );
+    }
+    return _emptyFallback();
+  }
+
+  Widget _emptyFallback() {
+    return Container(
+      width: double.infinity,
+      height: 240,
+      color: const Color(0xFF242019),
+      alignment: Alignment.center,
+      child: Icon(
+        jobAreaIcon(area),
+        size: 56,
+        color: const Color(0xFFAD9365),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final assetPath = area.coverAssetPathFor(
+      gardenPrepared: gardenPrepared,
+    );
     return Image.asset(
-      area.coverAssetPath,
+      assetPath,
+      key: ValueKey<String>(assetPath),
       width: double.infinity,
       fit: BoxFit.fitWidth,
       filterQuality: FilterQuality.high,
-      errorBuilder: (context, error, stackTrace) => Container(
-        width: double.infinity,
-        height: 240,
-        color: const Color(0xFF242019),
-        alignment: Alignment.center,
-        child: Icon(
-          jobAreaIcon(area),
-          size: 56,
-          color: const Color(0xFFAD9365),
-        ),
-      ),
+      errorBuilder: (context, error, stackTrace) => _fallback(context),
     );
   }
 }
