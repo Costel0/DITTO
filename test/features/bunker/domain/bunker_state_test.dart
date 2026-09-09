@@ -60,6 +60,22 @@ void main() {
     );
   });
 
+  test('schema v8 defaults passive tasks to an empty list', () {
+    final state = BunkerState.fromJson(<String, dynamic>{
+      'schemaVersion': 8,
+      'revision': 10,
+      'serverUpdatedAt': '2026-09-09T10:00:00Z',
+      'survivors': <dynamic>[],
+      'idleSurvivors': <String>[],
+      'busySurvivors': <dynamic>[],
+      'completedTaskIds': <String>[],
+      'inventory': <String, int>{},
+      'bunkerCoordinates': <String, int>{'x': 0, 'y': 0, 'z': 0},
+    });
+
+    expect(state.activeBackgroundTasks, isEmpty);
+  });
+
   test('parses expedition type from active occupation', () {
     final state = BunkerState.fromJson(<String, dynamic>{
       'schemaVersion': BunkerState.supportedSchemaVersion,
