@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": 4,
+  "catalogVersion": 5,
   "items": [
     {
       "id": "scrap_metal",
@@ -134,6 +134,26 @@
       "description": {
         "en": "Mixed discarded material that can still be repurposed for crude construction.",
         "es": "Desechos variados que todavía pueden reaprovecharse en construcciones rudimentarias."
+      },
+      "stats": {}
+    },
+    {
+      "id": "food",
+      "type": [
+        "food"
+      ],
+      "subtype": [
+        "generic"
+      ],
+      "value": 1,
+      "stackable": true,
+      "name": {
+        "en": "Food",
+        "es": "Comida"
+      },
+      "description": {
+        "en": "Basic edible material recovered in the wasteland.",
+        "es": "Alimento básico recuperado en el exterior."
       },
       "stats": {}
     }
