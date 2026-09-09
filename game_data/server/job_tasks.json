@@ -1,6 +1,6 @@
 {
   "schemaVersion": 5,
-  "dataVersion": 8,
+  "dataVersion": 9,
   "tasks": {
     "prepare_garden": {
       "activity": "prepare_garden",
@@ -27,7 +27,7 @@
       "results": {
         "success": {
           "guaranteedOutcomes": {
-            "energyDelta": -5,
+            "energyDelta": -10,
             "inventoryDelta": {
               "scrap_metal": 1,
               "trash": 5
@@ -64,7 +64,7 @@
       "results": {
         "success": {
           "guaranteedOutcomes": {
-            "energyDelta": -10,
+            "energyDelta": -15,
             "inventoryDelta": {},
             "statExperienceDelta": {
               "care": 5,
@@ -102,7 +102,7 @@
       "results": {
         "success": {
           "guaranteedOutcomes": {
-            "energyDelta": -20,
+            "energyDelta": -25,
             "inventoryDelta": {},
             "statExperienceDelta": {
               "care": 5,
@@ -140,7 +140,7 @@
       "results": {
         "success": {
           "guaranteedOutcomes": {
-            "energyDelta": -40,
+            "energyDelta": -45,
             "inventoryDelta": {},
             "statExperienceDelta": {
               "care": 5,
@@ -178,7 +178,7 @@
       "results": {
         "success": {
           "guaranteedOutcomes": {
-            "energyDelta": -5,
+            "energyDelta": -10,
             "inventoryDelta": {},
             "statExperienceDelta": {
               "care": 5,
@@ -216,7 +216,7 @@
       "results": {
         "success": {
           "guaranteedOutcomes": {
-            "energyDelta": -50,
+            "energyDelta": -55,
             "inventoryDelta": {},
             "statExperienceDelta": {
               "care": 5,
@@ -254,7 +254,7 @@
       "results": {
         "success": {
           "guaranteedOutcomes": {
-            "energyDelta": -60,
+            "energyDelta": -65,
             "inventoryDelta": {},
             "statExperienceDelta": {
               "care": 5,
