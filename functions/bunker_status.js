@@ -127,6 +127,12 @@ function normalizedBusySurvivors(source, fallbackDate = new Date()) {
         ) {
           normalized.expeditionType = entry.expeditionType.trim();
         }
+        if (
+          Number.isInteger(entry.taskExecutionCount) &&
+          entry.taskExecutionCount > 0
+        ) {
+          normalized.taskExecutionCount = entry.taskExecutionCount;
+        }
         return normalized;
       });
   }
