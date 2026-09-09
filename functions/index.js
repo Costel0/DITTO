@@ -423,6 +423,10 @@ exports.initializeBunker = onCall(
           busySurvivors: [],
           completedTaskIds: [],
           inventory: {},
+          // Temporary assignment seam. Replace this default with the future
+          // coordinate allocator; every expedition already reads this
+          // per-player bunker field.
+          bunkerCoordinates: normalizedBunkerCoordinates(null),
         },
       });
 
