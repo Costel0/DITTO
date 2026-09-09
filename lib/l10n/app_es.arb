@@ -137,5 +137,8 @@
   "jobResourcePerUnitLabel": "valor/u",
   "jobResourceAvailableLabel": "disponibles",
   "jobNoEligibleResources": "No tienes recursos válidos disponibles.",
-  "itemTypeMisc": "Otros"
+  "itemTypeMisc": "Otros",
+  "jobRequirementsLabel": "Requisitos",
+  "jobGenericResourcesLabel": "Recursos",
+  "jobRequirementsMissingHint": "Faltan requisitos para poder iniciar la tarea."
 }
