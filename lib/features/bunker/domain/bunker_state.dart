@@ -282,6 +282,7 @@ class BunkerState {
         inventory = Map<String, int>.unmodifiable(inventory);
 
   static const int supportedSchemaVersion = 9;
+  static const int backgroundTasksSchemaVersion = 9;
   static const int bunkerCoordinatesSchemaVersion = 7;
   static const int completedTasksSchemaVersion = 6;
   static const int locationSchemaVersion = 5;
@@ -395,7 +396,8 @@ class BunkerState {
       );
     }
 
-    final activeBackgroundTasks = schemaVersion >= 9
+    final activeBackgroundTasks =
+        schemaVersion >= backgroundTasksSchemaVersion
         ? _parseActiveBackgroundTasks(
             json['activeBackgroundTasks'],
             knownSurvivorIds,
