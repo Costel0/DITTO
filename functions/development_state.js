@@ -1,5 +1,6 @@
 const {
   SLEEPING_ACTIVITY,
+  normalizedActiveBackgroundTasks,
   normalizedBusySurvivors,
 } = require("./bunker_status");
 const {EXPEDITION_ACTIVITY} = require("./expeditions");
@@ -23,6 +24,10 @@ function uniqueStringList(source) {
  */
 function resetTaskTreeStateForTesting(bunker, now = new Date()) {
   const busySurvivors = normalizedBusySurvivors(bunker.busySurvivors, now);
+  const activeBackgroundTasks = normalizedActiveBackgroundTasks(
+    bunker.activeBackgroundTasks,
+    now,
+  );
   const preservedOccupations = busySurvivors.filter(
     (entry) =>
       entry.activity === SLEEPING_ACTIVITY ||
@@ -50,8 +55,10 @@ function resetTaskTreeStateForTesting(bunker, now = new Date()) {
       completedTaskIds: [],
       idleSurvivors: [...idleSurvivors],
       busySurvivors: preservedOccupations,
+      activeBackgroundTasks: [],
     },
-    cancelledOccupationCount: cancelledTaskOccupations.length,
+    cancelledOccupationCount:
+      cancelledTaskOccupations.length + activeBackgroundTasks.length,
     clearedCompletedTaskCount: uniqueStringList(bunker.completedTaskIds).length,
   };
 }
