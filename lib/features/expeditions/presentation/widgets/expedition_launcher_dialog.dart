@@ -371,7 +371,7 @@ class _CoordinateField extends StatelessWidget {
     return TextField(
       controller: controller,
       keyboardType: TextInputType.number,
-      inputFormatters: const <TextInputFormatter>[
+      inputFormatters: <TextInputFormatter>[
         FilteringTextInputFormatter.digitsOnly,
         LengthLimitingTextInputFormatter(3),
       ],
