@@ -25,7 +25,11 @@ Map<String, int> _positiveInventoryMap(Object? raw, String field) {
     if (entry.key is! String || entry.value is! num) {
       throw FormatException('$field contains an invalid item quantity.');
     }
-    final quantity = (entry.value as num).toInt();
+    final rawQuantity = entry.value as num;
+    if (!rawQuantity.isFinite || rawQuantity != rawQuantity.toInt()) {
+      throw FormatException('$field quantities must be integers.');
+    }
+    final quantity = rawQuantity.toInt();
     if (quantity <= 0) continue;
     result[entry.key as String] = quantity;
   }
@@ -195,8 +199,12 @@ class ExpeditionReview {
 
     final coordinatesRaw = map['coordinates'];
     final outcomesRaw = map['outcomes'];
-    if (coordinatesRaw is! Map || outcomesRaw is! List) {
-      throw const FormatException('Invalid expedition review payload.');
+    if (coordinatesRaw is! Map ||
+        outcomesRaw is! List ||
+        outcomesRaw.isEmpty) {
+      throw const FormatException(
+        'Expedition review must contain at least one outcome.',
+      );
     }
 
     final rawExecutionId = map['executionId'];
