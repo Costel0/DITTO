@@ -252,6 +252,12 @@ class _JobAreaScreenState extends State<JobAreaScreen> {
       ...?bunkerState?.activeBackgroundTasks
           .map((active) => active.taskId),
     };
+    final backgroundEndsAtByTaskId = <String, DateTime>{
+      for (final active
+          in bunkerState?.activeBackgroundTasks ??
+              const <ActiveBackgroundTask>[])
+        active.taskId: active.endsAt,
+    };
     final activeExecutionCountByTaskId = <String, int>{};
     for (final busy in bunkerState?.busySurvivors ?? const <BusySurvivor>[]) {
       final taskId = busy.taskId ?? busy.activity;
@@ -324,6 +330,11 @@ class _JobAreaScreenState extends State<JobAreaScreen> {
                                         activeTaskIds: activeTaskIds,
                                         activeExecutionCountByTaskId:
                                             activeExecutionCountByTaskId,
+                                        backgroundEndsAtByTaskId:
+                                            backgroundEndsAtByTaskId,
+                                        onResolveCompletedOccupations:
+                                            widget.bunkerStateController
+                                                .resolveCompletedOccupations,
                                         startingTaskId: _startingTaskId,
                                         taskInfoLoading: _isLoadingTaskInfo,
                                         taskInfoError: _taskInfoError,
@@ -475,6 +486,8 @@ class _JobAreaContent extends StatelessWidget {
     required this.tasks,
     required this.activeTaskIds,
     required this.activeExecutionCountByTaskId,
+    required this.backgroundEndsAtByTaskId,
+    required this.onResolveCompletedOccupations,
     required this.startingTaskId,
     required this.taskInfoLoading,
     required this.taskInfoError,
@@ -489,6 +502,8 @@ class _JobAreaContent extends StatelessWidget {
   final List<JobTaskDefinition> tasks;
   final Set<String> activeTaskIds;
   final Map<String, int> activeExecutionCountByTaskId;
+  final Map<String, DateTime> backgroundEndsAtByTaskId;
+  final Future<void> Function() onResolveCompletedOccupations;
   final String? startingTaskId;
   final bool taskInfoLoading;
   final Object? taskInfoError;
@@ -609,6 +624,10 @@ class _JobAreaContent extends StatelessWidget {
                           isBackground: startInfo?.isBackground ?? false,
                           activeExecutionCount:
                               activeExecutionCountByTaskId[task.id] ?? 1,
+                          backgroundEndsAt:
+                              backgroundEndsAtByTaskId[task.id],
+                          onResolveCompletedOccupations:
+                              onResolveCompletedOccupations,
                           isStarting: startingTaskId == task.id,
                           isActive: activeTaskIds.contains(task.id),
                           onTap: startingTaskId == null &&
@@ -1656,6 +1675,8 @@ class _TaskTile extends StatelessWidget {
     required this.isBatch,
     required this.isBackground,
     required this.activeExecutionCount,
+    required this.backgroundEndsAt,
+    required this.onResolveCompletedOccupations,
     required this.isStarting,
     required this.isActive,
     required this.onTap,
@@ -1668,6 +1689,8 @@ class _TaskTile extends StatelessWidget {
   final bool isBatch;
   final bool isBackground;
   final int activeExecutionCount;
+  final DateTime? backgroundEndsAt;
+  final Future<void> Function() onResolveCompletedOccupations;
   final bool isStarting;
   final bool isActive;
   final VoidCallback? onTap;
@@ -1805,6 +1828,11 @@ class _TaskTile extends StatelessWidget {
                   height: 22,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
+              else if (isActive && backgroundEndsAt != null)
+                _BackgroundTaskCountdown(
+                  endsAt: backgroundEndsAt!,
+                  onFinished: onResolveCompletedOccupations,
+                )
               else if (isActive)
                 Row(
                   mainAxisSize: MainAxisSize.min,
@@ -1835,6 +1863,102 @@ class _TaskTile extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _BackgroundTaskCountdown extends StatefulWidget {
+  const _BackgroundTaskCountdown({
+    required this.endsAt,
+    required this.onFinished,
+  });
+
+  final DateTime endsAt;
+  final Future<void> Function() onFinished;
+
+  @override
+  State<_BackgroundTaskCountdown> createState() =>
+      _BackgroundTaskCountdownState();
+}
+
+class _BackgroundTaskCountdownState extends State<_BackgroundTaskCountdown> {
+  Timer? _timer;
+  Duration _remaining = Duration.zero;
+  bool _completionRequested = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _restart();
+  }
+
+  @override
+  void didUpdateWidget(covariant _BackgroundTaskCountdown oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.endsAt != widget.endsAt) {
+      _restart();
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  void _restart() {
+    _timer?.cancel();
+    _completionRequested = false;
+    _tick();
+    if (_remaining == Duration.zero) {
+      _requestCompletion();
+      return;
+    }
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      _tick();
+      if (_remaining == Duration.zero) {
+        _timer?.cancel();
+        _requestCompletion();
+      }
+    });
+  }
+
+  void _tick() {
+    final difference = widget.endsAt.difference(DateTime.now());
+    final next = difference.isNegative ? Duration.zero : difference;
+    if (!mounted) {
+      _remaining = next;
+      return;
+    }
+    setState(() => _remaining = next);
+  }
+
+  void _requestCompletion() {
+    if (_completionRequested) return;
+    _completionRequested = true;
+    unawaited(widget.onFinished());
+  }
+
+  String _formattedRemaining() {
+    final totalSeconds = _remaining == Duration.zero
+        ? 0
+        : (_remaining.inMilliseconds / 1000).ceil();
+    final hours = totalSeconds ~/ 3600;
+    final minutes = (totalSeconds % 3600) ~/ 60;
+    final seconds = totalSeconds % 60;
+    return '${hours.toString().padLeft(2, '0')}:'
+        '${minutes.toString().padLeft(2, '0')}:'
+        '${seconds.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      _formattedRemaining(),
+      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            color: const Color(0xFFD4B77D),
+            fontWeight: FontWeight.w800,
+          ),
     );
   }
 }
