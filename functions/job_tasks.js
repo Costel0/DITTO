@@ -426,7 +426,10 @@ function taskDurationSecondsForExecution(task, executionCount, survivorCount) {
 function taskFixedOutputInventory(task) {
   if (task.resultResolver.type !== "fixed") return {};
   const result = task.results[task.resultResolver.resultId];
-  return {...(result?.guaranteedOutcomes?.inventoryDelta || {})};
+  return Object.fromEntries(
+    Object.entries(result?.guaranteedOutcomes?.inventoryDelta || {})
+      .filter(([, quantity]) => Number.isInteger(quantity) && quantity > 0),
+  );
 }
 
 function taskDefinitionFromSnapshot(snapshot, taskId) {
