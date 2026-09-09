@@ -73,10 +73,6 @@ function expeditionDefinitionFromSnapshot(snapshot) {
     throw new Error("Expedition server configuration is missing.");
   }
 
-  const bunkerCoordinates = normalizedCoordinates(
-    data.bunkerCoordinates,
-    "bunkerCoordinates",
-  );
   if (!isPlainObject(data.actions)) {
     throw new Error("Expedition actions must be an object.");
   }
@@ -90,15 +86,21 @@ function expeditionDefinitionFromSnapshot(snapshot) {
     actions[actionId] = normalizedActionDefinition(rawAction, actionId);
   }
 
-  return {
-    bunkerCoordinates,
-    actions,
-  };
+  return {actions};
 }
 
-function availableActionsAtCoordinates(definition, coordinates) {
-  const normalized = normalizedCoordinates(coordinates);
-  if (!sameCoordinates(normalized, definition.bunkerCoordinates)) {
+function availableActionsAtCoordinates(
+  definition,
+  coordinates,
+  bunkerCoordinates,
+) {
+  const normalizedTarget = normalizedCoordinates(coordinates);
+  const normalizedBunker = normalizedCoordinates(
+    bunkerCoordinates,
+    "bunkerCoordinates",
+  );
+
+  if (!sameCoordinates(normalizedTarget, normalizedBunker)) {
     return [];
   }
   return Object.values(definition.actions)
@@ -125,17 +127,41 @@ function normalizedActionIds(value) {
   return ids;
 }
 
-function selectedActionDefinitions(definition, coordinates, actionIds) {
+function canonicalActionId(actionId) {
+  return actionId === "scout_surroundings" ? "scavenge" : actionId;
+}
+
+function actionDefinitionsByIds(definition, actionIds) {
+  return normalizedActionIds(actionIds).map((rawActionId) => {
+    const actionId = canonicalActionId(rawActionId);
+    const action = definition.actions[actionId];
+    if (!action) {
+      throw new Error(`Unknown expedition action ${rawActionId}.`);
+    }
+    return action;
+  });
+}
+
+function selectedActionDefinitions(
+  definition,
+  coordinates,
+  bunkerCoordinates,
+  actionIds,
+) {
   const available = new Map(
-    availableActionsAtCoordinates(definition, coordinates)
-      .map((action) => [action.id, action]),
+    availableActionsAtCoordinates(
+      definition,
+      coordinates,
+      bunkerCoordinates,
+    ).map((action) => [action.id, action]),
   );
 
-  return normalizedActionIds(actionIds).map((actionId) => {
+  return normalizedActionIds(actionIds).map((rawActionId) => {
+    const actionId = canonicalActionId(rawActionId);
     const action = available.get(actionId);
     if (!action) {
       throw new Error(
-        `Expedition action ${actionId} is not available at these coordinates.`,
+        `Expedition action ${rawActionId} is not available at these coordinates.`,
       );
     }
     return action;
@@ -164,7 +190,9 @@ function actionIdsFromExpeditionTaskId(taskId) {
   if (typeof taskId !== "string" || !taskId.startsWith("expedition:")) {
     throw new Error("Invalid expedition task ID.");
   }
-  return normalizedActionIds(taskId.substring("expedition:".length).split("+"));
+  return normalizedActionIds(
+    taskId.substring("expedition:".length).split("+"),
+  ).map(canonicalActionId);
 }
 
 function expeditionLocation(coordinates) {
@@ -227,9 +255,11 @@ function applyExpeditionCompletion(
 
 module.exports = {
   EXPEDITION_ACTIVITY,
+  actionDefinitionsByIds,
   actionIdsFromExpeditionTaskId,
   applyExpeditionCompletion,
   availableActionsAtCoordinates,
+  canonicalActionId,
   coordinatesFromExpeditionLocation,
   expeditionDefinitionFromSnapshot,
   expeditionDurationSeconds,
