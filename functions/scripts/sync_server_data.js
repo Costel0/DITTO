@@ -245,6 +245,44 @@ function validateTaskResults(task, filename, taskId) {
   }
 }
 
+function validateExpeditions(data, filename) {
+  if (!isPlainObject(data.bunkerCoordinates)) {
+    throw new Error(`${filename}.bunkerCoordinates must be an object.`);
+  }
+  for (const axis of ["x", "y", "z"]) {
+    const value = data.bunkerCoordinates[axis];
+    if (!Number.isInteger(value) || value < 0 || value > 999) {
+      throw new Error(
+        `${filename}.bunkerCoordinates.${axis} must be an integer from 0 to 999.`,
+      );
+    }
+  }
+
+  if (!isPlainObject(data.actions)) {
+    throw new Error(`${filename}.actions must be an object.`);
+  }
+  for (const [actionId, action] of Object.entries(data.actions)) {
+    if (!actionId.trim() || !isPlainObject(action)) {
+      throw new Error(`${filename}.actions contains an invalid action.`);
+    }
+    if (action.availability !== "bunker") {
+      throw new Error(
+        `${filename}.actions.${actionId}.availability must be bunker.`,
+      );
+    }
+    if (!Number.isInteger(action.durationSeconds) || action.durationSeconds <= 0) {
+      throw new Error(
+        `${filename}.actions.${actionId}.durationSeconds must be positive.`,
+      );
+    }
+    if (!Number.isInteger(action.energyDelta)) {
+      throw new Error(
+        `${filename}.actions.${actionId}.energyDelta must be an integer.`,
+      );
+    }
+  }
+}
+
 function validateJobTasks(data, filename) {
   if (!isPlainObject(data.tasks)) {
     throw new Error(`${filename}.tasks must be an object.`);
@@ -416,6 +454,8 @@ function loadServerData() {
     }
     if (documentId === "jobTasks") {
       validateJobTasks(data, filename);
+    } else if (documentId === "expeditions") {
+      validateExpeditions(data, filename);
     }
 
     documents.set(documentId, {filename, data});
