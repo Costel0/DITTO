@@ -10,7 +10,7 @@ Se sincroniza con `/serverData/jobTasks`. La app no puede leer este documento di
 
 ```json
 {
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "dataVersion": 5,
   "tasks": {}
 }
@@ -149,18 +149,39 @@ Todos esos IDs deben estar ya presentes en `completedTaskIds` para poder iniciar
 
 ### Coste al iniciar
 
+Los costes fijos por ID siguen usando `inventory`:
+
 ```json
 "cost": {
   "inventory": {
-    "scrap_metal": 2,
-    "wood_plank": 1
+    "electronics": 5
   }
 }
 ```
 
 Las cantidades se descuentan una sola vez al comenzar la ejecución compartida, aunque participen varios Survivors.
 
-Los recursos también se representan como objetos de inventario, por lo que se usan aquí igual que cualquier otro item.
+Una tarea también puede pedir un valor genérico de recursos:
+
+```json
+"cost": {
+  "inventory": {
+    "electronics": 5
+  },
+  "resources": {
+    "craftingValue": 5
+  }
+}
+```
+
+En ese caso el usuario selecciona manualmente objetos de su inventario. Solo son válidos los items cuya definición pública cumpla las dos condiciones:
+
+- `type` contiene `resource`.
+- `stats.craftingValue` es un entero positivo.
+
+Cada unidad seleccionada aporta su `craftingValue`. La suma debe ser mayor o igual al mínimo configurado. Si se supera el mínimo, se consumen igualmente todas las unidades seleccionadas.
+
+Los items reservados por `cost.inventory` se descuentan antes de calcular qué unidades quedan disponibles para el selector genérico. El backend vuelve a validar catálogo, cantidades y valor total al iniciar la tarea, por lo que el cliente no puede reutilizar las mismas unidades para ambos costes.
 
 ## Resolución general: `resultResolver`
 
