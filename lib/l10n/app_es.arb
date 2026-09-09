@@ -140,5 +140,53 @@
   "itemTypeMisc": "Otros",
   "jobRequirementsLabel": "Requisitos",
   "jobGenericResourcesLabel": "Recursos",
-  "jobRequirementsMissingHint": "Faltan requisitos para poder iniciar la tarea."
+  "jobRequirementsMissingHint": "Faltan requisitos para poder iniciar la tarea.",
+  "jobEnergyCostLabel": "Coste de energía",
+  "jobPerSurvivorLabel": "por superviviente",
+  "expeditionLaunchButton": "Lanzar expedición",
+  "expeditionActiveTitle": "Expediciones activas",
+  "expeditionNoActive": "No hay expediciones activas.",
+  "expeditionLauncherTitle": "Preparar expedición",
+  "expeditionSurvivorsTitle": "Supervivientes",
+  "expeditionNoSurvivorsAvailable": "No hay supervivientes disponibles para salir.",
+  "expeditionCoordinatesTitle": "Coordenadas",
+  "expeditionCoordinatesDescription": "El bunker está en {coordinates}. Por ahora solo hay acciones disponibles en esa posición.",
+  "expeditionActionsTitle": "Acciones",
+  "expeditionNoActionsAtCoordinates": "No hay acciones disponibles en estas coordenadas.",
+  "expeditionScoutSurroundingsTitle": "Explorar los alrededores",
+  "expeditionStartButton": "Empezar",
+  "expeditionStarted": "Expedición iniciada.",
+  "expeditionStartError": "No se ha podido iniciar la expedición. Actualiza el estado e inténtalo de nuevo.",
+  "expeditionDurationMinutes": "{minutes} min",
+  "expeditionDurationSeconds": "{seconds} s",
+  "expeditionCoordinatesValue": "Coordenadas: {coordinates}",
+  "expeditionActiveFallbackTitle": "Expedición",
+  "@expeditionCoordinatesDescription": {
+    "placeholders": {
+      "coordinates": {
+        "type": "String"
+      }
+    }
+  },
+  "@expeditionDurationMinutes": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "@expeditionDurationSeconds": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "@expeditionCoordinatesValue": {
+    "placeholders": {
+      "coordinates": {
+        "type": "String"
+      }
+    }
+  }
 }
