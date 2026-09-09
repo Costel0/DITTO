@@ -432,6 +432,20 @@ class _JobAreaCover extends StatelessWidget {
   }
 }
 
+class _TaskRequirementStatus {
+  const _TaskRequirementStatus({
+    required this.label,
+    required this.current,
+    required this.required,
+  });
+
+  final String label;
+  final int current;
+  final int required;
+
+  bool get isMet => current >= required;
+}
+
 class _JobAreaContent extends StatelessWidget {
   const _JobAreaContent({
     required this.area,
@@ -440,6 +454,8 @@ class _JobAreaContent extends StatelessWidget {
     required this.startingTaskId,
     required this.taskInfoLoading,
     required this.taskInfoError,
+    required this.startInfoByTaskId,
+    required this.inventory,
     required this.taskTitle,
     required this.taskDescription,
     required this.onStartTask,
@@ -451,9 +467,61 @@ class _JobAreaContent extends StatelessWidget {
   final String? startingTaskId;
   final bool taskInfoLoading;
   final Object? taskInfoError;
+  final Map<String, JobTaskStartInfo> startInfoByTaskId;
+  final Map<String, int> inventory;
   final String Function(JobTaskDefinition task) taskTitle;
   final String Function(JobTaskDefinition task) taskDescription;
   final ValueChanged<JobTaskDefinition> onStartTask;
+
+  int _availableCraftingValue(
+    JobTaskStartInfo startInfo,
+    Map<String, Item> catalog,
+  ) {
+    var total = 0;
+    for (final entry in inventory.entries) {
+      final item = catalog[entry.key];
+      final craftingValue = item?.craftingValue;
+      if (item == null || !item.isCraftingResource || craftingValue == null) {
+        continue;
+      }
+      final reserved = startInfo.costInventory[entry.key] ?? 0;
+      final available = entry.value - reserved;
+      if (available > 0) total += available * craftingValue;
+    }
+    return total;
+  }
+
+  List<_TaskRequirementStatus> _requirementsFor(
+    BuildContext context,
+    JobTaskStartInfo startInfo,
+    Map<String, Item> catalog,
+  ) {
+    final languageCode = Localizations.localeOf(context).languageCode;
+    final result = <_TaskRequirementStatus>[];
+
+    for (final entry in startInfo.costInventory.entries) {
+      final item = catalog[entry.key];
+      result.add(
+        _TaskRequirementStatus(
+          label: item?.nameForLanguage(languageCode) ?? entry.key,
+          current: inventory[entry.key] ?? 0,
+          required: entry.value,
+        ),
+      );
+    }
+
+    if (startInfo.resourceCraftingValueCost > 0) {
+      result.add(
+        _TaskRequirementStatus(
+          label: context.l10n.jobGenericResourcesLabel,
+          current: _availableCraftingValue(startInfo, catalog),
+          required: startInfo.resourceCraftingValueCost,
+        ),
+      );
+    }
+
+    return result;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -493,23 +561,42 @@ class _JobAreaContent extends StatelessWidget {
         else if (tasks.isEmpty)
           _EmptyTasks(message: context.l10n.jobNoAvailableTasks)
         else
-          for (final task in tasks) ...[
-            _TaskTile(
-              title: taskTitle(task),
-              description: taskDescription(task),
-              isStarting: startingTaskId == task.id,
-              isActive: activeTaskIds.contains(task.id),
-              onTap: startingTaskId == null && !activeTaskIds.contains(task.id)
-                  ? () => onStartTask(task)
-                  : null,
-            ),
-            const SizedBox(height: 12),
-          ],
+          StreamBuilder<Map<String, Item>>(
+            stream: FirestoreItemCatalogService.instance.watchCatalog(),
+            builder: (context, snapshot) {
+              final catalog = snapshot.data ?? const <String, Item>{};
+              return Column(
+                children: [
+                  for (final task in tasks) ...[
+                    Builder(
+                      builder: (context) {
+                        final startInfo = startInfoByTaskId[task.id];
+                        final requirements = startInfo == null
+                            ? const <_TaskRequirementStatus>[]
+                            : _requirementsFor(context, startInfo, catalog);
+                        return _TaskTile(
+                          title: taskTitle(task),
+                          description: taskDescription(task),
+                          requirements: requirements,
+                          isStarting: startingTaskId == task.id,
+                          isActive: activeTaskIds.contains(task.id),
+                          onTap: startingTaskId == null &&
+                                  !activeTaskIds.contains(task.id)
+                              ? () => onStartTask(task)
+                              : null,
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                ],
+              );
+            },
+          ),
       ],
     );
   }
 }
-
 class _TaskAssignmentSelection {
   const _TaskAssignmentSelection({
     required this.survivors,
@@ -1122,6 +1209,7 @@ class _TaskTile extends StatelessWidget {
   const _TaskTile({
     required this.title,
     required this.description,
+    required this.requirements,
     required this.isStarting,
     required this.isActive,
     required this.onTap,
@@ -1129,6 +1217,7 @@ class _TaskTile extends StatelessWidget {
 
   final String title;
   final String description;
+  final List<_TaskRequirementStatus> requirements;
   final bool isStarting;
   final bool isActive;
   final VoidCallback? onTap;
@@ -1153,10 +1242,16 @@ class _TaskTile extends StatelessWidget {
             ),
           ),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(
-                isActive ? Icons.hourglass_top_rounded : Icons.task_alt_rounded,
-                color: const Color(0xFFC0A46F),
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Icon(
+                  isActive
+                      ? Icons.hourglass_top_rounded
+                      : Icons.task_alt_rounded,
+                  color: const Color(0xFFC0A46F),
+                ),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -1178,6 +1273,25 @@ class _TaskTile extends StatelessWidget {
                           color: const Color(0xFF9F9687),
                           height: 1.4,
                         ),
+                      ),
+                    ],
+                    if (requirements.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      Text(
+                        context.l10n.jobRequirementsLabel,
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: const Color(0xFFC5B596),
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          for (final requirement in requirements)
+                            _RequirementBadge(requirement: requirement),
+                        ],
                       ),
                     ],
                   ],
@@ -1210,22 +1324,9 @@ class _TaskTile extends StatelessWidget {
                   ],
                 )
               else
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      context.l10n.jobTaskStartButton,
-                      style: theme.textTheme.labelLarge?.copyWith(
-                        color: const Color(0xFFD4B77D),
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    const Icon(
-                      Icons.chevron_right_rounded,
-                      color: Color(0xFFD4B77D),
-                    ),
-                  ],
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: Color(0xFFD4B77D),
                 ),
             ],
           ),
@@ -1235,6 +1336,47 @@ class _TaskTile extends StatelessWidget {
   }
 }
 
+class _RequirementBadge extends StatelessWidget {
+  const _RequirementBadge({required this.requirement});
+
+  final _TaskRequirementStatus requirement;
+
+  @override
+  Widget build(BuildContext context) {
+    final met = requirement.isMet;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: met ? const Color(0xFF202B20) : const Color(0xFF30211D),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: met ? const Color(0xFF597052) : const Color(0xFF81594D),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            met ? Icons.check_rounded : Icons.warning_amber_rounded,
+            size: 14,
+            color: met ? const Color(0xFF9FC493) : const Color(0xFFD29C86),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            '${requirement.label}: '
+            '${requirement.current}/${requirement.required}',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: met
+                      ? const Color(0xFFB6CDAE)
+                      : const Color(0xFFDDB0A0),
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 class _EmptyTasks extends StatelessWidget {
   const _EmptyTasks({required this.message});
 
