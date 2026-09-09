@@ -58,7 +58,9 @@ Se sincroniza con Firestore en `/items/{itemId}` y puede ser leído por la app. 
 
 Los recursos no usan un inventario separado. Son objetos normales cuyo `type` incluye `resource`.
 
-Por eso una tarea puede gastar o entregar recursos usando sus IDs dentro de `inventoryDelta` o `cost.inventory`.
+Una tarea puede gastar o entregar recursos concretos usando sus IDs dentro de `inventoryDelta` o `cost.inventory`.
+
+Para que un item pueda usarse en los costes genéricos `cost.resources.craftingValue`, además de tener `resource` en `type` debe declarar un `stats.craftingValue` entero positivo. Cada unidad aporta ese valor al selector de recursos de la tarea.
 
 ## Arte opcional
 
