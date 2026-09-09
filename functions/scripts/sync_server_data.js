@@ -6,6 +6,8 @@ const {
 } = require("firebase-admin/app");
 const {getFirestore} = require("firebase-admin/firestore");
 
+const EXPEDITION_ID_PATTERN = /^[a-z0-9_]+$/;
+
 const SURVIVOR_STAT_KEYS = new Set([
   "strength",
   "dexterity",
@@ -255,10 +257,10 @@ function validateExpeditions(data, filename, knownItemIds) {
     }
     if (
       typeof action.expeditionType !== "string" ||
-      !action.expeditionType.trim()
+      !EXPEDITION_ID_PATTERN.test(action.expeditionType.trim())
     ) {
       throw new Error(
-        `${filename}.actions.${actionId}.expeditionType must be a string.`,
+        `${filename}.actions.${actionId}.expeditionType must be a safe slug.`,
       );
     }
     if (action.availability !== "bunker") {
@@ -329,10 +331,10 @@ function validateExpeditions(data, filename, knownItemIds) {
 
       if (outcome.imageKey != null && (
         typeof outcome.imageKey !== "string" ||
-        !outcome.imageKey.trim()
+        !EXPEDITION_ID_PATTERN.test(outcome.imageKey.trim())
       )) {
         throw new Error(
-          `${filename}.actions.${actionId}.outcomes.${outcomeId}.imageKey must be a non-empty string.`,
+          `${filename}.actions.${actionId}.outcomes.${outcomeId}.imageKey must be a safe slug.`,
         );
       }
 
