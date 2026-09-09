@@ -198,6 +198,10 @@ class _JobAreaScreenState extends State<JobAreaScreen> {
         resourceCraftingValueRequired:
             startInfo.resourceCraftingValueCost,
         energyCostPerSurvivor: startInfo.energyCostPerSurvivor,
+        durationSecondsPerExecution: startInfo.durationSecondsPerExecution,
+        outputInventoryPerExecution: startInfo.outputInventoryPerExecution,
+        executionMode: startInfo.executionMode,
+        maxExecutionCount: startInfo.maxExecutionCount,
       ),
     );
     if (selected == null || selected.survivors.isEmpty || !mounted) return;
@@ -209,6 +213,7 @@ class _JobAreaScreenState extends State<JobAreaScreen> {
         survivorIds:
             selected.survivors.map((survivor) => survivor.id).toList(),
         resourceItems: selected.resourceItems,
+        executionCount: selected.executionCount,
       );
       await widget.bunkerStateController.refreshAfterMutation();
       if (!mounted) return;
@@ -604,10 +609,12 @@ class _TaskAssignmentSelection {
   const _TaskAssignmentSelection({
     required this.survivors,
     required this.resourceItems,
+    required this.executionCount,
   });
 
   final List<Survivor> survivors;
   final Map<String, int> resourceItems;
+  final int executionCount;
 }
 
 class _ResourceOption {
@@ -632,6 +639,10 @@ class _SurvivorTaskDialog extends StatefulWidget {
     required this.fixedInventoryCost,
     required this.resourceCraftingValueRequired,
     required this.energyCostPerSurvivor,
+    required this.durationSecondsPerExecution,
+    required this.outputInventoryPerExecution,
+    required this.executionMode,
+    required this.maxExecutionCount,
   });
 
   final List<Survivor> survivors;
@@ -642,6 +653,10 @@ class _SurvivorTaskDialog extends StatefulWidget {
   final Map<String, int> fixedInventoryCost;
   final int resourceCraftingValueRequired;
   final int energyCostPerSurvivor;
+  final int durationSecondsPerExecution;
+  final Map<String, int> outputInventoryPerExecution;
+  final JobTaskExecutionMode executionMode;
+  final int maxExecutionCount;
 
   @override
   State<_SurvivorTaskDialog> createState() => _SurvivorTaskDialogState();
@@ -650,12 +665,20 @@ class _SurvivorTaskDialog extends StatefulWidget {
 class _SurvivorTaskDialogState extends State<_SurvivorTaskDialog> {
   final Set<String> _selectedIds = <String>{};
   final Map<String, int> _selectedResourceQuantities = <String, int>{};
+  late final TextEditingController _executionCountController;
   late final Stream<Map<String, Item>> _catalogStream;
 
   @override
   void initState() {
     super.initState();
+    _executionCountController = TextEditingController(text: '1');
     _catalogStream = FirestoreItemCatalogService.instance.watchCatalog();
+  }
+
+  @override
+  void dispose() {
+    _executionCountController.dispose();
+    super.dispose();
   }
 
   bool get _survivorsCanConfirm =>
