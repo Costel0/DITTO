@@ -59,6 +59,12 @@ service cloud.firestore {
         allow read: if isOwner() && stateId == 'bunker';
         allow create, update, delete: if false;
       }
+
+      match /expeditionReviews/{reviewId} {
+        // Full expedition outcomes are intentionally backend-only until the
+        // one-time review callable consumes them. Admin SDK bypasses this rule.
+        allow read, write: if false;
+      }
     }
 
     match /items/{itemId} {
