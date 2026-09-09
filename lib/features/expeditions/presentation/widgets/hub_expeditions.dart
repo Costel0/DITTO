@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 
 import '../../../../core/localization/l10n.dart';
@@ -208,7 +206,7 @@ List<List<BusySurvivor>> _groupActiveExpeditions(
   for (final busy in busySurvivors) {
     if (busy.activity != 'expedition') continue;
     final key = busy.executionId ??
-        busy.survivorId + ':' + busy.startedAt.toIso8601String();
+        '${busy.survivorId}:${busy.startedAt.toIso8601String()}';
     grouped.putIfAbsent(key, () => <BusySurvivor>[]).add(busy);
   }
   final result = grouped.values.toList(growable: false);
@@ -698,11 +696,10 @@ class _ExpeditionCountdownState extends State<_ExpeditionCountdown> {
     final hours = seconds ~/ 3600;
     final minutes = (seconds % 3600) ~/ 60;
     final remainingSeconds = seconds % 60;
-    return hours.toString().padLeft(2, '0') +
-        ':' +
-        minutes.toString().padLeft(2, '0') +
-        ':' +
-        remainingSeconds.toString().padLeft(2, '0');
+    final hoursText = hours.toString().padLeft(2, '0');
+    final minutesText = minutes.toString().padLeft(2, '0');
+    final secondsText = remainingSeconds.toString().padLeft(2, '0');
+    return '$hoursText:$minutesText:$secondsText';
   }
 
   @override
