@@ -21,8 +21,6 @@ class ExpeditionResultDialog extends StatelessWidget {
     );
   }
 
-  ExpeditionOutcomeReview get _primaryOutcome => review.outcomes.first;
-
   String _text(BuildContext context, String es, String en) {
     return Localizations.localeOf(context).languageCode == 'es' ? es : en;
   }
@@ -102,9 +100,14 @@ class ExpeditionResultDialog extends StatelessWidget {
       'assets/expeditions/results/${review.expeditionType}.png';
 
   String? get _specialImagePath {
-    final imageKey = _primaryOutcome.imageKey;
-    if (imageKey == null || imageKey.isEmpty) return null;
-    return 'assets/expeditions/results/${review.expeditionType}_$imageKey.png';
+    for (final outcome in review.outcomes) {
+      final imageKey = outcome.imageKey;
+      if (imageKey != null && imageKey.isNotEmpty) {
+        return 'assets/expeditions/results/'
+            '${review.expeditionType}_$imageKey.png';
+      }
+    }
+    return null;
   }
 
   @override
@@ -181,13 +184,22 @@ class ExpeditionResultDialog extends StatelessWidget {
                           ],
                         ),
                         const SizedBox(height: 16),
-                        Text(
-                          _narrative(context, _primaryOutcome.narrativeId),
-                          style: theme.textTheme.bodyLarge?.copyWith(
-                            color: const Color(0xFFC9BDA9),
-                            height: 1.55,
+                        for (var index = 0;
+                            index < review.outcomes.length;
+                            index++) ...[
+                          Text(
+                            _narrative(
+                              context,
+                              review.outcomes[index].narrativeId,
+                            ),
+                            style: theme.textTheme.bodyLarge?.copyWith(
+                              color: const Color(0xFFC9BDA9),
+                              height: 1.55,
+                            ),
                           ),
-                        ),
+                          if (index + 1 < review.outcomes.length)
+                            const SizedBox(height: 12),
+                        ],
                         const SizedBox(height: 20),
                         Text(
                           _text(context, 'Recompensa', 'Reward'),
@@ -216,17 +228,18 @@ class ExpeditionResultDialog extends StatelessWidget {
                                     '+${reward.value} ${_itemLabel(context, reward.key)}',
                               ),
                             ),
-                        if (_primaryOutcome.eventPoolId != null) ...[
-                          const SizedBox(height: 8),
-                          _RewardRow(
-                            icon: Icons.auto_awesome_outlined,
-                            label: _text(
-                              context,
-                              'Evento común detectado · todavía sin resolver',
-                              'Common event detected · not resolved yet',
+                        for (final outcome in review.outcomes)
+                          if (outcome.eventPoolId != null) ...[
+                            const SizedBox(height: 8),
+                            _RewardRow(
+                              icon: Icons.auto_awesome_outlined,
+                              label: _text(
+                                context,
+                                'Evento común detectado · todavía sin resolver',
+                                'Common event detected · not resolved yet',
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
                         const SizedBox(height: 20),
                         FilledButton(
                           onPressed: () => Navigator.of(context).pop(),
