@@ -1111,6 +1111,12 @@ class _SurvivorTaskDialogState extends State<_SurvivorTaskDialog> {
                                   ),
                                   const SizedBox(height: 6),
                                   _BatchSummaryRow(
+                                    label: context.l10n.jobEnergyCostLabel,
+                                    value: '$_scaledEnergyCost '
+                                        '${context.l10n.jobPerSurvivorLabel}',
+                                  ),
+                                  const SizedBox(height: 6),
+                                  _BatchSummaryRow(
                                     label: context.l10n.jobBatchInputsLabel,
                                     value: _inventorySummary(
                                       context,
