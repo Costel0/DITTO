@@ -197,6 +197,7 @@ class _JobAreaScreenState extends State<JobAreaScreen> {
         fixedInventoryCost: startInfo.costInventory,
         resourceCraftingValueRequired:
             startInfo.resourceCraftingValueCost,
+        energyCostPerSurvivor: startInfo.energyCostPerSurvivor,
       ),
     );
     if (selected == null || selected.survivors.isEmpty || !mounted) return;
@@ -578,6 +579,8 @@ class _JobAreaContent extends StatelessWidget {
                           title: taskTitle(task),
                           description: taskDescription(task),
                           requirements: requirements,
+                          energyCostPerSurvivor:
+                              startInfo?.energyCostPerSurvivor ?? 0,
                           isStarting: startingTaskId == task.id,
                           isActive: activeTaskIds.contains(task.id),
                           onTap: startingTaskId == null &&
@@ -628,6 +631,7 @@ class _SurvivorTaskDialog extends StatefulWidget {
     required this.inventory,
     required this.fixedInventoryCost,
     required this.resourceCraftingValueRequired,
+    required this.energyCostPerSurvivor,
   });
 
   final List<Survivor> survivors;
@@ -637,6 +641,7 @@ class _SurvivorTaskDialog extends StatefulWidget {
   final Map<String, int> inventory;
   final Map<String, int> fixedInventoryCost;
   final int resourceCraftingValueRequired;
+  final int energyCostPerSurvivor;
 
   @override
   State<_SurvivorTaskDialog> createState() => _SurvivorTaskDialogState();
@@ -876,6 +881,32 @@ class _SurvivorTaskDialogState extends State<_SurvivorTaskDialog> {
                                     fontWeight: FontWeight.w700,
                                   ),
                                 ),
+                                if (widget.energyCostPerSurvivor > 0) ...[
+                                  const SizedBox(height: 5),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(
+                                        Icons.bolt_rounded,
+                                        size: 15,
+                                        color: Color(0xFFC8A968),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Flexible(
+                                        child: Text(
+                                          '${context.l10n.jobEnergyCostLabel}: '
+                                          '${widget.energyCostPerSurvivor} '
+                                          '${context.l10n.jobPerSurvivorLabel}',
+                                          style: theme.textTheme.labelSmall
+                                              ?.copyWith(
+                                            color: const Color(0xFFB9AF9D),
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
                               ],
                             ),
                           ),
@@ -893,7 +924,30 @@ class _SurvivorTaskDialogState extends State<_SurvivorTaskDialog> {
                         shrinkWrap: true,
                         padding: const EdgeInsets.all(14),
                         children: [
-                          if (requirements.isNotEmpty) ...[
+                          if (energyCostPerSurvivor > 0) ...[
+                      const SizedBox(height: 9),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.bolt_rounded,
+                            size: 16,
+                            color: Color(0xFFC8A968),
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            '${context.l10n.jobEnergyCostLabel}: '
+                            '$energyCostPerSurvivor '
+                            '${context.l10n.jobPerSurvivorLabel}',
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              color: const Color(0xFFBEB39E),
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                    if (requirements.isNotEmpty) ...[
                             Text(
                               context.l10n.jobRequirementsLabel,
                               style: theme.textTheme.titleMedium?.copyWith(
@@ -1286,6 +1340,7 @@ class _TaskTile extends StatelessWidget {
     required this.title,
     required this.description,
     required this.requirements,
+    required this.energyCostPerSurvivor,
     required this.isStarting,
     required this.isActive,
     required this.onTap,
@@ -1294,6 +1349,7 @@ class _TaskTile extends StatelessWidget {
   final String title;
   final String description;
   final List<_TaskRequirementStatus> requirements;
+  final int energyCostPerSurvivor;
   final bool isStarting;
   final bool isActive;
   final VoidCallback? onTap;
