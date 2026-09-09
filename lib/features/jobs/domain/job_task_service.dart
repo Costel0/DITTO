@@ -127,9 +127,10 @@ class JobTaskStartInfo {
     if (maxExecutionCountRaw is! num ||
         !maxExecutionCountRaw.isFinite ||
         maxExecutionCountRaw != maxExecutionCountRaw.toInt() ||
-        maxExecutionCountRaw < 1) {
+        maxExecutionCountRaw < 1 ||
+        maxExecutionCountRaw > 999) {
       throw const FormatException(
-        'Task maximum execution count must be a positive integer.',
+        'Task maximum execution count must be an integer from 1 to 999.',
       );
     }
     if (requiredRaw is! List || requiredRaw.any((value) => value is! String)) {
@@ -175,7 +176,13 @@ class JobTaskStartInfo {
           'Task output contains an invalid quantity.',
         );
       }
-      final quantity = (entry.value as num).toInt();
+      final rawQuantity = entry.value as num;
+      if (!rawQuantity.isFinite || rawQuantity != rawQuantity.toInt()) {
+        throw const FormatException(
+          'Task output quantities must be integers.',
+        );
+      }
+      final quantity = rawQuantity.toInt();
       if (quantity > 0) {
         outputInventory[entry.key as String] = quantity;
       }
