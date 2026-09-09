@@ -344,6 +344,91 @@ function normalizedResults(rawTask, taskId) {
   };
 }
 
+function normalizedExecution(value, taskId) {
+  if (value == null) {
+    return {type: "single", maxCount: 1};
+  }
+  if (!isPlainObject(value)) {
+    throw new Error(`Task ${taskId} execution must be an object.`);
+  }
+
+  const type = typeof value.type === "string" ? value.type.trim() : "";
+  if (type === "single") {
+    return {type, maxCount: 1};
+  }
+  if (type !== "batch") {
+    throw new Error(
+      `Task ${taskId} execution.type must be single or batch.`,
+    );
+  }
+
+  const maxCount = value.maxCount ?? 999;
+  if (!Number.isInteger(maxCount) || maxCount < 1 || maxCount > 999) {
+    throw new Error(
+      `Task ${taskId} execution.maxCount must be an integer from 1 to 999.`,
+    );
+  }
+  return {type, maxCount};
+}
+
+function normalizedTaskExecutionCount(task, value) {
+  const count = value == null ? 1 : value;
+  if (!Number.isInteger(count) || count < 1) {
+    throw new Error(`Task ${task.id} executionCount must be a positive integer.`);
+  }
+  if (task.execution.type === "single" && count !== 1) {
+    throw new Error(`Task ${task.id} does not support batch execution.`);
+  }
+  if (count > task.execution.maxCount) {
+    throw new Error(
+      `Task ${task.id} executionCount cannot exceed ${task.execution.maxCount}.`,
+    );
+  }
+  return count;
+}
+
+function scaledInventoryMap(source, count) {
+  return Object.fromEntries(
+    Object.entries(source || {}).map(([itemId, quantity]) => [
+      itemId,
+      quantity * count,
+    ]),
+  );
+}
+
+function scaledEffects(effects, count) {
+  const statExperienceDelta = Object.fromEntries(
+    Object.entries(effects.statExperienceDelta || {}).map(([stat, value]) => [
+      stat,
+      value * count,
+    ]),
+  );
+  return {
+    energyDelta: effects.energyDelta * count,
+    inventoryDelta: scaledInventoryMap(effects.inventoryDelta, count),
+    ...(Object.keys(statExperienceDelta).length > 0
+      ? {statExperienceDelta}
+      : {}),
+  };
+}
+
+function taskDurationSecondsForExecution(task, executionCount, survivorCount) {
+  const count = normalizedTaskExecutionCount(task, executionCount);
+  if (!Number.isInteger(survivorCount) || survivorCount < 1) {
+    throw new Error("Task duration requires at least one Survivor.");
+  }
+  return Math.max(
+    1,
+    Math.ceil((task.durationSeconds * count) / survivorCount),
+  );
+}
+
+function taskFixedOutputInventory(task) {
+  if (task.resultResolver.type !== "fixed") return {};
+  const result = task.results[task.resultResolver.resultId];
+  return {...(result?.guaranteedOutcomes?.inventoryDelta || {})};
+}
+
 function taskDefinitionFromSnapshot(snapshot, taskId) {
   const normalizedTaskId = typeof taskId === "string" ? taskId.trim() : "";
   if (!normalizedTaskId) return null;
@@ -391,6 +476,27 @@ function taskDefinitionFromSnapshot(snapshot, taskId) {
   }
 
   const resultDefinition = normalizedResults(rawTask, normalizedTaskId);
+  const execution = normalizedExecution(rawTask.execution, normalizedTaskId);
+
+  if (execution.type === "batch") {
+    if (storable) {
+      throw new Error(
+        `Task ${normalizedTaskId} batch execution cannot be storable.`,
+      );
+    }
+    if (resultDefinition.resolver.type !== "fixed") {
+      throw new Error(
+        `Task ${normalizedTaskId} batch execution requires a fixed result.`,
+      );
+    }
+    const fixedResult =
+      resultDefinition.results[resultDefinition.resolver.resultId];
+    if ((fixedResult?.randomOutcomes || []).length > 0) {
+      throw new Error(
+        `Task ${normalizedTaskId} batch execution cannot use random outcomes yet.`,
+      );
+    }
+  }
 
   return {
     id: normalizedTaskId,
@@ -398,6 +504,7 @@ function taskDefinitionFromSnapshot(snapshot, taskId) {
     location,
     durationSeconds: Math.ceil(durationSeconds),
     storable,
+    execution,
     requiredTaskIds,
     survivorRequirements: normalizedSurvivorRequirements(
       rawTask.survivorRequirements,
@@ -452,10 +559,16 @@ function applyInventoryDelta(inventorySource, delta, {rejectNegative = true} = {
 function applyTaskStartCost(
   bunker,
   task,
-  {resourceSelection = {}, itemDefinitions = {}} = {},
+  {
+    resourceSelection = {},
+    itemDefinitions = {},
+    executionCount = 1,
+  } = {},
 ) {
+  const count = normalizedTaskExecutionCount(task, executionCount);
   const selectedResources = normalizedResourceSelection(resourceSelection);
-  const resourceRequirement = task.cost.resources?.craftingValue ?? 0;
+  const resourceRequirement =
+    (task.cost.resources?.craftingValue ?? 0) * count;
   const selectedEntries = Object.entries(selectedResources);
 
   if (resourceRequirement === 0 && selectedEntries.length > 0) {
@@ -506,7 +619,7 @@ function applyTaskStartCost(
     }
   }
 
-  const totalCost = {...task.cost.inventory};
+  const totalCost = scaledInventoryMap(task.cost.inventory, count);
   for (const [itemId, quantity] of selectedEntries) {
     totalCost[itemId] = (totalCost[itemId] ?? 0) + quantity;
   }
@@ -532,7 +645,8 @@ function deterministicUnitInterval(seed) {
 function selectTaskResult(task, executionId, externallyResolvedResultId = null) {
   if (externallyResolvedResultId != null) {
     const resultId = String(externallyResolvedResultId).trim();
-    const result = task.results[resultId];
+    const count = normalizedTaskExecutionCount(task, executionCount);
+  const result = task.results[resultId];
     if (!result) {
       throw new Error(`Task ${task.id} does not define result ${resultId}.`);
     }
@@ -567,12 +681,13 @@ function selectTaskResult(task, executionId, externallyResolvedResultId = null) 
   );
 }
 
-function taskEnergyCostPerSurvivor(task) {
+function taskEnergyCostPerSurvivor(task, executionCount = 1) {
+  const count = normalizedTaskExecutionCount(task, executionCount);
   if (task.resultResolver.type !== "fixed") return 0;
   const result = task.results[task.resultResolver.resultId];
   const energyDelta = result?.guaranteedOutcomes?.energyDelta;
   return Number.isInteger(energyDelta) && energyDelta < 0
-    ? Math.abs(energyDelta)
+    ? Math.abs(energyDelta) * count
     : 0;
 }
 
@@ -622,6 +737,7 @@ function applyTaskCompletionEffects(
   task,
   resultId,
   executionId,
+  executionCount = 1,
 ) {
   const participantIds = Array.isArray(survivorIds)
     ? survivorIds
@@ -641,7 +757,7 @@ function applyTaskCompletionEffects(
   let workingBunker = applyEffects(
     bunker,
     participantIds,
-    result.guaranteedOutcomes,
+    scaledEffects(result.guaranteedOutcomes, count),
   );
   const triggeredRandomOutcomeIds = [];
 
@@ -670,7 +786,10 @@ module.exports = {
   applyTaskStartCost,
   missingRequiredTaskIds,
   normalizedResourceSelection,
+  normalizedTaskExecutionCount,
   selectTaskResult,
   taskDefinitionFromSnapshot,
+  taskDurationSecondsForExecution,
   taskEnergyCostPerSurvivor,
+  taskFixedOutputInventory,
 };
