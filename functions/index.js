@@ -29,6 +29,7 @@ const {
   actionDefinitionsByIds,
   aggregateExpeditionInventoryDelta,
   actionIdsFromExpeditionTaskId,
+  applyInventoryReward,
   applyExpeditionCompletion,
   availableActionsAtCoordinates,
   coordinatesFromExpeditionLocation,
@@ -237,7 +238,6 @@ async function resolveCompletedOccupationsForUser(db, uid) {
           workingBunker,
           participantIds,
           actions,
-          outcomes,
         );
 
         const reviewOutcomes = outcomes.map((outcome) => ({
@@ -276,6 +276,7 @@ async function resolveCompletedOccupationsForUser(db, uid) {
             ...reviewSummary,
             inventoryDelta,
             outcomes: reviewOutcomes,
+            rewardApplied: false,
           },
         });
 
@@ -1079,6 +1080,12 @@ exports.reviewExpeditionResult = onCall(
       }
 
       reviews.splice(reviewIndex, 1);
+      const inventory = privateReview.rewardApplied === false
+        ? applyInventoryReward(
+          bunker.inventory,
+          privateReview.inventoryDelta || {},
+        )
+        : bunker.inventory;
       const now = truncateToSecond(new Date()) || new Date();
       const fixed = await fixStatus({
         transaction,
@@ -1086,6 +1093,7 @@ exports.reviewExpeditionResult = onCall(
         now,
         bunker: {
           ...bunker,
+          inventory,
           pendingExpeditionReviews: reviews,
         },
       });
