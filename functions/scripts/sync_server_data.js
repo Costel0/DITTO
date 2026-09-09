@@ -252,8 +252,13 @@ function validateExpeditions(data, filename, knownItemIds) {
     throw new Error(`${filename}.actions must be an object.`);
   }
   for (const [actionId, action] of Object.entries(data.actions)) {
-    if (!actionId.trim() || !isPlainObject(action)) {
-      throw new Error(`${filename}.actions contains an invalid action.`);
+    if (
+      !EXPEDITION_ID_PATTERN.test(actionId.trim()) ||
+      !isPlainObject(action)
+    ) {
+      throw new Error(
+        `${filename}.actions contains an invalid action ID or definition.`,
+      );
     }
     if (
       typeof action.expeditionType !== "string" ||
