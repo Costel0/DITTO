@@ -111,7 +111,7 @@ class _ExpeditionLauncherDialogState extends State<ExpeditionLauncherDialog> {
       case 'scout_surroundings':
         return context.l10n.expeditionScoutSurroundingsTitle;
       default:
-        return actionId;
+        return context.l10n.expeditionActionFallbackTitle;
     }
   }
 
