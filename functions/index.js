@@ -7,6 +7,7 @@ const {
   fixStatus,
   normalizedBunkerCoordinates,
   normalizedBusySurvivors,
+  normalizedActiveBackgroundTasks,
   normalizedPendingExpeditionReviews,
   normalizedSurvivor,
   truncateToSecond,
@@ -163,8 +164,18 @@ async function resolveCompletedOccupationsForUser(db, uid) {
     const completedGroups = [...groups.entries()].filter(([, entries]) =>
       entries.every((entry) => entry.endsAt.getTime() <= now.getTime()),
     );
+    const activeBackgroundTasks = normalizedActiveBackgroundTasks(
+      bunker.activeBackgroundTasks,
+      now,
+    );
+    const completedBackgroundTasks = activeBackgroundTasks.filter(
+      (entry) => entry.endsAt.getTime() <= now.getTime(),
+    );
 
-    if (completedGroups.length === 0) {
+    if (
+      completedGroups.length === 0 &&
+      completedBackgroundTasks.length === 0
+    ) {
       return {
         resolvedCount: 0,
         revision: Number.isInteger(bunker.revision) ? bunker.revision : 0,
@@ -174,6 +185,7 @@ async function resolveCompletedOccupationsForUser(db, uid) {
     let workingBunker = {
       ...bunker,
       busySurvivors,
+      activeBackgroundTasks,
     };
     const idleSurvivors = new Set(
       Array.isArray(bunker.idleSurvivors)
@@ -190,6 +202,7 @@ async function resolveCompletedOccupationsForUser(db, uid) {
     );
     const privateExpeditionReviewWrites = [];
     const resolvedGroupKeys = new Set();
+    const resolvedBackgroundExecutionIds = new Set();
     const resolvedSurvivorIds = new Set();
     const resolvedExecutions = [];
 
@@ -334,6 +347,35 @@ async function resolveCompletedOccupationsForUser(db, uid) {
       resolvedGroupKeys.add(groupKey);
     }
 
+    for (const backgroundTask of completedBackgroundTasks) {
+      const task = requiredTaskDefinition(
+        taskCatalogSnapshot,
+        backgroundTask.taskId,
+      );
+      const result = selectTaskResult(task, backgroundTask.executionId);
+      const completion = applyTaskCompletionEffects(
+        workingBunker,
+        [backgroundTask.startedBySurvivorId],
+        task,
+        result.id,
+        backgroundTask.executionId,
+        1,
+      );
+      workingBunker = completion.bunker;
+      if (task.storable) {
+        completedTaskIds.add(task.id);
+      }
+      resolvedBackgroundExecutionIds.add(backgroundTask.executionId);
+      resolvedExecutions.push({
+        executionId: backgroundTask.executionId,
+        taskId: task.id,
+        result: result.id,
+        triggeredRandomOutcomeIds: completion.triggeredRandomOutcomeIds,
+        survivorIds: [backgroundTask.startedBySurvivorId],
+        background: true,
+      });
+    }
+
     workingBunker = {
       ...workingBunker,
       completedTaskIds: [...completedTaskIds],
@@ -341,6 +383,9 @@ async function resolveCompletedOccupationsForUser(db, uid) {
       idleSurvivors: [...idleSurvivors],
       busySurvivors: busySurvivors.filter(
         (entry) => !resolvedGroupKeys.has(occupationGroupKey(entry)),
+      ),
+      activeBackgroundTasks: activeBackgroundTasks.filter(
+        (entry) => !resolvedBackgroundExecutionIds.has(entry.executionId),
       ),
     };
 
@@ -499,6 +544,7 @@ exports.initializeBunker = onCall(
           survivors: [survivor],
           idleSurvivors: [survivorId],
           busySurvivors: [],
+          activeBackgroundTasks: [],
           completedTaskIds: [],
           inventory: {},
           // Temporary assignment seam. Replace this default with the future
@@ -679,6 +725,19 @@ exports.startJobTask = onCall(
       }
 
       const bunker = bunkerSnapshot.data() || {};
+      const activeBackgroundTasks = normalizedActiveBackgroundTasks(
+        bunker.activeBackgroundTasks,
+      );
+      if (
+        task.execution.type === "background" &&
+        activeBackgroundTasks.some((entry) => entry.taskId === task.id)
+      ) {
+        throw new HttpsError(
+          "failed-precondition",
+          `Task ${task.id} is already active.`,
+        );
+      }
+
       const completedTaskIds = new Set(
         Array.isArray(bunker.completedTaskIds)
           ? bunker.completedTaskIds.filter((id) => typeof id === "string")
@@ -772,31 +831,54 @@ exports.startJobTask = onCall(
         bunker.busySurvivors,
         now,
       );
-      for (const survivorId of survivorIds) {
-        busySurvivors.push({
-          survivorId,
+
+      let bunkerForFix;
+      if (task.execution.type === "background") {
+        activeBackgroundTasks.push({
           executionId,
           taskId: task.id,
-          ...(task.execution.type === "batch"
-            ? {taskExecutionCount: executionCount}
-            : {}),
           activity: task.activity,
           location: task.location,
+          startedBySurvivorId: survivorIds[0],
           startedAt: now,
           endsAt,
         });
+        bunkerForFix = {
+          ...workingBunker,
+          idleSurvivors,
+          busySurvivors,
+          activeBackgroundTasks,
+        };
+      } else {
+        for (const survivorId of survivorIds) {
+          busySurvivors.push({
+            survivorId,
+            executionId,
+            taskId: task.id,
+            ...(task.execution.type === "batch"
+              ? {taskExecutionCount: executionCount}
+              : {}),
+            activity: task.activity,
+            location: task.location,
+            startedAt: now,
+            endsAt,
+          });
+        }
+
+        const selectedSet = new Set(survivorIds);
+        bunkerForFix = {
+          ...workingBunker,
+          idleSurvivors: idleSurvivors.filter((id) => !selectedSet.has(id)),
+          busySurvivors,
+          activeBackgroundTasks,
+        };
       }
 
-      const selectedSet = new Set(survivorIds);
       const fixed = await fixStatus({
         transaction,
         db,
         now,
-        bunker: {
-          ...workingBunker,
-          idleSurvivors: idleSurvivors.filter((id) => !selectedSet.has(id)),
-          busySurvivors,
-        },
+        bunker: bunkerForFix,
       });
       transaction.set(bunkerRef, fixed);
 
