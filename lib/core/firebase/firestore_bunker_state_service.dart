@@ -1,6 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:flutter/foundation.dart';
 
 import '../../features/bunker/domain/bunker_state.dart';
 import '../../features/bunker/domain/bunker_state_service.dart';
@@ -29,10 +28,11 @@ class FirestoreBunkerStateService implements BunkerStateService {
   Future<BunkerState> fetchBunkerState() async {
     var state = await _fetchState();
 
-    // Temporary development fallback. Production completion should be triggered
-    // by trusted backend infrastructure, but the resolver itself remains the
-    // same server-authoritative and idempotent Cloud Function.
-    if (kDebugMode && _hasLocallyExpiredOccupation(state)) {
+    // The client only decides whether it is worth requesting a resolution.
+    // The callable uses server time and is the sole authority on whether any
+    // execution is actually complete, so a wrong/manipulated device clock
+    // cannot resolve work early.
+    if (_hasLocallyExpiredExecution(state)) {
       state = await resolveCompletedOccupations();
     }
 
@@ -58,7 +58,7 @@ class FirestoreBunkerStateService implements BunkerStateService {
     return BunkerState.fromJson(normalized);
   }
 
-  bool _hasLocallyExpiredOccupation(BunkerState state) {
+  bool _hasLocallyExpiredExecution(BunkerState state) {
     final now = DateTime.now().toUtc();
     return state.busySurvivors.any(
           (occupation) => !occupation.endsAt.isAfter(now),
