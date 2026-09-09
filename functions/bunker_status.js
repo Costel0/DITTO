@@ -3,7 +3,7 @@ const {
   normalizedStatMods,
 } = require("./survivor_progression");
 
-const BUNKER_SCHEMA_VERSION = 8;
+const BUNKER_SCHEMA_VERSION = 9;
 const DEFAULT_SURVIVOR_ENERGY = 50;
 const DEFAULT_SLEEPING_SECONDS_PER_NEGATIVE_ENERGY = 60;
 const SLEEPING_ACTIVITY = "sleeping";
@@ -163,6 +163,59 @@ function normalizedBusySurvivors(source, fallbackDate = new Date()) {
   return [];
 }
 
+function normalizedActiveBackgroundTasks(source, fallbackDate = new Date()) {
+  if (!Array.isArray(source)) return [];
+
+  const fallback = truncateToSecond(fallbackDate) || new Date(0);
+  const result = [];
+  const seenExecutionIds = new Set();
+
+  for (const entry of source) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+
+    const executionId = typeof entry.executionId === "string"
+      ? entry.executionId.trim()
+      : "";
+    const taskId = typeof entry.taskId === "string" ? entry.taskId.trim() : "";
+    const activity = typeof entry.activity === "string"
+      ? entry.activity.trim()
+      : taskId;
+    const location = typeof entry.location === "string"
+      ? entry.location.trim()
+      : "";
+    const startedBySurvivorId = typeof entry.startedBySurvivorId === "string"
+      ? entry.startedBySurvivorId.trim()
+      : "";
+    const startedAt = truncateToSecond(entry.startedAt) || fallback;
+    const endsAt = truncateToSecond(entry.endsAt) || fallback;
+
+    if (
+      !executionId ||
+      !taskId ||
+      !activity ||
+      !location ||
+      !startedBySurvivorId ||
+      seenExecutionIds.has(executionId) ||
+      endsAt.getTime() < startedAt.getTime()
+    ) {
+      continue;
+    }
+
+    result.push({
+      executionId,
+      taskId,
+      activity,
+      location,
+      startedBySurvivorId,
+      startedAt,
+      endsAt,
+    });
+    seenExecutionIds.add(executionId);
+  }
+
+  return result;
+}
+
 function uniqueStringList(source) {
   if (!Array.isArray(source)) return [];
   return [...new Set(source
@@ -264,6 +317,11 @@ async function fixStatus({transaction, db, bunker, now = new Date()}) {
       .filter((survivorId) => knownSurvivorIds.has(survivorId)),
   );
 
+  const activeBackgroundTasks = normalizedActiveBackgroundTasks(
+    bunker.activeBackgroundTasks,
+    fixedNow,
+  ).filter((entry) => knownSurvivorIds.has(entry.startedBySurvivorId));
+
   const busyBySurvivorId = new Map();
   for (const busySurvivor of normalizedBusySurvivors(
     bunker.busySurvivors,
@@ -308,6 +366,7 @@ async function fixStatus({transaction, db, bunker, now = new Date()}) {
     survivors,
     idleSurvivors: [...idleSurvivors],
     busySurvivors: [...busyBySurvivorId.values()],
+    activeBackgroundTasks,
     completedTaskIds: uniqueStringList(bunker.completedTaskIds),
     bunkerCoordinates: normalizedBunkerCoordinates(bunker.bunkerCoordinates),
     pendingExpeditionReviews: normalizedPendingExpeditionReviews(
@@ -327,6 +386,7 @@ module.exports = {
   normalizedBunkerSurvivors,
   normalizedBunkerCoordinates,
   normalizedBusySurvivors,
+  normalizedActiveBackgroundTasks,
   normalizedPendingExpeditionReviews,
   normalizedSurvivor,
   truncateToSecond,
