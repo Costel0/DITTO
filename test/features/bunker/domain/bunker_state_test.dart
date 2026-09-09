@@ -25,6 +25,7 @@ void main() {
       'survivors': <dynamic>[],
       'idleSurvivors': <String>[],
       'busySurvivors': <dynamic>[],
+      'activeBackgroundTasks': <dynamic>[],
       'completedTaskIds': <String>[],
       'inventory': <String, int>{},
       'bunkerCoordinates': <String, int>{
@@ -48,6 +49,7 @@ void main() {
       'survivors': <dynamic>[],
       'idleSurvivors': <String>[],
       'busySurvivors': <dynamic>[],
+      'activeBackgroundTasks': <dynamic>[],
       'completedTaskIds': <String>[],
       'inventory': <String, int>{},
     });
@@ -79,12 +81,48 @@ void main() {
           'endsAt': '2026-09-09T10:01:00Z',
         },
       ],
+      'activeBackgroundTasks': <dynamic>[],
       'completedTaskIds': <String>[],
       'inventory': <String, int>{},
       'bunkerCoordinates': <String, int>{'x': 1, 'y': 2, 'z': 3},
     });
 
     expect(state.busySurvivors.single.expeditionType, 'test_type');
+  });
+
+  test('schema v9 allows a passive task starter to remain idle', () {
+    final state = BunkerState.fromJson(<String, dynamic>{
+      'schemaVersion': BunkerState.supportedSchemaVersion,
+      'revision': 12,
+      'serverUpdatedAt': '2026-09-09T10:00:00Z',
+      'survivors': <dynamic>[
+        survivor(id: 's1', duplicateId: '01', energy: 50),
+      ],
+      'idleSurvivors': <String>['s1'],
+      'busySurvivors': <dynamic>[],
+      'activeBackgroundTasks': <dynamic>[
+        <String, dynamic>{
+          'executionId': 'crop-1',
+          'taskId': 'plant_potatoes',
+          'activity': 'plant_potatoes',
+          'location': 'garden',
+          'startedBySurvivorId': 's1',
+          'startedAt': '2026-09-09T10:00:00Z',
+          'endsAt': '2026-09-09T10:01:00Z',
+        },
+      ],
+      'completedTaskIds': <String>['prepare_garden'],
+      'inventory': <String, int>{},
+      'bunkerCoordinates': <String, int>{'x': 0, 'y': 0, 'z': 0},
+    });
+
+    expect(state.idleSurvivors, <String>['s1']);
+    expect(state.busySurvivors, isEmpty);
+    expect(state.activeBackgroundTasks.single.taskId, 'plant_potatoes');
+    expect(
+      state.activeBackgroundTasks.single.startedBySurvivorId,
+      's1',
+    );
   });
 
   test('parses schema v6 task execution and completed task registry', () {
