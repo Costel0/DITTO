@@ -459,6 +459,7 @@ module.exports = {
   actionIdsFromExpeditionTaskId,
   aggregateExpeditionInventoryDelta,
   applyExpeditionCompletion,
+  applyInventoryReward,
   availableActionsAtCoordinates,
   canonicalActionId,
   coordinatesFromExpeditionLocation,
