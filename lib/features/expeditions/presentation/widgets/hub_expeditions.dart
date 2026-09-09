@@ -227,96 +227,145 @@ class _ActiveExpeditionCard extends StatelessWidget {
   final BunkerState bunkerState;
   final Future<void> Function() onFinished;
 
-  List<String> get _actionIds {
+  String get _typeId {
     final taskId = entries.first.taskId;
     if (taskId == null || !taskId.startsWith('expedition:')) {
-      return const <String>[];
+      return 'unknown';
     }
-    return taskId
+    final firstId = taskId
         .substring('expedition:'.length)
         .split('+')
-        .where((id) => id.isNotEmpty)
-        .toList(growable: false);
+        .firstWhere((id) => id.isNotEmpty, orElse: () => 'unknown');
+    return firstId == 'scout_surroundings' ? 'scavenge' : firstId;
   }
 
-  String _actionLabel(BuildContext context, String actionId) {
-    switch (actionId) {
-      case 'scout_surroundings':
-        return context.l10n.expeditionScoutSurroundingsTitle;
+  @override
+  Widget build(BuildContext context) {
+    switch (_typeId) {
+      case 'scavenge':
+        return _ScavengeExpeditionCard(
+          entries: entries,
+          bunkerState: bunkerState,
+          onFinished: onFinished,
+        );
       default:
-        return actionId;
+        return _GenericExpeditionCard(
+          entries: entries,
+          bunkerState: bunkerState,
+          onFinished: onFinished,
+        );
     }
+  }
+}
+
+class _ScavengeExpeditionCard extends StatelessWidget {
+  const _ScavengeExpeditionCard({
+    required this.entries,
+    required this.bunkerState,
+    required this.onFinished,
+  });
+
+  final List<BusySurvivor> entries;
+  final BunkerState bunkerState;
+  final Future<void> Function() onFinished;
+
+  String _survivorNames(BuildContext context) => entries.map((entry) {
+        final survivor = bunkerState.survivorById(entry.survivorId);
+        return survivor == null
+            ? entry.survivorId
+            : duplicateDisplayName(context, survivor.duplicateId);
+      }).join(', ');
+
+  Widget _portraits() {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 120),
+      child: Wrap(
+        spacing: 4,
+        runSpacing: 4,
+        children: [
+          for (final entry in entries)
+            _ExpeditionPortrait(
+              survivor: bunkerState.survivorById(entry.survivorId),
+            ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final first = entries.first;
-    final names = entries.map((entry) {
-      final survivor = bunkerState.survivorById(entry.survivorId);
-      return survivor == null
-          ? entry.survivorId
-          : duplicateDisplayName(context, survivor.duplicateId);
-    }).join(', ');
-    final actions = _actionIds
-        .map((actionId) => _actionLabel(context, actionId))
-        .join(' · ');
+    final details = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+              decoration: BoxDecoration(
+                color: const Color(0xFF322A1D),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFF77643F)),
+              ),
+              child: Text(
+                'SCAVENGE',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: const Color(0xFFD3B878),
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.0,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 7),
+        Text(
+          context.l10n.expeditionScavengeInProgressTitle,
+          style: theme.textTheme.titleMedium?.copyWith(
+            color: const Color(0xFFE4D5B8),
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 5),
+        Text(
+          context.l10n.expeditionCoordinatesValue(first.location),
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: const Color(0xFFB0A38F),
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          _survivorNames(context),
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: const Color(0xFF8F8677),
+          ),
+        ),
+      ],
+    );
+
+    final countdown = _ExpeditionCountdown(
+      endsAt: first.endsAt,
+      onFinished: onFinished,
+    );
 
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF1B1A16),
-        borderRadius: BorderRadius.circular(7),
-        border: Border.all(color: const Color(0xFF4E4537)),
+        color: const Color(0xFF191914),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFF66583C)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x33000000),
+            blurRadius: 12,
+            offset: Offset(0, 6),
+          ),
+        ],
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final compact = constraints.maxWidth < 560;
-          final details = Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                actions.isEmpty
-                    ? context.l10n.expeditionActiveFallbackTitle
-                    : actions,
-                style: theme.textTheme.titleSmall?.copyWith(
-                  color: const Color(0xFFE4D5B8),
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                context.l10n.expeditionCoordinatesValue(first.location),
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: const Color(0xFF9F9687),
-                ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                names,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: const Color(0xFF8F8677),
-                ),
-              ),
-            ],
-          );
-          final portraits = ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 120),
-            child: Wrap(
-              spacing: 4,
-              runSpacing: 4,
-              children: [
-                for (final entry in entries)
-                  _ExpeditionPortrait(
-                    survivor: bunkerState.survivorById(entry.survivorId),
-                  ),
-              ],
-            ),
-          );
-          final countdown = _ExpeditionCountdown(
-            endsAt: first.endsAt,
-            onFinished: onFinished,
-          );
+          final compact = constraints.maxWidth < 620;
 
           if (compact) {
             return Column(
@@ -325,27 +374,207 @@ class _ActiveExpeditionCard extends StatelessWidget {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    portraits,
-                    const SizedBox(width: 10),
+                    const _ScavengeScanner(size: 78),
+                    const SizedBox(width: 12),
                     Expanded(child: details),
                   ],
                 ),
-                const SizedBox(height: 10),
-                Align(alignment: Alignment.centerRight, child: countdown),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(child: _portraits()),
+                    const SizedBox(width: 10),
+                    countdown,
+                  ],
+                ),
               ],
             );
           }
 
           return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              portraits,
-              const SizedBox(width: 12),
+              const _ScavengeScanner(size: 88),
+              const SizedBox(width: 14),
               Expanded(child: details),
+              const SizedBox(width: 12),
+              _portraits(),
               const SizedBox(width: 18),
               countdown,
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _ScavengeScanner extends StatefulWidget {
+  const _ScavengeScanner({required this.size});
+
+  final double size;
+
+  @override
+  State<_ScavengeScanner> createState() => _ScavengeScannerState();
+}
+
+class _ScavengeScannerState extends State<_ScavengeScanner>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1500),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.square(
+      dimension: widget.size,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: const Color(0xFF242219),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFF5C513D)),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(7),
+          child: AnimatedBuilder(
+            animation: _controller,
+            builder: (context, child) {
+              final sweepLeft =
+                  8 + (widget.size - 17) * _controller.value;
+              return Stack(
+                children: [
+                  const Positioned(
+                    left: 11,
+                    bottom: 10,
+                    child: Icon(
+                      Icons.construction_rounded,
+                      size: 24,
+                      color: Color(0xFF746A58),
+                    ),
+                  ),
+                  const Positioned(
+                    right: 10,
+                    top: 12,
+                    child: Icon(
+                      Icons.recycling_rounded,
+                      size: 25,
+                      color: Color(0xFF8B7957),
+                    ),
+                  ),
+                  Positioned(
+                    left: sweepLeft,
+                    top: 7,
+                    bottom: 7,
+                    child: Container(
+                      width: 2,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFD0B36F),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Color(0x88D0B36F),
+                            blurRadius: 7,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: 16 + 12 * _controller.value,
+                    top: 17 + 6 * _controller.value,
+                    child: const Icon(
+                      Icons.search_rounded,
+                      size: 30,
+                      color: Color(0xFFD8BE83),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GenericExpeditionCard extends StatelessWidget {
+  const _GenericExpeditionCard({
+    required this.entries,
+    required this.bunkerState,
+    required this.onFinished,
+  });
+
+  final List<BusySurvivor> entries;
+  final BunkerState bunkerState;
+  final Future<void> Function() onFinished;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final first = entries.first;
+    final portraits = ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 120),
+      child: Wrap(
+        spacing: 4,
+        runSpacing: 4,
+        children: [
+          for (final entry in entries)
+            _ExpeditionPortrait(
+              survivor: bunkerState.survivorById(entry.survivorId),
+            ),
+        ],
+      ),
+    );
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1B1A16),
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(color: const Color(0xFF4E4537)),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.explore_outlined,
+            color: Color(0xFFC0A46F),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  context.l10n.expeditionActiveFallbackTitle,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: const Color(0xFFE4D5B8),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  context.l10n.expeditionCoordinatesValue(first.location),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: const Color(0xFF9F9687),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          portraits,
+          const SizedBox(width: 18),
+          _ExpeditionCountdown(
+            endsAt: first.endsAt,
+            onFinished: onFinished,
+          ),
+        ],
       ),
     );
   }
