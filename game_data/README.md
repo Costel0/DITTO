@@ -4,6 +4,7 @@
 
 - [`README_ITEMS.md`](README_ITEMS.md): estructura y uso de `items.json`.
 - [`server/README_JOB_TASKS.md`](server/README_JOB_TASKS.md): estructura de `job_tasks.json`, Survivors, costes, resultados y outcomes.
+- [`server/README_EXPEDITIONS.md`](server/README_EXPEDITIONS.md): coordenadas, acciones, duración y energía de `expeditions.json`.
 - [`server/README_LOOT_TABLES.md`](server/README_LOOT_TABLES.md): estado y propósito de `loot_tables.json`.
 - [`server/README_SERVER_CONFIG.md`](server/README_SERVER_CONFIG.md): parámetros de `server_config.json`.
 - [`README_WORKFLOW.md`](README_WORKFLOW.md): comandos que hay que ejecutar después de modificar cualquier JSON de `game_data`.
@@ -53,6 +54,7 @@ Initial files:
 - `loot_tables.json` -> `/serverData/lootTables`
 - `server_config.json` -> `/serverData/serverConfig`
 - `job_tasks.json` -> `/serverData/jobTasks`
+- `expeditions.json` -> `/serverData/expeditions`
 
 Any additional `.json` file added to `game_data/server/` is picked up automatically. Snake-case filenames are converted to camelCase Firestore document IDs; for example `encounter_rules.json` becomes `/serverData/encounterRules`.
 
