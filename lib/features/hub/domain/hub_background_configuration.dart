@@ -81,9 +81,9 @@ class HubBackgroundState {
 
   /// Number of Survivors currently sleeping in the bunker.
   ///
-  /// Beds are the first data-driven tile. The current art set keeps the empty
-  /// room in background_beds_default.png and successive occupied variants in
-  /// background_beds_default_2.png, _3.png, etc.
+  /// Beds are the first data-driven tile. The empty room is
+  /// background_beds_default.png and occupied variants map directly to the
+  /// sleeper count: background_beds_default_1.png, _2.png, _3.png and _4.png.
   final int sleepingSurvivorCount;
 }
 
