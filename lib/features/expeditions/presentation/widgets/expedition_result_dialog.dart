@@ -152,7 +152,7 @@ class _ExpeditionResultDialogState extends State<ExpeditionResultDialog> {
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 620, maxHeight: 860),
+        constraints: const BoxConstraints(maxWidth: 620, maxHeight: 920),
         child: DecoratedBox(
           decoration: BoxDecoration(
             color: const Color(0xFF181713),
@@ -382,7 +382,7 @@ class _ResultImage extends StatelessWidget {
   Widget build(BuildContext context) {
     Widget fallbackIllustration() {
       return Container(
-        height: 230,
+        height: 280,
         width: double.infinity,
         decoration: const BoxDecoration(
           gradient: LinearGradient(
@@ -431,7 +431,7 @@ class _ResultImage extends StatelessWidget {
     Widget generalImage() {
       return Image.asset(
         generalAssetPath,
-        height: 230,
+        height: 280,
         width: double.infinity,
         fit: BoxFit.cover,
         filterQuality: FilterQuality.high,
@@ -444,7 +444,7 @@ class _ResultImage extends StatelessWidget {
 
     return Image.asset(
       special,
-      height: 230,
+      height: 280,
       width: double.infinity,
       fit: BoxFit.cover,
       filterQuality: FilterQuality.high,
