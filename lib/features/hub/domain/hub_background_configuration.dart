@@ -142,9 +142,12 @@ String _selectedPngForArea({
 }) {
   if (area == HubArea.beds && state.sleepingSurvivorCount > 0) {
     // The current art set keeps the empty room as "default" and the
-    // successive occupied variants as default_2, default_3, ...
-    // 1 sleeper -> default_2, 2 sleepers -> default_3, etc.
-    return 'background_beds_default_${state.sleepingSurvivorCount + 1}.png';
+    // successive occupied variants as default_2, default_3 and default_4.
+    // Clamp to the most populated artwork we currently have instead of
+    // falling back to an empty room when more Survivors are sleeping.
+    final variantNumber =
+        (state.sleepingSurvivorCount + 1).clamp(2, 4).toInt();
+    return 'background_beds_default_$variantNumber.png';
   }
 
   return stateMapping[state.areaStates[area]] ?? defaultPng;
