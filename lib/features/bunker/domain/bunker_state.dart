@@ -28,6 +28,62 @@ String? _optionalNonEmptyString(Object? raw) {
   return normalized.isEmpty ? null : normalized;
 }
 
+class BunkerCoordinates {
+  const BunkerCoordinates({
+    required this.x,
+    required this.y,
+    required this.z,
+  });
+
+  static const BunkerCoordinates temporaryDefault =
+      BunkerCoordinates(x: 0, y: 0, z: 0);
+
+  final int x;
+  final int y;
+  final int z;
+
+  factory BunkerCoordinates.fromJson(Object? raw) {
+    if (raw is! Map) {
+      throw const FormatException(
+        'bunkerCoordinates must be an object.',
+      );
+    }
+    final map = Map<String, dynamic>.from(raw);
+
+    int readAxis(String axis) {
+      final value = map[axis];
+      if (value is! num ||
+          !value.isFinite ||
+          value != value.toInt() ||
+          value < 0 ||
+          value > 999) {
+        throw FormatException(
+          'bunkerCoordinates.$axis must be an integer from 0 to 999.',
+        );
+      }
+      return value.toInt();
+    }
+
+    return BunkerCoordinates(
+      x: readAxis('x'),
+      y: readAxis('y'),
+      z: readAxis('z'),
+    );
+  }
+
+  String get displayValue => '$x, $y, $z';
+
+  @override
+  bool operator ==(Object other) =>
+      other is BunkerCoordinates &&
+      other.x == x &&
+      other.y == y &&
+      other.z == z;
+
+  @override
+  int get hashCode => Object.hash(x, y, z);
+}
+
 class BusySurvivor {
   const BusySurvivor({
     required this.survivorId,
@@ -134,13 +190,15 @@ class BunkerState {
     required List<BusySurvivor> busySurvivors,
     required List<String> completedTaskIds,
     required Map<String, int> inventory,
+    required this.bunkerCoordinates,
   })  : survivors = List<Survivor>.unmodifiable(survivors),
         idleSurvivors = List<String>.unmodifiable(idleSurvivors),
         busySurvivors = List<BusySurvivor>.unmodifiable(busySurvivors),
         completedTaskIds = List<String>.unmodifiable(completedTaskIds),
         inventory = Map<String, int>.unmodifiable(inventory);
 
-  static const int supportedSchemaVersion = 6;
+  static const int supportedSchemaVersion = 7;
+  static const int bunkerCoordinatesSchemaVersion = 7;
   static const int completedTasksSchemaVersion = 6;
   static const int locationSchemaVersion = 5;
   static const int timestampSchemaVersion = 4;
@@ -165,6 +223,12 @@ class BunkerState {
 
   /// Item ID -> quantity owned.
   final Map<String, int> inventory;
+
+  /// Server-authoritative position of this player's bunker.
+  ///
+  /// Until coordinate assignment exists, older states use the temporary
+  /// 0,0,0 fallback. Schema v7+ must explicitly carry this field.
+  final BunkerCoordinates bunkerCoordinates;
 
   Survivor? survivorById(String id) {
     for (final survivor in survivors) {
@@ -247,6 +311,10 @@ class BunkerState {
         ? _uniqueNonEmptyStringList(json, 'completedTaskIds')
         : const <String>[];
 
+    final bunkerCoordinates = schemaVersion >= bunkerCoordinatesSchemaVersion
+        ? BunkerCoordinates.fromJson(json['bunkerCoordinates'])
+        : BunkerCoordinates.temporaryDefault;
+
     final inventoryRaw = json['inventory'];
     if (inventoryRaw is! Map) {
       throw const FormatException('inventory must be an object.');
@@ -274,6 +342,7 @@ class BunkerState {
       busySurvivors: busySurvivors,
       completedTaskIds: completedTaskIds,
       inventory: inventory,
+      bunkerCoordinates: bunkerCoordinates,
     );
   }
 
