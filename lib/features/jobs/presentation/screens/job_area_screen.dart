@@ -924,30 +924,7 @@ class _SurvivorTaskDialogState extends State<_SurvivorTaskDialog> {
                         shrinkWrap: true,
                         padding: const EdgeInsets.all(14),
                         children: [
-                          if (energyCostPerSurvivor > 0) ...[
-                      const SizedBox(height: 9),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.bolt_rounded,
-                            size: 16,
-                            color: Color(0xFFC8A968),
-                          ),
-                          const SizedBox(width: 5),
-                          Text(
-                            '${context.l10n.jobEnergyCostLabel}: '
-                            '$energyCostPerSurvivor '
-                            '${context.l10n.jobPerSurvivorLabel}',
-                            style: theme.textTheme.labelMedium?.copyWith(
-                              color: const Color(0xFFBEB39E),
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                    if (requirements.isNotEmpty) ...[
+                          if (requirements.isNotEmpty) ...[
                             Text(
                               context.l10n.jobRequirementsLabel,
                               style: theme.textTheme.titleMedium?.copyWith(
@@ -1405,6 +1382,29 @@ class _TaskTile extends StatelessWidget {
                           color: const Color(0xFF9F9687),
                           height: 1.4,
                         ),
+                      ),
+                    ],
+                    if (energyCostPerSurvivor > 0) ...[
+                      const SizedBox(height: 9),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.bolt_rounded,
+                            size: 16,
+                            color: Color(0xFFC8A968),
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            '${context.l10n.jobEnergyCostLabel}: '
+                            '$energyCostPerSurvivor '
+                            '${context.l10n.jobPerSurvivorLabel}',
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              color: const Color(0xFFBEB39E),
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                     if (requirements.isNotEmpty) ...[
