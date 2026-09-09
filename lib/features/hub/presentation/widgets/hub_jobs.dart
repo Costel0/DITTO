@@ -267,8 +267,12 @@ class _ActiveJobInfo extends StatelessWidget {
     final active = bunker.busySurvivors
         .where((busy) => busy.location == area.id)
         .toList(growable: false);
+    final background = bunker.activeBackgroundTasks
+        .where((task) => task.location == area.id)
+        .toList(growable: false)
+      ..sort((a, b) => a.endsAt.compareTo(b.endsAt));
 
-    if (active.isEmpty) {
+    if (active.isEmpty && background.isEmpty) {
       return _JobInfoFrame(
         child: Row(
           children: [
@@ -298,18 +302,29 @@ class _ActiveJobInfo extends StatelessWidget {
     final executions = grouped.values.toList(growable: false)
       ..sort((a, b) => a.first.endsAt.compareTo(b.first.endsAt));
 
-    return _JobInfoFrame(
-      child: ListView.separated(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: executions.length,
-        separatorBuilder: (context, index) =>
-            const Divider(height: 14, color: Color(0xFF443D31)),
-        itemBuilder: (context, index) => _BusyExecutionRow(
-          busySurvivors: executions[index],
+    final rows = <Widget>[
+      for (final execution in executions)
+        _BusyExecutionRow(
+          busySurvivors: execution,
           bunkerState: bunker,
           onResolveCompletedOccupations: onResolveCompletedOccupations,
         ),
+      for (final task in background)
+        _BackgroundExecutionRow(
+          task: task,
+          onResolveCompletedOccupations: onResolveCompletedOccupations,
+        ),
+    ];
+
+    return _JobInfoFrame(
+      child: Column(
+        children: [
+          for (var index = 0; index < rows.length; index++) ...[
+            rows[index],
+            if (index + 1 < rows.length)
+              const Divider(height: 14, color: Color(0xFF443D31)),
+          ],
+        ],
       ),
     );
   }
@@ -430,6 +445,108 @@ class _BusyExecutionRow extends StatelessWidget {
           children: [
             portraits,
             const SizedBox(width: 10),
+            Expanded(child: details),
+            const SizedBox(width: 18),
+            countdown,
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _BackgroundExecutionRow extends StatelessWidget {
+  const _BackgroundExecutionRow({
+    required this.task,
+    required this.onResolveCompletedOccupations,
+  });
+
+  final ActiveBackgroundTask task;
+  final Future<void> Function() onResolveCompletedOccupations;
+
+  String _formatDateTime(BuildContext context, DateTime value) {
+    final local = value.toLocal();
+    final material = MaterialLocalizations.of(context);
+    final date = material.formatShortDate(local);
+    final time = material.formatTimeOfDay(
+      TimeOfDay.fromDateTime(local),
+      alwaysUse24HourFormat: true,
+    );
+    return '$date $time';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final details = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.spa_outlined,
+              size: 16,
+              color: Color(0xFFC7A970),
+            ),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                jobActivityLabel(context, task.activity),
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: const Color(0xFFBDB3A1),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 3),
+        Text(
+          context.l10n.jobBackgroundModeLabel,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: const Color(0xFFC7A970),
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          '${context.l10n.jobStartsLabel}: '
+          '${_formatDateTime(context, task.startedAt)}  ·  '
+          '${context.l10n.jobEndsLabel}: '
+          '${_formatDateTime(context, task.endsAt)}',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: const Color(0xFF8F8677),
+          ),
+        ),
+      ],
+    );
+
+    final countdown = _JobCountdown(
+      endsAt: task.endsAt,
+      onFinished: onResolveCompletedOccupations,
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 520;
+        if (compact) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              details,
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerRight,
+                child: countdown,
+              ),
+            ],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
             Expanded(child: details),
             const SizedBox(width: 18),
             countdown,
