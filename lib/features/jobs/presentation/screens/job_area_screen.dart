@@ -2,11 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../../core/firebase/firestore_item_catalog_service.dart';
 import '../../../../core/localization/l10n.dart';
 import '../../../../core/presentation/survival_background.dart';
 import '../../../bunker/application/bunker_state_controller.dart';
 import '../../../hub/domain/hub_scene_configuration.dart';
-import '../../../../core/firebase/firestore_item_catalog_service.dart';
 import '../../../items/domain/item.dart';
 import '../../../survivors/domain/survivor.dart';
 import '../../../survivors/presentation/widgets/survivor_profile_photo.dart';
@@ -606,7 +606,7 @@ class _SurvivorTaskDialogState extends State<_SurvivorTaskDialog> {
   ) {
     setState(() {
       final current = _selectedResourceQuantities[itemId] ?? 0;
-      final next = (current + delta).clamp(0, availableQuantity);
+      final next = (current + delta).clamp(0, availableQuantity).toInt();
       if (next == 0) {
         _selectedResourceQuantities.remove(itemId);
       } else {
@@ -812,7 +812,14 @@ class _SurvivorTaskDialogState extends State<_SurvivorTaskDialog> {
                               ),
                             ),
                             const SizedBox(height: 12),
-                            if (!snapshot.hasData)
+                            if (snapshot.hasError)
+                              Text(
+                                context.l10n.jobNoEligibleResources,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: const Color(0xFFB08C75),
+                                ),
+                              )
+                            else if (!snapshot.hasData)
                               const Center(
                                 child: Padding(
                                   padding: EdgeInsets.all(14),
