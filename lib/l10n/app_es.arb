@@ -136,5 +136,6 @@
   "jobResourceValueLabel": "Valor seleccionado",
   "jobResourcePerUnitLabel": "valor/u",
   "jobResourceAvailableLabel": "disponibles",
-  "jobNoEligibleResources": "No tienes recursos válidos disponibles."
+  "jobNoEligibleResources": "No tienes recursos válidos disponibles.",
+  "itemTypeMisc": "Otros"
 }
