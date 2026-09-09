@@ -79,13 +79,13 @@ class FirebaseFunctionsExpeditionService implements ExpeditionService {
   }
 
   @override
-  Future<ExpeditionReview> reviewExpeditionResult(String reviewId) async {
+  Future<ExpeditionReview> fetchExpeditionReview(String reviewId) async {
     final normalizedId = reviewId.trim();
     if (normalizedId.isEmpty) {
       throw const FormatException('Invalid expedition review ID.');
     }
 
-    final callable = _functions.httpsCallable('reviewExpeditionResult');
+    final callable = _functions.httpsCallable('getExpeditionReview');
     final result = await callable.call(<String, dynamic>{
       'reviewId': normalizedId,
     });
@@ -98,6 +98,31 @@ class FirebaseFunctionsExpeditionService implements ExpeditionService {
       _normalizeMap(
         Map<String, dynamic>.from(data['review'] as Map),
       ),
+    );
+  }
+
+  @override
+  Future<ExpeditionResolutionResult> resolveExpeditionReview({
+    required String reviewId,
+    required Map<String, String> choices,
+  }) async {
+    final normalizedId = reviewId.trim();
+    if (normalizedId.isEmpty || choices.isEmpty) {
+      throw const FormatException('Invalid expedition resolution request.');
+    }
+
+    final callable = _functions.httpsCallable('resolveExpeditionReview');
+    final result = await callable.call(<String, dynamic>{
+      'reviewId': normalizedId,
+      'choices': Map<String, String>.from(choices),
+    });
+    final data = result.data;
+    if (data is! Map) {
+      throw const FormatException('Invalid expedition resolution response.');
+    }
+
+    return ExpeditionResolutionResult.fromMap(
+      _normalizeMap(Map<String, dynamic>.from(data)),
     );
   }
 
