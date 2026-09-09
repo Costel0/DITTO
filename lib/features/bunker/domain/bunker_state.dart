@@ -198,6 +198,64 @@ class BusySurvivor {
   }
 }
 
+class ActiveBackgroundTask {
+  const ActiveBackgroundTask({
+    required this.executionId,
+    required this.taskId,
+    required this.activity,
+    required this.location,
+    required this.startedBySurvivorId,
+    required this.startedAt,
+    required this.endsAt,
+  });
+
+  final String executionId;
+  final String taskId;
+  final String activity;
+  final String location;
+  final String startedBySurvivorId;
+  final DateTime startedAt;
+  final DateTime endsAt;
+
+  factory ActiveBackgroundTask.fromJson(Map<String, dynamic> json) {
+    final executionId = _optionalNonEmptyString(json['executionId']);
+    final taskId = _optionalNonEmptyString(json['taskId']);
+    final activity = _optionalNonEmptyString(json['activity']);
+    final location = _optionalNonEmptyString(json['location']);
+    final startedBySurvivorId =
+        _optionalNonEmptyString(json['startedBySurvivorId']);
+    final startedAt = _dateAtSecondPrecision(json['startedAt']);
+    final endsAt = _dateAtSecondPrecision(json['endsAt']);
+
+    if (executionId == null ||
+        taskId == null ||
+        activity == null ||
+        location == null ||
+        startedBySurvivorId == null ||
+        startedAt == null ||
+        endsAt == null) {
+      throw const FormatException(
+        'Active background tasks must contain IDs, location and timestamps.',
+      );
+    }
+    if (endsAt.isBefore(startedAt)) {
+      throw const FormatException(
+        'Active background task endsAt cannot be before startedAt.',
+      );
+    }
+
+    return ActiveBackgroundTask(
+      executionId: executionId,
+      taskId: taskId,
+      activity: activity,
+      location: location,
+      startedBySurvivorId: startedBySurvivorId,
+      startedAt: startedAt,
+      endsAt: endsAt,
+    );
+  }
+}
+
 /// Immutable snapshot of the player's bunker state as provided by the server.
 ///
 /// The app intentionally exposes no mutation or serialization API for this
@@ -211,16 +269,19 @@ class BunkerState {
     required List<Survivor> survivors,
     required List<String> idleSurvivors,
     required List<BusySurvivor> busySurvivors,
+    required List<ActiveBackgroundTask> activeBackgroundTasks,
     required List<String> completedTaskIds,
     required Map<String, int> inventory,
     required this.bunkerCoordinates,
   })  : survivors = List<Survivor>.unmodifiable(survivors),
         idleSurvivors = List<String>.unmodifiable(idleSurvivors),
         busySurvivors = List<BusySurvivor>.unmodifiable(busySurvivors),
+        activeBackgroundTasks =
+            List<ActiveBackgroundTask>.unmodifiable(activeBackgroundTasks),
         completedTaskIds = List<String>.unmodifiable(completedTaskIds),
         inventory = Map<String, int>.unmodifiable(inventory);
 
-  static const int supportedSchemaVersion = 8;
+  static const int supportedSchemaVersion = 9;
   static const int bunkerCoordinatesSchemaVersion = 7;
   static const int completedTasksSchemaVersion = 6;
   static const int locationSchemaVersion = 5;
@@ -240,6 +301,10 @@ class BunkerState {
   /// Survivors currently occupied, what they are doing, where, and for which
   /// exact time window.
   final List<BusySurvivor> busySurvivors;
+
+  /// Time-based jobs that continue independently after an available Survivor
+  /// starts them. The starter remains idle and can do other work immediately.
+  final List<ActiveBackgroundTask> activeBackgroundTasks;
 
   /// IDs of storable tasks that have been completed at least once.
   final List<String> completedTaskIds;
@@ -330,6 +395,13 @@ class BunkerState {
       );
     }
 
+    final activeBackgroundTasks = schemaVersion >= 9
+        ? _parseActiveBackgroundTasks(
+            json['activeBackgroundTasks'],
+            knownSurvivorIds,
+          )
+        : const <ActiveBackgroundTask>[];
+
     final completedTaskIds = schemaVersion >= completedTasksSchemaVersion
         ? _uniqueNonEmptyStringList(json, 'completedTaskIds')
         : const <String>[];
@@ -363,10 +435,47 @@ class BunkerState {
       survivors: survivors,
       idleSurvivors: idleSurvivors,
       busySurvivors: busySurvivors,
+      activeBackgroundTasks: activeBackgroundTasks,
       completedTaskIds: completedTaskIds,
       inventory: inventory,
       bunkerCoordinates: bunkerCoordinates,
     );
+  }
+
+  static List<ActiveBackgroundTask> _parseActiveBackgroundTasks(
+    Object? raw,
+    Set<String> knownSurvivorIds,
+  ) {
+    if (raw is! List) {
+      throw const FormatException(
+        'activeBackgroundTasks must be a list.',
+      );
+    }
+
+    final result = <ActiveBackgroundTask>[];
+    final executionIds = <String>{};
+    for (final rawTask in raw) {
+      if (rawTask is! Map) {
+        throw const FormatException(
+          'Each activeBackgroundTasks entry must be an object.',
+        );
+      }
+      final task = ActiveBackgroundTask.fromJson(
+        Map<String, dynamic>.from(rawTask),
+      );
+      if (!knownSurvivorIds.contains(task.startedBySurvivorId)) {
+        throw const FormatException(
+          'activeBackgroundTasks references an unknown Survivor ID.',
+        );
+      }
+      if (!executionIds.add(task.executionId)) {
+        throw const FormatException(
+          'activeBackgroundTasks contains duplicate execution IDs.',
+        );
+      }
+      result.add(task);
+    }
+    return result;
   }
 
   static List<BusySurvivor> _parseBusySurvivors(
