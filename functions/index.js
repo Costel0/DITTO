@@ -15,6 +15,7 @@ const {
 const {
   applyTaskCompletionEffects,
   applyTaskStartCost,
+  hasActiveTaskExecution,
   missingRequiredTaskIds,
   normalizedResourceSelection,
   normalizedTaskExecutionCount,
@@ -725,18 +726,15 @@ exports.startJobTask = onCall(
       }
 
       const bunker = bunkerSnapshot.data() || {};
-      const activeBackgroundTasks = normalizedActiveBackgroundTasks(
-        bunker.activeBackgroundTasks,
-      );
-      if (
-        task.execution.type === "background" &&
-        activeBackgroundTasks.some((entry) => entry.taskId === task.id)
-      ) {
+      if (hasActiveTaskExecution(bunker, task.id)) {
         throw new HttpsError(
           "failed-precondition",
           `Task ${task.id} is already active.`,
         );
       }
+      const activeBackgroundTasks = normalizedActiveBackgroundTasks(
+        bunker.activeBackgroundTasks,
+      );
 
       const completedTaskIds = new Set(
         Array.isArray(bunker.completedTaskIds)
