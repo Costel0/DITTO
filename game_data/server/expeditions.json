@@ -1,8 +1,9 @@
 {
   "schemaVersion": 1,
-  "dataVersion": 2,
+  "dataVersion": 3,
   "actions": {
-    "scavenge": {
+    "scout_surroundings": {
+      "expeditionType": "scavenge",
       "availability": "bunker",
       "durationSeconds": 60,
       "energyDelta": -20
