@@ -5,6 +5,7 @@ const {onCall, HttpsError} = require("firebase-functions/v2/https");
 const {
   SLEEPING_ACTIVITY,
   fixStatus,
+  normalizedBunkerCoordinates,
   normalizedBusySurvivors,
   normalizedSurvivor,
   truncateToSecond,
@@ -24,6 +25,7 @@ const {
 } = require("./survivor_progression");
 const {
   EXPEDITION_ACTIVITY,
+  actionDefinitionsByIds,
   actionIdsFromExpeditionTaskId,
   applyExpeditionCompletion,
   availableActionsAtCoordinates,
@@ -210,11 +212,9 @@ async function resolveCompletedOccupationsForUser(db, uid) {
         const expeditionDefinition = expeditionDefinitionFromSnapshot(
           expeditionCatalogSnapshot,
         );
-        const coordinates = coordinatesFromExpeditionLocation(first.location);
         const actionIds = actionIdsFromExpeditionTaskId(first.taskId);
-        const actions = selectedActionDefinitions(
+        const actions = actionDefinitionsByIds(
           expeditionDefinition,
-          coordinates,
           actionIds,
         );
         workingBunker = applyExpeditionCompletion(
@@ -718,14 +718,27 @@ exports.getExpeditionLauncherInfo = onCall(
       );
     }
 
-    const snapshot = await getFirestore()
-      .collection("serverData")
-      .doc("expeditions")
-      .get();
+    const db = getFirestore();
+    const bunkerRef = db
+      .collection("users")
+      .doc(request.auth.uid)
+      .collection("state")
+      .doc("bunker");
+
+    const [bunkerSnapshot, expeditionSnapshot] = await Promise.all([
+      bunkerRef.get(),
+      db.collection("serverData").doc("expeditions").get(),
+    ]);
+    if (!bunkerSnapshot.exists) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Bunker is not initialized.",
+      );
+    }
 
     let definition;
     try {
-      definition = expeditionDefinitionFromSnapshot(snapshot);
+      definition = expeditionDefinitionFromSnapshot(expeditionSnapshot);
     } catch (error) {
       throw new HttpsError(
         "failed-precondition",
@@ -735,9 +748,16 @@ exports.getExpeditionLauncherInfo = onCall(
       );
     }
 
+    // Coordinates belong to the player bunker, never to the shared expedition
+    // catalog. Older bunkers currently migrate to 0,0,0 until coordinate
+    // assignment is implemented.
+    const bunkerCoordinates = normalizedBunkerCoordinates(
+      bunkerSnapshot.data()?.bunkerCoordinates,
+    );
     const actions = availableActionsAtCoordinates(
       definition,
-      definition.bunkerCoordinates,
+      bunkerCoordinates,
+      bunkerCoordinates,
     ).map((action) => ({
       id: action.id,
       durationSeconds: action.durationSeconds,
@@ -746,7 +766,7 @@ exports.getExpeditionLauncherInfo = onCall(
     }));
 
     return {
-      bunkerCoordinates: definition.bunkerCoordinates,
+      bunkerCoordinates,
       bunkerActions: actions,
     };
   },
@@ -797,15 +817,9 @@ exports.startExpedition = onCall(
       }
 
       let definition;
-      let actions;
       try {
         definition = expeditionDefinitionFromSnapshot(
           expeditionCatalogSnapshot,
-        );
-        actions = selectedActionDefinitions(
-          definition,
-          coordinates,
-          actionIds,
         );
       } catch (error) {
         throw new HttpsError(
@@ -817,6 +831,26 @@ exports.startExpedition = onCall(
       }
 
       const bunker = bunkerSnapshot.data() || {};
+      const bunkerCoordinates = normalizedBunkerCoordinates(
+        bunker.bunkerCoordinates,
+      );
+      let actions;
+      try {
+        actions = selectedActionDefinitions(
+          definition,
+          coordinates,
+          bunkerCoordinates,
+          actionIds,
+        );
+      } catch (error) {
+        throw new HttpsError(
+          "failed-precondition",
+          error instanceof Error
+            ? error.message
+            : "Expedition cannot be launched.",
+        );
+      }
+
       const survivors = Array.isArray(bunker.survivors)
         ? bunker.survivors
         : [];
