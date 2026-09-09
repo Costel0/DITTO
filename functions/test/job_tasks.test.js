@@ -4,9 +4,12 @@ const {
   applyTaskCompletionEffects,
   applyTaskStartCost,
   missingRequiredTaskIds,
+  normalizedTaskExecutionCount,
   selectTaskResult,
   taskDefinitionFromSnapshot,
+  taskDurationSecondsForExecution,
   taskEnergyCostPerSurvivor,
+  taskFixedOutputInventory,
 } = require("../job_tasks");
 
 function snapshotWithTasks(tasks) {
@@ -424,5 +427,114 @@ test("fixed task energy cost reflects its guaranteed energy delta", () => {
   assert.equal(
     taskEnergyCostPerSurvivor(task),
     Math.abs(task.results.done.guaranteedOutcomes.energyDelta),
+  );
+});
+
+
+function batchTask() {
+  return taskDefinitionFromSnapshot(
+    snapshotWithTasks({
+      batch_craft: {
+        location: "workshop",
+        durationSeconds: 30,
+        storable: false,
+        execution: {type: "batch", maxCount: 99},
+        survivorRequirements: {min: 1, max: 1},
+        requiredTaskIds: [],
+        cost: {inventory: {scrap_metal: 4}},
+        resultResolver: {type: "fixed", resultId: "success"},
+        results: {
+          success: {
+            guaranteedOutcomes: {
+              energyDelta: -5,
+              inventoryDelta: {electronics: 1},
+            },
+            randomOutcomes: {},
+          },
+        },
+      },
+    }),
+    "batch_craft",
+  );
+}
+
+test("normal tasks remain single-execution by default", () => {
+  const task = exampleTask();
+  assert.deepEqual(task.execution, {type: "single", maxCount: 1});
+  assert.equal(normalizedTaskExecutionCount(task, null), 1);
+  assert.throws(
+    () => normalizedTaskExecutionCount(task, 2),
+    /does not support batch execution/,
+  );
+});
+
+test("batch task count scales cost duration energy and fixed output", () => {
+  const task = batchTask();
+  const count = normalizedTaskExecutionCount(task, 3);
+
+  assert.equal(count, 3);
+  assert.deepEqual(task.execution, {type: "batch", maxCount: 99});
+  assert.equal(taskDurationSecondsForExecution(task, count, 1), 90);
+  assert.equal(taskEnergyCostPerSurvivor(task, count), 15);
+  assert.deepEqual(taskFixedOutputInventory(task), {electronics: 1});
+
+  const paid = applyTaskStartCost(
+    {inventory: {scrap_metal: 20}},
+    task,
+    {executionCount: count},
+  );
+  assert.deepEqual(paid.inventory, {scrap_metal: 8});
+
+  const completed = applyTaskCompletionEffects(
+    {
+      survivors: [{id: "s1", energy: 40}],
+      inventory: paid.inventory,
+    },
+    ["s1"],
+    task,
+    "success",
+    "execution-batch-1",
+    count,
+  );
+  assert.equal(completed.bunker.survivors[0].energy, 25);
+  assert.deepEqual(completed.bunker.inventory, {
+    scrap_metal: 8,
+    electronics: 3,
+  });
+});
+
+test("batch task count is bounded by its configured maximum", () => {
+  const task = batchTask();
+  assert.throws(
+    () => normalizedTaskExecutionCount(task, 0),
+    /positive integer/,
+  );
+  assert.throws(
+    () => normalizedTaskExecutionCount(task, 100),
+    /cannot exceed 99/,
+  );
+});
+
+test("batch task definitions reject storable or random variants", () => {
+  assert.throws(
+    () => taskDefinitionFromSnapshot(
+      snapshotWithTasks({
+        invalid_batch: {
+          location: "workshop",
+          durationSeconds: 10,
+          storable: true,
+          execution: {type: "batch", maxCount: 5},
+          resultResolver: {type: "fixed", resultId: "done"},
+          results: {
+            done: {
+              guaranteedOutcomes: {energyDelta: 0, inventoryDelta: {}},
+              randomOutcomes: {},
+            },
+          },
+        },
+      }),
+      "invalid_batch",
+    ),
+    /cannot be storable/,
   );
 });
