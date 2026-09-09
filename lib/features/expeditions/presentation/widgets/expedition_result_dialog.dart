@@ -137,8 +137,8 @@ class _ExpeditionResultDialogState extends State<ExpeditionResultDialog> {
       parts.add(
         _text(
           context,
-          'activa una posible continuación',
-          'may trigger a follow-up',
+          'evento común · sin efecto implementado todavía',
+          'common event · no effect implemented yet',
         ),
       );
     }
