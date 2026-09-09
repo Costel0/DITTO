@@ -6,6 +6,7 @@ class JobTaskStartInfo {
     required this.statRequirements,
     required this.costInventory,
     required this.resourceCraftingValueCost,
+    required this.energyCostPerSurvivor,
     required this.requiredTaskIds,
     required this.storable,
   });
@@ -24,6 +25,9 @@ class JobTaskStartInfo {
   /// inventory items whose type contains "resource".
   final int resourceCraftingValueCost;
 
+  /// Guaranteed fixed energy spent by each participating Survivor.
+  final int energyCostPerSurvivor;
+
   final List<String> requiredTaskIds;
   final bool storable;
 
@@ -35,6 +39,7 @@ class JobTaskStartInfo {
     final costRaw = map['costInventory'];
     final resourceCraftingValueCostRaw =
         map['resourceCraftingValueCost'] ?? 0;
+    final energyCostPerSurvivorRaw = map['energyCostPerSurvivor'] ?? 0;
     final requiredRaw = map['requiredTaskIds'];
     final storable = map['storable'];
 
@@ -60,6 +65,14 @@ class JobTaskStartInfo {
         resourceCraftingValueCostRaw < 0) {
       throw const FormatException(
         'Task resource crafting value cost must be a non-negative integer.',
+      );
+    }
+    if (energyCostPerSurvivorRaw is! num ||
+        !energyCostPerSurvivorRaw.isFinite ||
+        energyCostPerSurvivorRaw != energyCostPerSurvivorRaw.toInt() ||
+        energyCostPerSurvivorRaw < 0) {
+      throw const FormatException(
+        'Task energy cost must be a non-negative integer.',
       );
     }
     if (requiredRaw is! List || requiredRaw.any((value) => value is! String)) {
@@ -105,6 +118,7 @@ class JobTaskStartInfo {
       statRequirements: Map<String, int>.unmodifiable(statRequirements),
       costInventory: Map<String, int>.unmodifiable(costInventory),
       resourceCraftingValueCost: resourceCraftingValueCostRaw.toInt(),
+      energyCostPerSurvivor: energyCostPerSurvivorRaw.toInt(),
       requiredTaskIds: List<String>.unmodifiable(requiredRaw.cast<String>()),
       storable: storable,
     );
