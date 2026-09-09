@@ -1,13 +1,8 @@
 {
   "schemaVersion": 1,
-  "dataVersion": 1,
-  "bunkerCoordinates": {
-    "x": 0,
-    "y": 0,
-    "z": 0
-  },
+  "dataVersion": 2,
   "actions": {
-    "scout_surroundings": {
+    "scavenge": {
       "availability": "bunker",
       "durationSeconds": 60,
       "energyDelta": -20
