@@ -316,19 +316,6 @@ function validateExpeditions(data, filename, knownItemIds) {
         );
       }
 
-      validateInventoryMap(
-        outcome.inventoryDelta,
-        `${filename}.actions.${actionId}.outcomes.${outcomeId}.inventoryDelta`,
-        {positiveOnly: true},
-      );
-      for (const itemId of Object.keys(outcome.inventoryDelta)) {
-        if (!knownItemIds.has(itemId)) {
-          throw new Error(
-            `${filename}.actions.${actionId}.outcomes.${outcomeId}.inventoryDelta references unknown item ${itemId}.`,
-          );
-        }
-      }
-
       if (outcome.imageKey != null && (
         typeof outcome.imageKey !== "string" ||
         !EXPEDITION_ID_PATTERN.test(outcome.imageKey.trim())
@@ -338,15 +325,56 @@ function validateExpeditions(data, filename, knownItemIds) {
         );
       }
 
-      if (outcome.eventTrigger != null) {
+      if (
+        !isPlainObject(outcome.resolutionOptions) ||
+        Object.keys(outcome.resolutionOptions).length === 0
+      ) {
+        throw new Error(
+          `${filename}.actions.${actionId}.outcomes.${outcomeId}.resolutionOptions must be a non-empty object.`,
+        );
+      }
+
+      for (const [optionId, option] of Object.entries(
+        outcome.resolutionOptions
+      )) {
+        const optionLabel =
+          `${filename}.actions.${actionId}.outcomes.${outcomeId}.resolutionOptions.${optionId}`;
         if (
-          !isPlainObject(outcome.eventTrigger) ||
-          typeof outcome.eventTrigger.poolId !== "string" ||
-          !outcome.eventTrigger.poolId.trim()
+          !EXPEDITION_ID_PATTERN.test(optionId) ||
+          !isPlainObject(option)
         ) {
-          throw new Error(
-            `${filename}.actions.${actionId}.outcomes.${outcomeId}.eventTrigger.poolId must be a string.`,
-          );
+          throw new Error(`${optionLabel} is invalid.`);
+        }
+        if (
+          typeof option.labelId !== "string" ||
+          !EXPEDITION_ID_PATTERN.test(option.labelId.trim())
+        ) {
+          throw new Error(`${optionLabel}.labelId must be a safe slug.`);
+        }
+
+        validateInventoryMap(
+          option.inventoryDelta,
+          `${optionLabel}.inventoryDelta`,
+          {positiveOnly: true},
+        );
+        for (const itemId of Object.keys(option.inventoryDelta)) {
+          if (!knownItemIds.has(itemId)) {
+            throw new Error(
+              `${optionLabel}.inventoryDelta references unknown item ${itemId}.`,
+            );
+          }
+        }
+
+        if (option.eventTrigger != null) {
+          if (
+            !isPlainObject(option.eventTrigger) ||
+            typeof option.eventTrigger.poolId !== "string" ||
+            !option.eventTrigger.poolId.trim()
+          ) {
+            throw new Error(
+              `${optionLabel}.eventTrigger.poolId must be a string.`,
+            );
+          }
         }
       }
     }
