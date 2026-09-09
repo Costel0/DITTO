@@ -537,4 +537,91 @@ test("batch task definitions reject storable or random variants", () => {
     ),
     /cannot be storable/,
   );
+
+  assert.throws(
+    () => taskDefinitionFromSnapshot(
+      snapshotWithTasks({
+        invalid_random_batch: {
+          location: "workshop",
+          durationSeconds: 10,
+          storable: false,
+          execution: {type: "batch", maxCount: 5},
+          resultResolver: {type: "fixed", resultId: "done"},
+          results: {
+            done: {
+              guaranteedOutcomes: {energyDelta: 0, inventoryDelta: {}},
+              randomOutcomes: {
+                surprise: {
+                  probability: 0.5,
+                  effects: {energyDelta: 0, inventoryDelta: {}},
+                },
+              },
+            },
+          },
+        },
+      }),
+      "invalid_random_batch",
+    ),
+    /cannot use random outcomes yet/,
+  );
+});
+
+test("batch generic resource requirements scale with execution count", () => {
+  const task = taskDefinitionFromSnapshot(
+    snapshotWithTasks({
+      batch_resources: {
+        location: "workshop",
+        durationSeconds: 10,
+        storable: false,
+        execution: {type: "batch", maxCount: 10},
+        cost: {
+          inventory: {},
+          resources: {craftingValue: 2},
+        },
+        resultResolver: {type: "fixed", resultId: "done"},
+        results: {
+          done: {
+            guaranteedOutcomes: {energyDelta: 0, inventoryDelta: {}},
+            randomOutcomes: {},
+          },
+        },
+      },
+    }),
+    "batch_resources",
+  );
+
+  assert.throws(
+    () => applyTaskStartCost(
+      {inventory: {resource_a: 2}},
+      task,
+      {
+        executionCount: 3,
+        resourceSelection: {resource_a: 2},
+        itemDefinitions: {
+          resource_a: {
+            type: ["resource"],
+            stats: {craftingValue: 2},
+          },
+        },
+      },
+    ),
+    /requires 6/,
+  );
+
+  const paid = applyTaskStartCost(
+    {inventory: {resource_a: 3}},
+    task,
+    {
+      executionCount: 3,
+      resourceSelection: {resource_a: 3},
+      itemDefinitions: {
+        resource_a: {
+          type: ["resource"],
+          stats: {craftingValue: 2},
+        },
+      },
+    },
+  );
+
+  assert.deepEqual(paid.inventory, {});
 });
