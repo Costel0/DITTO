@@ -183,7 +183,8 @@ function expeditionEnergyDelta(actions) {
 }
 
 function expeditionTaskId(actionIds) {
-  return `expedition:${normalizedActionIds(actionIds).join("+")}`;
+  const canonicalIds = normalizedActionIds(actionIds).map(canonicalActionId);
+  return `expedition:${canonicalIds.join("+")}`;
 }
 
 function actionIdsFromExpeditionTaskId(taskId) {
