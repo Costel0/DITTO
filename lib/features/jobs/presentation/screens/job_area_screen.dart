@@ -6,6 +6,8 @@ import '../../../../core/localization/l10n.dart';
 import '../../../../core/presentation/survival_background.dart';
 import '../../../bunker/application/bunker_state_controller.dart';
 import '../../../hub/domain/hub_scene_configuration.dart';
+import '../../../../core/firebase/firestore_item_catalog_service.dart';
+import '../../../items/domain/item.dart';
 import '../../../survivors/domain/survivor.dart';
 import '../../../survivors/presentation/widgets/survivor_profile_photo.dart';
 import '../../domain/job_area.dart';
@@ -192,7 +194,7 @@ class _JobAreaScreenState extends State<JobAreaScreen> {
       return;
     }
 
-    final selected = await showDialog<List<Survivor>>(
+    final selected = await showDialog<_TaskAssignmentSelection>(
       context: context,
       barrierColor: const Color(0xB8000000),
       builder: (dialogContext) => _SurvivorTaskDialog(
@@ -200,19 +202,25 @@ class _JobAreaScreenState extends State<JobAreaScreen> {
         minSurvivors: startInfo.minSurvivors,
         maxSurvivors: startInfo.maxSurvivors,
         statRequirements: startInfo.statRequirements,
+        inventory: current.inventory,
+        fixedInventoryCost: startInfo.costInventory,
+        resourceCraftingValueRequired:
+            startInfo.resourceCraftingValueCost,
       ),
     );
-    if (selected == null || selected.isEmpty || !mounted) return;
+    if (selected == null || selected.survivors.isEmpty || !mounted) return;
 
     setState(() => _startingTaskId = task.id);
     try {
       await widget.taskService.startTask(
         taskId: task.id,
-        survivorIds: selected.map((survivor) => survivor.id).toList(),
+        survivorIds:
+            selected.survivors.map((survivor) => survivor.id).toList(),
+        resourceItems: selected.resourceItems,
       );
       await widget.bunkerStateController.refreshAfterMutation();
       if (!mounted) return;
-      final names = selected
+      final names = selected.survivors
           .map((survivor) => survivorDisplayName(context, survivor))
           .join(', ');
       ScaffoldMessenger.of(context).showSnackBar(
