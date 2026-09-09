@@ -214,7 +214,6 @@ class _JobAreaScreenState extends State<JobAreaScreen> {
         outputInventoryPerExecution: startInfo.outputInventoryPerExecution,
         executionMode: startInfo.executionMode,
         maxExecutionCount: startInfo.maxExecutionCount,
-        isBackground: startInfo.isBackground,
       ),
     );
     if (selected == null || selected.survivors.isEmpty || !mounted) return;
@@ -635,8 +634,8 @@ class _JobAreaContent extends StatelessWidget {
                           requirements: requirements,
                           energyCostPerSurvivor:
                               startInfo?.energyCostPerSurvivor ?? 0,
-                          isBatch: startInfo?.isBatch ?? false,
-                          isBackground: startInfo?.isBackground ?? false,
+                          executionMode: startInfo?.executionMode ??
+                              JobTaskExecutionMode.single,
                           activeExecutionCount:
                               activeExecutionCountByTaskId[task.id] ?? 1,
                           activeEndsAt:
@@ -700,7 +699,6 @@ class _SurvivorTaskDialog extends StatefulWidget {
     required this.outputInventoryPerExecution,
     required this.executionMode,
     required this.maxExecutionCount,
-    required this.isBackground,
   });
 
   final List<Survivor> survivors;
@@ -715,7 +713,6 @@ class _SurvivorTaskDialog extends StatefulWidget {
   final Map<String, int> outputInventoryPerExecution;
   final JobTaskExecutionMode executionMode;
   final int maxExecutionCount;
-  final bool isBackground;
 
   @override
   State<_SurvivorTaskDialog> createState() => _SurvivorTaskDialogState();
@@ -745,6 +742,8 @@ class _SurvivorTaskDialogState extends State<_SurvivorTaskDialog> {
       _selectedIds.length <= widget.maxSurvivors;
 
   bool get _isBatch => widget.executionMode == JobTaskExecutionMode.batch;
+  bool get _isBackground =>
+      widget.executionMode == JobTaskExecutionMode.background;
 
   int? get _executionCount {
     final parsed = int.tryParse(_executionCountController.text.trim());
@@ -1119,7 +1118,7 @@ class _SurvivorTaskDialogState extends State<_SurvivorTaskDialog> {
                         shrinkWrap: true,
                         padding: const EdgeInsets.all(14),
                         children: [
-                          if (widget.isBackground) ...[
+                          if (_isBackground) ...[
                             Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
@@ -1687,8 +1686,7 @@ class _TaskTile extends StatelessWidget {
     required this.description,
     required this.requirements,
     required this.energyCostPerSurvivor,
-    required this.isBatch,
-    required this.isBackground,
+    required this.executionMode,
     required this.activeExecutionCount,
     required this.activeEndsAt,
     required this.onResolveCompletedOccupations,
@@ -1701,8 +1699,7 @@ class _TaskTile extends StatelessWidget {
   final String description;
   final List<_TaskRequirementStatus> requirements;
   final int energyCostPerSurvivor;
-  final bool isBatch;
-  final bool isBackground;
+  final JobTaskExecutionMode executionMode;
   final int activeExecutionCount;
   final DateTime? activeEndsAt;
   final Future<void> Function() onResolveCompletedOccupations;
@@ -1713,6 +1710,8 @@ class _TaskTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isBatch = executionMode == JobTaskExecutionMode.batch;
+    final isBackground = executionMode == JobTaskExecutionMode.background;
     return Material(
       color: isActive ? const Color(0xFF25221B) : const Color(0xFF1B1A16),
       borderRadius: BorderRadius.circular(7),
