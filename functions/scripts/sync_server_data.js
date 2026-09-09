@@ -72,6 +72,21 @@ function validateInventoryMap(value, label, {positiveOnly = false} = {}) {
   }
 }
 
+function validateResourceCost(value, label) {
+  if (value == null) return;
+  if (!isPlainObject(value)) {
+    throw new Error(`${label} must be an object.`);
+  }
+  if (
+    !Number.isInteger(value.craftingValue) ||
+    value.craftingValue <= 0
+  ) {
+    throw new Error(
+      `${label}.craftingValue must be a positive integer.`,
+    );
+  }
+}
+
 function validateStatRequirements(value, label) {
   if (value == null) return;
   if (!isPlainObject(value)) {
@@ -301,6 +316,10 @@ function validateJobTasks(data, filename) {
       task.cost.inventory,
       `${filename}.${taskId}.cost.inventory`,
       {positiveOnly: true},
+    );
+    validateResourceCost(
+      task.cost.resources,
+      `${filename}.${taskId}.cost.resources`,
     );
 
     validateTaskResults(task, filename, taskId);
