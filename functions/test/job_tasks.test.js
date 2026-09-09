@@ -6,6 +6,7 @@ const {
   missingRequiredTaskIds,
   selectTaskResult,
   taskDefinitionFromSnapshot,
+  taskEnergyCostPerSurvivor,
 } = require("../job_tasks");
 
 function snapshotWithTasks(tasks) {
@@ -396,5 +397,32 @@ test("missingRequiredTaskIds checks stored task history", () => {
       task,
     ),
     [],
+  );
+});
+
+test("fixed task energy cost reflects its guaranteed energy delta", () => {
+  const task = taskDefinitionFromSnapshot(
+    snapshotWithTasks({
+      energy_test: {
+        location: "test",
+        durationSeconds: 10,
+        resultResolver: {type: "fixed", resultId: "done"},
+        results: {
+          done: {
+            guaranteedOutcomes: {
+              energyDelta: -13,
+              inventoryDelta: {},
+            },
+            randomOutcomes: {},
+          },
+        },
+      },
+    }),
+    "energy_test",
+  );
+
+  assert.equal(
+    taskEnergyCostPerSurvivor(task),
+    Math.abs(task.results.done.guaranteedOutcomes.energyDelta),
   );
 });
