@@ -631,8 +631,6 @@ class _HubSectionView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = context.l10n;
-
     switch (section) {
       case _HubSection.character:
         return AnimatedSwitcher(
@@ -670,77 +668,5 @@ class _HubSectionView extends StatelessWidget {
           onResolveCompletedOccupations: onResolveCompletedOccupations,
         );
     }
-  }
-}
-
-class _HubSectionContent extends StatelessWidget {
-  const _HubSectionContent({
-    super.key,
-    required this.icon,
-    required this.title,
-    required this.description,
-  });
-
-  final IconData icon;
-  final String title;
-  final String description;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Container(
-      width: double.infinity,
-      color: const Color(0xE611110E),
-      padding: const EdgeInsets.fromLTRB(24, 22, 24, 36),
-      child: SingleChildScrollView(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 920),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF262219),
-                    borderRadius: BorderRadius.circular(5),
-                    border: Border.all(color: const Color(0xFF554936)),
-                  ),
-                  child: Icon(
-                    icon,
-                    color: const Color(0xFFC6AA74),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          color: const Color(0xFFE6D8BD),
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        description,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: const Color(0xFFA49B8B),
-                          height: 1.5,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }
