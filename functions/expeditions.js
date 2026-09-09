@@ -1,5 +1,6 @@
 const {createHash} = require("node:crypto");
 const EXPEDITION_ACTIVITY = "expedition";
+const EXPEDITION_ID_PATTERN = /^[a-z0-9_]+$/;
 
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -98,6 +99,11 @@ function normalizedOutcomeDefinition(rawOutcome, actionId, outcomeId) {
     rawOutcome.imageKey.trim().length > 0
     ? rawOutcome.imageKey.trim()
     : null;
+  if (imageKey && !EXPEDITION_ID_PATTERN.test(imageKey)) {
+    throw new Error(
+      `Expedition outcome ${actionId}.${outcomeId} imageKey must be a safe slug.`,
+    );
+  }
 
   return {
     id: outcomeId,
@@ -157,9 +163,9 @@ function normalizedActionDefinition(rawAction, actionId) {
   const expeditionType = typeof rawAction.expeditionType === "string"
     ? rawAction.expeditionType.trim()
     : "";
-  if (!expeditionType) {
+  if (!expeditionType || !EXPEDITION_ID_PATTERN.test(expeditionType)) {
     throw new Error(
-      `Expedition action ${actionId} must define expeditionType.`,
+      `Expedition action ${actionId} must define a safe expeditionType slug.`,
     );
   }
 
