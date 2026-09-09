@@ -34,6 +34,7 @@ const {
   expeditionEnergyDelta,
   expeditionLocation,
   expeditionTaskId,
+  expeditionTypeForActions,
   normalizedActionIds,
   normalizedCoordinates,
   selectedActionDefinitions,
@@ -763,6 +764,7 @@ exports.getExpeditionLauncherInfo = onCall(
       bunkerCoordinates,
     ).map((action) => ({
       id: action.id,
+      expeditionType: action.expeditionType,
       durationSeconds: action.durationSeconds,
       energyCostPerSurvivor:
         action.energyDelta < 0 ? Math.abs(action.energyDelta) : 0,
@@ -889,6 +891,7 @@ exports.startExpedition = onCall(
         }
       }
 
+      const expeditionType = expeditionTypeForActions(actions);
       const now = truncateToSecond(new Date()) || new Date();
       const durationSeconds = expeditionDurationSeconds(actions);
       const endsAt = new Date(now.getTime() + durationSeconds * 1000);
@@ -905,6 +908,7 @@ exports.startExpedition = onCall(
           executionId,
           taskId,
           activity: EXPEDITION_ACTIVITY,
+          expeditionType,
           location,
           startedAt: now,
           endsAt,
@@ -931,6 +935,7 @@ exports.startExpedition = onCall(
         executionId,
         survivorIds,
         actionIds,
+        expeditionType,
         coordinates,
         durationSeconds,
         energyCostPerSurvivor: Math.max(
