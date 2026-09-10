@@ -190,9 +190,24 @@ Deploy current callables and rules with:
 firebase deploy --only "functions:initializeBunker,functions:addSurvivorForTesting,functions:addItemForTesting,functions:resetUserForTesting,firestore:rules"
 ```
 
-Cloud Functions has `enforceAppCheck: true`, so calls without a valid App Check token are rejected before game logic executes.
+Cloud Functions currently have `enforceAppCheck: true`, so calls without a valid App Check token are rejected before game logic executes.
 
 For Cloud Firestore, App Check enforcement is enabled separately from Firebase Console. Enable it only after the debug tokens for every development platform you still use are registered and verified, otherwise those local requests will be rejected.
+
+### Temporary development policy for deployed Web builds
+
+During the current development phase, deployed Flutter Web release builds do **not** initialize a production App Check provider. We intentionally postpone configuring Web reCAPTCHA until the definitive production Hosting/domain URL is known, to avoid maintaining a temporary reCAPTCHA configuration that will be replaced later.
+
+Therefore, while testing deployed Web builds from phones, tablets or other computers:
+
+1. Keep **Cloud Firestore App Check enforcement disabled** in Firebase Console.
+2. Keep **Cloud Functions App Check enforcement disabled in code** (`enforceAppCheck: false`) for callable Functions that the deployed Web build needs.
+3. Authentication and Firestore security rules remain active; disabling App Check does not make Firestore public.
+4. Local debug builds may continue using the registered App Check debug providers/tokens.
+
+If a deployed Web build logs in successfully but screens fail with messages such as *"No se ha podido cargar el estado..."*, check App Check enforcement first. Authentication can succeed while Firestore/Functions requests are rejected by App Check.
+
+**Mandatory before production:** re-enable App Check enforcement and configure real attestation providers. For Web, configure reCAPTCHA Enterprise (or the selected supported Web provider) for the final production domain/Hosting URL. For Android, use Play Integrity. Remove development debug tokens/providers and verify the production build before enabling enforcement for all protected Firebase services.
 
 Before production, replace the debug providers with real attestation providers, primarily Play Integrity on Android and reCAPTCHA Enterprise for Web. Never ship a debug provider/token in a production build.
 
