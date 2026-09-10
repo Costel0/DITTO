@@ -60,7 +60,7 @@ const CALLABLE_OPTIONS = {
   minInstances: 0,
   maxInstances: 1,
   timeoutSeconds: 15,
-  enforceAppCheck: true,
+  enforceAppCheck: false,
 };
 
 function requiredTaskDefinition(snapshot, taskId) {

@@ -26,7 +26,7 @@ const DEVELOPMENT_CALLABLE_OPTIONS = {
   minInstances: 0,
   maxInstances: 1,
   timeoutSeconds: 15,
-  enforceAppCheck: true,
+  enforceAppCheck: false,
 };
 const RESET_CALLABLE_OPTIONS = {
   ...DEVELOPMENT_CALLABLE_OPTIONS,
