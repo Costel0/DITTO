@@ -1,10 +1,12 @@
 # DITTO — Sistema de mapa, coordenadas y expansión
 
-> Documento de diseño inicial del mundo persistente de DITTO. Define coordenadas, sectores y zonas, generación bajo demanda, conocimiento del jugador, distancias, asignación de bunkers y crecimiento progresivo del mapa.
+> Documento principal de diseño del mundo persistente de DITTO. Define coordenadas, sectores y zonas, generación bajo demanda, conocimiento del jugador, distancias, asignación de bunkers y crecimiento progresivo del mapa.
 >
 > Estado: **propuesta base / pendiente de implementación**.
 >
-> Última actualización: 2026-09-10.
+> Última actualización: 2026-09-11.
+
+La especificación detallada del algoritmo de colocación de nuevos jugadores está en [`SPAWN_PLACEMENT.md`](./SPAWN_PLACEMENT.md).
 
 ---
 
@@ -12,9 +14,9 @@
 
 El mundo de DITTO se organiza como una cuadrícula 2D de **sectores**. Cada sector contiene varias **zonas** internas.
 
-La geometría del mundo existe de forma lógica aunque el backend no haya poblado todavía todos sus sectores. El mundo real es único y compartido por todos los jugadores, pero su contenido se resuelve progresivamente cuando una acción del juego obliga al servidor a hacerlo.
+La geometría del mundo existe lógicamente aunque el backend no haya poblado todavía todos sus sectores. El mundo real es único y compartido por todos los jugadores, pero su contenido se resuelve progresivamente cuando una acción obliga al servidor a hacerlo.
 
-La idea central es:
+La arquitectura base es:
 
 **mapa global persistente + sectores generados bajo demanda + conocimiento parcial por jugador + expansión progresiva del eje numérico**.
 
@@ -22,7 +24,7 @@ La idea central es:
 
 ## 2. Coordenadas
 
-Una localización completa utiliza tres componentes conceptuales:
+Una localización completa usa tres componentes:
 
 1. letra del sector;
 2. número del sector;
@@ -53,7 +55,7 @@ El número de zonas por sector será configurable.
 
 ## 3. Forma global del mapa
 
-### 3.1 Eje alfabético: limitado
+### 3.1 Eje alfabético
 
 El eje de letras está limitado al alfabeto inglés:
 
@@ -61,73 +63,57 @@ El eje de letras está limitado al alfabeto inglés:
 A ... Z
 ```
 
-No existen filas posteriores a `Z` ni anteriores a `A`.
+No existen filas anteriores a `A` ni posteriores a `Z`.
 
-Por tanto, el mundo tiene una anchura fija de **26 sectores** en este eje.
+La anchura física del mundo es por tanto de **26 sectores**.
 
-### 3.2 Eje numérico: ampliable indefinidamente
+### 3.2 Eje numérico
 
-El eje numérico comienza en valores positivos y puede crecer indefinidamente:
+El eje numérico comienza en `1` y no tiene límite superior conceptual:
 
 ```text
 1, 2, 3, ... 50, 51, 52, ...
 ```
 
-No existen sectores con números negativos ni se puede atravesar el límite inferior del mapa.
+No existen coordenadas numéricas negativas ni `0` como sector jugable si se mantiene esta convención.
 
-El mapa puede comenzar materializado, por ejemplo, como:
+El servidor puede comenzar con una plantilla materializada de:
 
 ```text
 [A-Z] × [1-50]
 ```
 
-pero `50` **no es el límite real del mundo**. Es únicamente el límite materializado inicialmente.
+pero `50` no es el límite real del mundo.
 
-Si el juego necesita acceder a una coordenada superior, el backend amplía la plantilla creando las nuevas celdas necesarias como sectores vacíos/no generados.
+Si una acción necesita una coordenada superior, el backend amplía la plantilla con nuevos sectores vacíos/no generados.
 
 Ejemplo:
 
 ```text
-Mapa actual: [A-Z] × [1-50]
-Un jugador intenta explorar M51
-→ el servidor amplía el mapa
-→ M51 pasa a ser una coordenada válida
-→ los nuevos sectores nacen sin poblar salvo que una acción obligue a generarlos
+máximo materializado = 50
+un jugador intenta explorar H53
+→ ampliar mapa hasta cubrir 53
+→ H53 existe como UNGENERATED
+→ el reconocimiento puede resolverlo después
 ```
 
-La expansión debe poder realizarse por bloques y no necesariamente una única columna cada vez.
+La expansión puede realizarse por bloques para evitar ampliaciones de una única columna cada vez.
 
 ---
 
 ## 4. Sector y zona
 
-### Sector
+Un **sector** es una posición de la cuadrícula, por ejemplo `B12`.
 
-Es la unidad geográfica principal del mapa.
-
-Ejemplo:
-
-```text
-B12
-```
+Una **zona** es una localización interna concreta, por ejemplo `B12-3`.
 
 Un sector:
 
-- tiene una posición única en la cuadrícula;
+- tiene una posición única;
 - contiene varias zonas;
-- tiene un tipo o carácter principal;
-- puede estar sin generar o ya poblado;
-- condiciona las reglas de generación de sus zonas internas.
-
-### Zona
-
-Es una localización concreta dentro del sector.
-
-Ejemplo:
-
-```text
-B12-3
-```
+- tiene un tipo principal;
+- puede estar sin generar o poblado;
+- condiciona qué zonas internas puede contener.
 
 Una zona puede representar, por ejemplo:
 
@@ -137,15 +123,15 @@ Una zona puede representar, por ejemplo:
 - lago;
 - ruinas;
 - edificio abandonado;
-- otras localizaciones futuras.
+- futuras localizaciones.
 
-El jugador interactúa con zonas, mientras que el sector sirve como unidad geográfica, unidad de distancia y contexto de generación.
+El jugador interactúa con zonas; el sector actúa como unidad geográfica, unidad externa de distancia y contexto de generación.
 
 ---
 
-## 5. Tipo principal del sector
+## 5. Tipo principal de sector
 
-Cada sector está caracterizado por una función o zona principal que define su **tipo de sector**.
+Cada sector tiene un **tipo principal** que condiciona su composición.
 
 Ejemplo:
 
@@ -153,15 +139,7 @@ Ejemplo:
 B12 -> PLAYER_BUNKER
 ```
 
-Si el bunker del jugador está en:
-
-```text
-B12-3
-```
-
-`B12` es un sector de jugador aunque sus otras cuatro zonas puedan ser de tipos distintos.
-
-El tipo de sector determina restricciones, compatibilidades y, cuando corresponda, probabilidades de generación.
+Si el bunker está en `B12-3`, `B12` es un sector de jugador aunque las otras zonas sean de tipos distintos.
 
 Ejemplos conceptuales:
 
@@ -175,16 +153,16 @@ PLAYER_BUNKER
 HUNTING
 - puede contener varias zonas de caza
 - puede coexistir con otros tipos compatibles
-- puede utilizar probabilidades propias de generación
+- puede utilizar probabilidades propias
 ```
+
+El tipo principal no obliga a que todas las zonas del sector sean iguales.
 
 ---
 
-## 6. Generación lazy del mundo
+## 6. Generación lazy
 
-El backend conoce las reglas y la geometría, pero no necesita decidir el contenido de todos los sectores al crear el servidor.
-
-Un sector puede encontrarse conceptualmente en:
+Un sector puede estar conceptualmente en:
 
 ```text
 UNGENERATED
@@ -193,229 +171,216 @@ POPULATED
 
 ### `UNGENERATED`
 
-La coordenada existe, pero el servidor todavía no ha decidido qué zonas contiene.
+La coordenada existe, pero el backend todavía no ha decidido su contenido.
 
 ### `POPULATED`
 
-El servidor ya ha resuelto todas sus zonas y la composición ha quedado persistida como parte del mundo real.
+El backend ha resuelto todas sus zonas y ha persistido la composición como parte del mundo real.
 
-Una vez poblado, un sector **no vuelve a sortearse** por explorarlo de nuevo.
+Una vez poblado, un sector no se vuelve a sortear por explorarlo otra vez.
 
 ---
 
 ## 7. Sectores de jugador
 
-Cuando se crea una cuenta, el backend selecciona un sector válido dentro de la zona actual permitida para nuevos jugadores.
+Cuando se crea una cuenta, el backend busca un sector válido dentro de la ventana activa de spawn.
 
-Flujo conceptual:
+El flujo es:
 
 ```text
-Nueva cuenta
-   ↓
-Buscar sector válido para spawn
-   ↓
-Comprobar separación mínima respecto a otros jugadores
-   ↓
-Reservar el sector de forma atómica
-   ↓
-Convertirlo en PLAYER_BUNKER
-   ↓
-Asignar una zona al bunker
-   ↓
-Resolver TODAS las zonas del sector
-   ↓
-Persistir el sector completo
-   ↓
-Revelar al jugador únicamente su conocimiento inicial
+buscar candidato
+→ comprobar separación
+→ reservar atómicamente
+→ convertir en PLAYER_BUNKER
+→ asignar zona del bunker
+→ resolver TODAS las zonas del sector
+→ persistir
+→ revelar únicamente el conocimiento inicial permitido
 ```
 
 ### 7.1 Resolución inmediata
 
-Cuando un sector se asigna a un jugador, **todo el sector se resuelve inmediatamente**.
+Al asignar un sector a un jugador se resuelve **todo el sector inmediatamente**.
 
-No quedan zonas internas pendientes de generación posterior.
-
-El backend puede saber:
+Por ejemplo, el servidor puede saber:
 
 ```text
-B12-1 = RUINS
-B12-2 = HUNTING
-B12-3 = PLAYER_BUNKER(player_123)
-B12-4 = EMPTY
-B12-5 = ABANDONED_BUILDING
+M25-1 = RUINS
+M25-2 = EMPTY
+M25-3 = PLAYER_BUNKER(player_123)
+M25-4 = HUNTING
+M25-5 = ABANDONED_BUILDING
 ```
 
-mientras el jugador conoce inicialmente solo:
+mientras el jugador conoce inicialmente únicamente:
 
 ```text
-B12-3 = MY_BUNKER
+M25-3 = MY_BUNKER
 ```
 
 ### 7.2 Equidad inicial
 
-Los sectores `PLAYER_BUNKER` no deben utilizar una tirada aleatoria de calidad que pueda dar a un jugador varias zonas extraordinarias y a otro un sector claramente peor desde el inicio.
+Los sectores `PLAYER_BUNKER` no deben tener una tirada aleatoria de calidad capaz de dar una ventaja material a unos jugadores respecto a otros desde la creación de la cuenta.
 
-La composición exacta se definirá más adelante, pero debe mantener un valor inicial equivalente entre jugadores.
-
-La aleatoriedad puede aportar variedad siempre que no produzca diferencias materiales de ventaja inicial.
+Su composición puede variar, pero el valor inicial debe ser equivalente.
 
 ---
 
-## 8. Zona permitida para aparición de jugadores
+## 8. Banda y ventana de spawn
 
-El hecho de que una coordenada exista en el mundo **no significa que pueda recibir un nuevo jugador**.
+La zona en la que pueden aparecer jugadores es independiente de la parte del mapa que exista o haya sido explorada.
 
-El servidor mantiene una **zona de spawn o zona poblable activa** destinada exclusivamente a controlar dónde pueden aparecer nuevas cuentas.
-
-Conceptualmente puede definirse mediante:
+La banda alfabética inicial queda fijada en:
 
 ```text
-spawnLetters = [LETTER_MIN, LETTER_MAX]
-spawnNumbers = [NUMBER_MIN, NUMBER_MAX]
+[D-W]
 ```
 
-Ejemplo de ventana numérica inicial:
+Esto deja margen respecto a los límites físicos `A` y `Z`.
+
+La primera ventana numérica propuesta es:
 
 ```text
-[10, 40]
+[10-40]
 ```
 
-La intención es impedir que un jugador nuevo aparezca demasiado cerca de un borde físico del mapa y tenga menos posibilidades de expansión o exploración que otros jugadores.
-
-### 8.1 Banda de letras
-
-La banda de letras permitida será un subconjunto interior de `[A-Z]`, dejando margen respecto a `A` y `Z`.
-
-El diseño propone que la población comience alrededor de la fila central:
+Por tanto, la primera región de spawn es:
 
 ```text
-M
+[D-W] × [10-40]
 ```
 
-Por tanto, la configuración definitiva de la banda de letras debe **contener M**.
-
-> Nota de diseño: el ejemplo `[D,J]` no contiene `M`, por lo que no puede utilizarse literalmente al mismo tiempo que `M` sea la fila inicial. Se mantiene como ejemplo del concepto de limitar la banda, pero la configuración concreta deberá corregirse o aclararse antes de implementarla.
-
-### 8.2 Motivo del margen
-
-Un bunker colocado inicialmente muy cerca de `A`, `Z` o del límite numérico inferior tendría una dirección con mucha menos profundidad explorable.
-
-Por ello el spawn se restringe a una zona interior aunque el jugador pueda posteriormente explorar fuera de ella.
-
-La **zona poblable limita el spawn, no el movimiento ni la exploración**.
-
----
-
-## 9. Crecimiento compacto de la población
-
-Los jugadores no se distribuirán uniformemente por toda la ventana de spawn.
-
-La intención es que la población nazca en una zona central y vaya creciendo de forma compacta hacia fuera.
-
-Por ejemplo, con una ventana numérica inicial `[10,40]`, el centro aproximado es:
-
-```text
-25
-```
-
-junto con la fila central:
-
-```text
-M
-```
-
-por lo que el origen conceptual del crecimiento sería aproximadamente:
+El origen inicial del crecimiento es:
 
 ```text
 M25
 ```
 
-Los primeros jugadores se colocarán alrededor de ese núcleo y los siguientes irán ocupando posiciones cada vez más externas conforme se llene el espacio cercano.
+La ventana de spawn **solo limita dónde aparecen nuevas cuentas**. No limita exploración, viajes ni contenido del mundo.
 
-### 9.1 Separación mínima entre jugadores
-
-Dos bunkers de jugadores distintos deben estar separados por una distancia estrictamente mayor que:
-
-```text
-2.0
-```
-
-Por tanto, una posición candidata `C` solo puede utilizarse si para todos los bunkers existentes `P` se cumple:
-
-```text
-distance(C, P) > 2.0
-```
-
-La comprobación utiliza la misma distancia euclídea de sectores definida en este documento.
-
-### 9.2 Algoritmo conceptual de colocación
-
-El algoritmo exacto queda pendiente, pero debe respetar estas prioridades:
-
-1. utilizar únicamente sectores dentro de la ventana de spawn activa;
-2. excluir sectores ya reservados, incompatibles o no válidos;
-3. exigir distancia `> 2.0` respecto a todos los bunkers existentes relevantes;
-4. favorecer posiciones cercanas al núcleo ya poblado;
-5. expandir progresivamente la población desde el centro hacia los extremos de la ventana;
-6. introducir aleatoriedad entre candidatos equivalentes para evitar patrones completamente artificiales.
-
-Una estrategia sencilla sería puntuar los candidatos por cercanía al centro de crecimiento y/o a la frontera de la población existente, manteniendo siempre la separación mínima.
-
-El objetivo no es maximizar la distancia entre jugadores, sino conseguir una población **compacta pero no amontonada**.
+Los márgenes existen para evitar que un jugador aparezca inicialmente demasiado cerca de un borde físico y tenga menos espacio disponible en una dirección.
 
 ---
 
-## 10. Saturación y desplazamiento de la ventana de spawn
+## 9. Separación mínima de jugadores
 
-Una ventana de spawn se considera saturada cuando ya no existe ningún sector válido en ella que permita colocar un nuevo jugador cumpliendo las restricciones, especialmente la separación mínima `> 2.0`.
-
-Cuando esto ocurra, la zona numérica permitida para nuevos jugadores se desplaza hacia adelante.
-
-Ejemplo conceptual:
+Dos bunkers distintos deben cumplir siempre:
 
 ```text
-Ventana inicial:   [10, 40]
-Siguiente ventana: [41, 80]
-Siguiente ventana: [81, 120]
+distance(playerA, playerB) > 2.0
+```
+
+La desigualdad es estricta.
+
+Por ejemplo:
+
+```text
+M25 -> M27 = 2.0        NO permitido
+M25 -> N26 = sqrt(2)    NO permitido
+M25 -> N27 = sqrt(5)    SÍ permitido
+M25 -> O26 = sqrt(5)    SÍ permitido
+M25 -> P25 = 3.0        SÍ permitido
+```
+
+Como las coordenadas de sector son enteras, validar `d > 2` puede hacerse comprobando únicamente el pequeño vecindario del candidato cuya distancia sea `<= 2`, sin recorrer todos los jugadores del servidor.
+
+---
+
+## 10. Algoritmo de colocación propuesto
+
+La estrategia elegida para la primera implementación es un **crecimiento radial con frontera preferente y jitter determinista**.
+
+### 10.1 Primer jugador
+
+Se intenta colocar en:
+
+```text
+M25
+```
+
+Si no está disponible se utiliza el candidato válido de mayor prioridad alrededor de ese origen.
+
+### 10.2 Candidatos válidos
+
+Un sector solo puede recibir un jugador si:
+
+- está en `D-W`;
+- está en la ventana numérica activa;
+- no está reservado;
+- no está ya `POPULATED`;
+- puede convertirse legalmente en `PLAYER_BUNKER`;
+- mantiene `d > 2` respecto a todos los bunkers existentes.
+
+Un sector que ya fue resuelto por reconocimiento no se sobrescribe para acomodar un jugador nuevo.
+
+### 10.3 Frontera preferente
+
+Entre los candidatos válidos se prefieren aquellos que tengan algún jugador existente a:
+
+```text
+2.0 < d <= 4.0
+```
+
+El `4.0` es una preferencia, no una regla dura.
+
+Esto hace que la población vaya creciendo desde los jugadores ya existentes en vez de saltar a posiciones aisladas.
+
+Si no hay candidatos en esa frontera pero siguen existiendo posiciones legales en la ventana, se usa el mejor candidato global. De esta forma obstáculos o sectores ya explorados no bloquean artificialmente el sistema.
+
+### 10.4 Prioridad radial
+
+Los candidatos preferentes se ordenan principalmente por distancia al origen global:
+
+```text
+M25
+```
+
+Cuanto más cerca de `M25`, mayor prioridad.
+
+El origen no cambia cuando se avanza a ventanas posteriores. Esto es importante para que `[41-80]` empiece a poblarse cerca de `41` y continúe físicamente el crecimiento anterior, en vez de iniciar otra colonia aislada cerca de `60`.
+
+### 10.5 Jitter determinista
+
+Para evitar un patrón geométrico demasiado perfecto se añade una pequeña perturbación estable:
+
+```text
+jitter(C) = hash01(worldSeed, coordinate) * 0.75
+priority(C) = distance(C, M25) + jitter(C)
+```
+
+Se elige la prioridad más baja.
+
+El jitter es pequeño: altera el orden entre sectores parecidos, pero no permite que sectores mucho más lejanos adelanten al frente de crecimiento.
+
+Al derivarse de `worldSeed + coordinate`, el resultado es reproducible y seguro frente a reintentos de transacciones.
+
+La especificación completa, pseudocódigo, concurrencia y optimizaciones se encuentra en [`SPAWN_PLACEMENT.md`](./SPAWN_PLACEMENT.md).
+
+---
+
+## 11. Saturación y siguientes ventanas
+
+Una ventana solo está saturada cuando **no queda ningún sector legal** para un nuevo jugador.
+
+La ausencia de candidatos cercanos a la frontera `<= 4` no significa saturación: primero se comprueba si existen otros candidatos válidos.
+
+Cuando `[10-40]` se satura, se avanza conceptualmente a:
+
+```text
+[41-80]
+```
+
+Después:
+
+```text
+[81-120]
+[121-160]
 ...
 ```
 
-Los intervalos exactos y su posible solapamiento serán configurables; lo importante es que el sistema pueda avanzar indefinidamente por el eje numérico.
+El tamaño de las ventanas posteriores debe ser configurable.
 
-### 10.1 Expansión del mapa por saturación
-
-Si la nueva ventana requiere números que todavía no forman parte del mapa materializado, el backend amplía previamente la plantilla con sectores vacíos.
-
-Ejemplo:
-
-```text
-Mapa materializado: [1, 50]
-Nueva zona de spawn: [41, 80]
-→ crear estructura vacía hasta 80
-→ los sectores nuevos siguen UNGENERATED
-```
-
-No es necesario poblar esas nuevas celdas al ampliarlas.
-
----
-
-## 11. Expansión del mapa por exploración
-
-La saturación de la zona de spawn no es la única causa de expansión.
-
-Si un jugador intenta explorar una coordenada cuyo número supera el máximo materializado actual, el mapa también se amplía.
-
-Ejemplo:
-
-```text
-Máximo actual: 50
-Exploración solicitada: H53
-→ ampliar plantilla hasta cubrir H53
-→ H53 existe como UNGENERATED
-→ al resolverse el reconocimiento, poblar H53 si sigue sin generar
-```
-
-Así, **la exploración de jugadores y el crecimiento de población pueden ampliar el mundo de forma independiente**.
+Si una nueva ventana supera el máximo actualmente materializado, el backend amplía el mapa con sectores `UNGENERATED` antes de utilizarlos.
 
 ---
 
@@ -423,9 +388,9 @@ Así, **la exploración de jugadores y el crecimiento de población pueden ampli
 
 Las distancias se expresan en unidades decimales.
 
-### 12.1 Entre sectores distintos
+### 12.1 Sectores distintos
 
-La distancia depende exclusivamente de las dos coordenadas del sector:
+Se usa distancia euclídea:
 
 ```text
 d = sqrt((Δx)^2 + (Δy)^2)
@@ -436,7 +401,6 @@ Las letras se convierten a posiciones consecutivas:
 ```text
 A -> 0
 B -> 1
-C -> 2
 ...
 Z -> 25
 ```
@@ -449,11 +413,9 @@ B11 -> B12 = 1.0
 B11 -> C12 = sqrt(2) ≈ 1.4142
 ```
 
-### 12.2 El índice de zona no afecta a sectores distintos
+### 12.2 Zonas de sectores distintos
 
-Todas las zonas de un mismo sector comparten la misma posición externa.
-
-Por tanto:
+El índice de zona no afecta a la distancia externa:
 
 ```text
 B11-1 -> C12-1 = sqrt(2)
@@ -461,27 +423,19 @@ B11-1 -> C12-5 = sqrt(2)
 B11-4 -> C12-2 = sqrt(2)
 ```
 
-Y todas las zonas de `H27` están exactamente a la misma distancia de todas las zonas de `J3`.
+Todas las zonas de `H27` están a la misma distancia de todas las zonas de `J3`.
 
-### 12.3 Dentro de un mismo sector
+### 12.3 Zonas del mismo sector
 
-Dos zonas distintas del mismo sector tienen siempre:
+Dos zonas diferentes del mismo sector están siempre a:
 
 ```text
 0.1
 ```
 
-Ejemplos:
+La misma localización respecto a sí misma está a `0`.
 
-```text
-B12-1 -> B12-2 = 0.1
-B12-1 -> B12-3 = 0.1
-B12-1 -> B12-5 = 0.1
-```
-
-Una localización respecto a sí misma tiene distancia `0`.
-
-### 12.4 Regla completa
+Regla completa:
 
 ```text
 si origen == destino:
@@ -494,152 +448,133 @@ si sector(origen) != sector(destino):
     distancia = sqrt((x2-x1)^2 + (y2-y1)^2)
 ```
 
-Debe existir una única implementación autoritativa de esta función para viajes, exploración, consumo, tiempos, rango y cualquier otra mecánica espacial.
+Debe existir una única implementación autoritativa de esta función.
 
 ---
 
-## 13. Reconocimiento y población de sectores
+## 13. Reconocimiento
 
-Cuando termina un reconocimiento:
+Cuando termina un reconocimiento sobre un sector `UNGENERATED`:
 
 ```text
-Reconocimiento de C12
-   ↓
-¿C12 está POPULATED?
-   ↓ no
-Resolver TODAS las zonas de C12
-   ↓
-Persistir la composición completa
-   ↓
-Revelar SOLO una zona permitida al jugador
+resolver TODAS sus zonas
+→ persistir la composición completa
+→ revelar SOLO una zona permitida al jugador
 ```
 
-Si `C12` ya estaba poblado:
+Si el sector ya estaba `POPULATED`:
 
 ```text
-Reconocimiento de C12
-   ↓
-Leer el layout persistido
-   ↓
-No regenerar nada
-   ↓
-Revelar una zona todavía desconocida para ese jugador
+leer layout persistido
+→ no regenerar nada
+→ revelar una zona todavía desconocida para ese jugador
 ```
 
 Todos los jugadores comparten el mismo mundo real.
 
 ---
 
-## 14. Estado real vs. conocimiento del jugador
+## 14. Estado real vs. conocimiento
 
-El backend mantiene la verdad autoritativa del mundo:
+El backend mantiene la verdad completa:
 
 ```text
 WORLD / SECTORS
 SECTOR / ZONES
 ```
 
-Mientras que cada jugador mantiene su propio conocimiento:
+Cada jugador mantiene únicamente su conocimiento:
 
 ```text
 PLAYER MAP KNOWLEDGE
 ```
 
-El servidor puede conocer cinco zonas de un sector mientras un jugador conoce solo una.
+Que el backend conozca cinco zonas de un sector no implica que el cliente tenga derecho a recibirlas.
 
-La aplicación cliente nunca debe recibir automáticamente el layout oculto completo por el simple hecho de que el sector ya exista en Firestore.
-
-La revelación debe ser controlada por backend.
+La revelación debe controlarse desde backend.
 
 ---
 
 ## 15. Persistencia y concurrencia
 
-Una vez generado un sector, su composición permanece fija salvo que una futura mecánica modifique explícitamente una zona.
+Un sector ya resuelto no se vuelve a generar salvo que una futura mecánica modifique explícitamente su estado.
 
-La generación inicial debe ser segura frente a concurrencia.
-
-Especialmente en el alta de una cuenta, deben tratarse como una única operación lógica:
+El alta de una cuenta debe tratar como una única operación lógica:
 
 ```text
-validar candidato
-→ comprobar distancia mínima
-→ reservar sector
-→ asignar bunker
+leer estado de spawn
+→ elegir candidato
+→ revalidar separación
+→ reservar
+→ asignar jugador
 → generar sector completo
 → persistir
 ```
 
-Dos altas simultáneas no pueden recibir el mismo sector ni sectores que incumplan la separación mínima por una condición de carrera.
+Dos altas simultáneas no pueden obtener el mismo sector ni dos sectores que incumplan `d > 2`.
+
+La especificación de spawn propone un estado autoritativo con revisión/transacción para serializar de forma segura esta operación, que tiene una frecuencia muy baja comparada con las acciones normales de juego.
 
 ---
 
-## 16. Invariantes principales
+## 16. Configuración conceptual
 
-1. Una coordenada `sector-zona` identifica una única localización.
-2. El eje alfabético está limitado a `A-Z`.
-3. El eje numérico no tiene límite superior conceptual.
-4. No existen coordenadas numéricas negativas.
-5. El límite materializado actual puede ampliarse sin poblar los nuevos sectores.
-6. Un sector poblado no se vuelve a sortear.
-7. Todos los jugadores comparten el mismo mundo real.
-8. El conocimiento del mapa es individual por jugador.
-9. Un sector `PLAYER_BUNKER` se resuelve completamente al asignarse.
-10. Dos jugadores nunca comparten un mismo sector de bunker.
-11. Los sectores iniciales no deben introducir grandes diferencias de calidad por azar.
-12. La zona de spawn limita únicamente dónde aparecen nuevos jugadores.
-13. Los jugadores pueden explorar fuera de la zona de spawn.
-14. Los bunkers nuevos deben mantener distancia estrictamente mayor que `2.0` respecto a los demás bunkers afectados por la regla.
-15. La población debe crecer de forma compacta desde una región central hacia los extremos de la ventana activa.
-16. Al saturarse una ventana de spawn, el sistema desplaza la ventana hacia números superiores.
-17. La exploración también puede provocar expansión del mapa.
-18. Entre sectores distintos, la distancia ignora la zona interna.
-19. Entre dos zonas distintas del mismo sector, la distancia es siempre `0.1`.
-
----
-
-## 17. Modelo conceptual de configuración
-
-Sin fijar todavía el JSON definitivo, la configuración global podría contener conceptos como:
+Como mínimo, el sistema debería permitir configurar:
 
 ```text
 MAP
-- letters: A-Z
-- initialNumberMin: 1
-- initialNumberMax: 50
-- zonesPerSector: configurable
+- letters = A-Z
+- initialNumberMin = 1
+- initialNumberMax = 50
+- zonesPerSector
 
 PLAYER_SPAWN
-- letterMin
-- letterMax
-- initialNumberMin
-- initialNumberMax
-- centerLetter: M
-- minimumPlayerDistance: > 2.0
-- expansionWindowSize
-- placementStrategy
+- letterMin = D
+- letterMax = W
+- originLetter = M
+- originNumber = 25
+- initialNumberMin = 10
+- initialNumberMax = 40
+- minimumPlayerDistance = 2.0
+- preferredLinkDistance = 4.0
+- jitterMax = 0.75
+- subsequentWindowSize = 40
+- worldSeed
 ```
 
-El límite materializado del mapa y la ventana activa de spawn deben almacenarse como conceptos distintos.
+El máximo materializado del mapa y la ventana activa de spawn son conceptos distintos y deben almacenarse por separado.
 
 ---
 
-## 18. Decisiones todavía abiertas
+## 17. Invariantes principales
 
-Queda por concretar al implementar:
+1. Una coordenada `sector-zona` identifica una única localización.
+2. El eje alfabético está limitado a `A-Z`.
+3. El eje numérico empieza en `1` y no tiene límite superior conceptual.
+4. Ampliar el mapa no implica poblar los nuevos sectores.
+5. Un sector `POPULATED` no se vuelve a sortear.
+6. Todos los jugadores comparten el mismo mundo real.
+7. El conocimiento del mapa es individual por jugador.
+8. Un sector `PLAYER_BUNKER` se resuelve completamente al asignarse.
+9. Dos jugadores nunca comparten sector de bunker.
+10. Los sectores iniciales no introducen grandes diferencias de calidad por azar.
+11. Los nuevos jugadores aparecen únicamente en la banda `D-W` y en la ventana numérica activa.
+12. La zona de spawn no limita movimiento ni exploración.
+13. Dos bunkers distintos mantienen siempre `d > 2.0`.
+14. Se prefiere crecimiento próximo a jugadores existentes, sin convertirlo en una restricción que pueda bloquear altas.
+15. La población crece desde `M25` hacia fuera.
+16. El jitter solo rompe simetrías; nunca invalida las reglas duras.
+17. Una ventana solo se declara saturada cuando no queda ningún candidato legal.
+18. Las siguientes ventanas avanzan hacia números superiores.
+19. La exploración también puede ampliar el mapa independientemente del spawn.
+20. Entre sectores distintos, la distancia ignora el índice de zona.
+21. Dos zonas distintas del mismo sector están siempre a `0.1`.
+22. La asignación final de un sector de jugador debe ser atómica.
 
-- número definitivo de zonas por sector;
-- banda exacta de letras permitida para spawn;
-- corrección del ejemplo `[D,J]` si `M` debe seguir siendo el origen central;
-- ventana numérica inicial exacta;
-- tamaño y posible solapamiento de las siguientes ventanas (`41-80`, etc.);
-- algoritmo y función de puntuación exactos para elegir el siguiente sector de jugador;
-- si la distancia mínima se comprueba contra todos los jugadores o puede optimizarse mediante índices espaciales/locales;
-- composición exacta que garantiza equidad en `PLAYER_BUNKER`;
-- tipos iniciales de sector y zona;
-- reglas de generación de sectores no iniciales;
-- qué ocurre cuando un jugador ha descubierto todas las zonas de un sector;
-- cómo pueden cambiar o agotarse zonas en el futuro;
-- precisión mostrada al jugador para distancias.
+---
 
-La arquitectura base queda definida como: **anchura fija A-Z, longitud numérica ampliable, spawn controlado en ventanas interiores, crecimiento compacto de población, sectores generados bajo demanda y mundo persistente compartido**.
+## 18. Documentos relacionados
+
+- [`SPAWN_PLACEMENT.md`](./SPAWN_PLACEMENT.md): algoritmo detallado de colocación de jugadores, frontera de crecimiento, jitter, pseudocódigo, concurrencia y optimización.
+
+La arquitectura resultante es: **mundo persistente de anchura fija `A-Z`, longitud numérica ampliable, jugadores restringidos inicialmente a `D-W`, crecimiento compacto desde `M25`, separación estricta `> 2`, sectores resueltos bajo demanda y conocimiento parcial por jugador**.
