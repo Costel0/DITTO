@@ -257,9 +257,15 @@ function candidateDocument(letter, number, config) {
 async function createMapRange(db, fromNumber, toNumber, config) {
   if (toNumber < fromNumber) return {sectorsCreated: 0, candidatesCreated: 0};
 
-  const writers = [];
+  let writers = [];
   let sectorsCreated = 0;
   let candidatesCreated = 0;
+
+  const flush = async () => {
+    if (writers.length === 0) return;
+    await commitWriters(db, writers);
+    writers = [];
+  };
 
   for (let number = fromNumber; number <= toNumber; number += 1) {
     for (
@@ -284,10 +290,14 @@ async function createMapRange(db, fromNumber, toNumber, config) {
         });
         candidatesCreated += 1;
       }
+
+      if (writers.length >= BATCH_SIZE) {
+        await flush();
+      }
     }
   }
 
-  await commitWriters(db, writers);
+  await flush();
   return {sectorsCreated, candidatesCreated};
 }
 
@@ -413,11 +423,42 @@ async function expandMap(db, newMaximum) {
   };
 }
 
-async function candidateSnapshotForActiveWindow(db, meta) {
-  return db.collection(CANDIDATES_COLLECTION)
+function activeWindowKey(meta) {
+  return `${Number(meta.activeSpawnNumberMin)}:${Number(meta.activeSpawnNumberMax)}`;
+}
+
+function clearCandidateCache(cache) {
+  if (!cache || typeof cache !== "object") return;
+  cache.windowKey = null;
+  cache.docs = null;
+}
+
+function removeCandidateIdsFromCache(cache, ids) {
+  if (!cache || !Array.isArray(cache.docs) || !ids || ids.size === 0) return;
+  cache.docs = cache.docs.filter((doc) => !ids.has(doc.id));
+}
+
+async function candidateDocsForActiveWindow(db, meta, cache = null) {
+  const windowKey = activeWindowKey(meta);
+  if (
+    cache &&
+    cache.windowKey === windowKey &&
+    Array.isArray(cache.docs)
+  ) {
+    return cache.docs;
+  }
+
+  const snapshot = await db.collection(CANDIDATES_COLLECTION)
     .where("number", ">=", Number(meta.activeSpawnNumberMin))
     .where("number", "<=", Number(meta.activeSpawnNumberMax))
+    .select("letter", "number", "priority")
     .get();
+
+  if (cache) {
+    cache.windowKey = windowKey;
+    cache.docs = snapshot.docs;
+  }
+  return snapshot.docs;
 }
 
 function randomUnit() {
@@ -475,47 +516,65 @@ async function allocatePlayerSector(db, options = {}) {
     ? options.playerId.trim()
     : null;
   const maxAttempts = options.maxAttempts || 100;
+  const candidateCache = options.candidateCache &&
+    typeof options.candidateCache === "object"
+    ? options.candidateCache
+    : null;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const {data: meta} = await requiredMeta(db);
     const config = configFromMeta(meta);
-    const candidateSnapshot = await candidateSnapshotForActiveWindow(db, meta);
+    const candidateDocs = await candidateDocsForActiveWindow(
+      db,
+      meta,
+      candidateCache,
+    );
 
-    if (candidateSnapshot.empty) {
+    if (candidateDocs.length === 0) {
       await advanceSpawnWindow(db, meta);
+      clearCandidateCache(candidateCache);
       continue;
     }
 
-    const selectedDoc = chooseWeightedCandidate(candidateSnapshot.docs);
+    const selectedDoc = chooseWeightedCandidate(candidateDocs);
     if (!selectedDoc) {
       throw new Error("Spawn candidate pool contains no positive priorities.");
     }
 
     const selected = selectedDoc.data();
     const selectedCoordinate = {letter: selected.letter, number: selected.number};
-    const neighbours = neighbourCoordinates(selectedCoordinate, config);
-    const selectedSectorRef = sectorRef(db, selectedDoc.id);
-    const neighbourSectorRefs = neighbours.map((coordinate) =>
+    const allForbiddenCoordinates = neighbourCoordinates(selectedCoordinate, config);
+    const selectedId = selectedDoc.id;
+    const nearbyCoordinates = allForbiddenCoordinates.filter((coordinate) =>
+      sectorId(coordinate.letter, coordinate.number) !== selectedId,
+    );
+    const nearbySectorRefs = nearbyCoordinates.map((coordinate) =>
       sectorRef(db, sectorId(coordinate.letter, coordinate.number)),
     );
-    const neighbourCandidateRefs = neighbours.map((coordinate) =>
+    const candidateRefsToDelete = allForbiddenCoordinates.map((coordinate) =>
       candidateRef(db, sectorId(coordinate.letter, coordinate.number)),
     );
+    const invalidatedCandidateIds = new Set(
+      allForbiddenCoordinates.map((coordinate) =>
+        sectorId(coordinate.letter, coordinate.number),
+      ),
+    );
+    const selectedSectorRef = sectorRef(db, selectedId);
 
     const result = await db.runTransaction(async (transaction) => {
-      const transactionMeta = await transaction.get(metaRef(db));
+      const snapshots = await transaction.getAll(
+        metaRef(db),
+        selectedDoc.ref,
+        selectedSectorRef,
+        ...nearbySectorRefs,
+      );
+      const [
+        transactionMeta,
+        selectedCandidate,
+        selectedSector,
+        ...nearbySectors
+      ] = snapshots;
       const currentMeta = transactionMeta.data() || {};
-      const selectedCandidate = await transaction.get(selectedDoc.ref);
-      const selectedSector = await transaction.get(selectedSectorRef);
-      const nearbySectors = [];
-      const nearbyCandidates = [];
-
-      for (const ref of neighbourSectorRefs) {
-        nearbySectors.push(await transaction.get(ref));
-      }
-      for (const ref of neighbourCandidateRefs) {
-        nearbyCandidates.push(await transaction.get(ref));
-      }
 
       if (!selectedCandidate.exists || !selectedSector.exists) {
         return {retry: true};
@@ -556,8 +615,10 @@ async function allocatePlayerSector(db, options = {}) {
         updatedAt: FieldValue.serverTimestamp(),
       });
 
-      for (const snapshot of nearbyCandidates) {
-        if (snapshot.exists) transaction.delete(snapshot.ref);
+      // No candidate reads are required here. Deleting a missing document is
+      // harmless, and all forbidden coordinates are known from geometry.
+      for (const ref of candidateRefsToDelete) {
+        transaction.delete(ref);
       }
 
       transaction.set(metaRef(db), {
@@ -568,15 +629,20 @@ async function allocatePlayerSector(db, options = {}) {
       return {
         retry: false,
         playerId,
-        sectorId: selectedDoc.id,
+        sectorId: selectedId,
         letter: selected.letter,
         number: selected.number,
         priority: Number(selected.priority),
-        removedCandidates: nearbyCandidates.filter((doc) => doc.exists).length,
+        invalidatedCandidateIds: [...invalidatedCandidateIds],
       };
     });
 
-    if (result.retry) continue;
+    if (result.retry) {
+      clearCandidateCache(candidateCache);
+      continue;
+    }
+
+    removeCandidateIdsFromCache(candidateCache, invalidatedCandidateIds);
     return result;
   }
 
@@ -591,9 +657,14 @@ async function addSimulatedPlayers(db, count) {
     throw new Error("Refusing to add more than 10000 simulated players in one command.");
   }
 
+  // A batch simulation is still strictly one player at a time. The only thing
+  // reused is the already-downloaded candidate pool for the active window.
+  // Each successful allocation removes its forbidden cells from this cache,
+  // while every player still gets its own Firestore transaction.
+  const candidateCache = {};
   const added = [];
   for (let index = 0; index < count; index += 1) {
-    added.push(await allocatePlayerSector(db));
+    added.push(await allocatePlayerSector(db, {candidateCache}));
   }
   return added;
 }
@@ -601,13 +672,9 @@ async function addSimulatedPlayers(db, count) {
 async function markSectorResolved(db, id, resolution) {
   const parsed = parseSectorId(id);
   const ref = sectorRef(db, id);
-  const snapshot = await ref.get();
-  if (!snapshot.exists) throw new Error(`Sector ${id} does not exist.`);
-
-  const data = snapshot.data() || {};
-  if (data.status === "POPULATED") return {changed: false, sectorId: id};
-
   const zones = Array.isArray(resolution?.zones) ? resolution.zones : [];
+  let changed = false;
+
   await db.runTransaction(async (transaction) => {
     const current = await transaction.get(ref);
     if (!current.exists) throw new Error(`Sector ${id} does not exist.`);
@@ -622,9 +689,10 @@ async function markSectorResolved(db, id, resolution) {
       updatedAt: FieldValue.serverTimestamp(),
     });
     transaction.delete(candidateRef(db, sectorId(parsed.letter, parsed.number)));
+    changed = true;
   });
 
-  return {changed: true, sectorId: id};
+  return {changed, sectorId: id};
 }
 
 function serializeFirestoreValue(value) {
@@ -644,7 +712,9 @@ async function exportMap(db) {
   const {data: meta} = await requiredMeta(db);
   const [sectorSnapshot, candidateSnapshot] = await Promise.all([
     db.collection(SECTORS_COLLECTION).get(),
-    db.collection(CANDIDATES_COLLECTION).get(),
+    // Only candidate document IDs are needed for the export. Avoid downloading
+    // their priority/coordinate fields again on large maps.
+    db.collection(CANDIDATES_COLLECTION).select().get(),
   ]);
 
   const candidateIds = new Set(candidateSnapshot.docs.map((doc) => doc.id));
