@@ -104,15 +104,17 @@ function candidateChunkForSector(coordinate, config, currentMapNumberMax) {
   return spawnChunkForNumber(coordinate.number, config);
 }
 
+function mapIsEditable(meta) {
+  return meta.initializationStatus === "READY" &&
+    meta.expansionStatus !== "EXPANDING" &&
+    Number(meta.schemaVersion) === MAP_SCHEMA_VERSION;
+}
+
 async function requiredMeta(db) {
   const snapshot = await db.collection(META_COLLECTION).doc(META_DOCUMENT).get();
   if (!snapshot.exists) throw new Error("World map is not initialized.");
   const meta = snapshot.data() || {};
-  if (
-    meta.initializationStatus !== "READY" ||
-    meta.expansionStatus === "EXPANDING" ||
-    Number(meta.schemaVersion) !== MAP_SCHEMA_VERSION
-  ) {
+  if (!mapIsEditable(meta)) {
     throw new Error("World map is not ready for manual editing.");
   }
   return meta;
@@ -129,12 +131,13 @@ async function setSectorType(db, sectorRaw, typeRaw) {
   }
 
   const initialMeta = await requiredMeta(db);
+  const initialMapMax = Number(initialMeta.currentMapNumberMax);
   const config = configFromMeta(initialMeta);
   const sectorRef = db.collection(SECTORS_COLLECTION).doc(sector);
   const chunk = candidateChunkForSector(
     coordinate,
     config,
-    Number(initialMeta.currentMapNumberMax),
+    initialMapMax,
   );
   const chunkRef = chunk
     ? db.collection(SPAWN_CHUNKS_COLLECTION).doc(chunk.id)
@@ -148,14 +151,10 @@ async function setSectorType(db, sectorRaw, typeRaw) {
     const [metaSnapshot, sectorSnapshot, chunkSnapshot] = snapshots;
     const meta = metaSnapshot.data() || {};
 
-    if (
-      meta.initializationStatus !== "READY" ||
-      meta.expansionStatus === "EXPANDING" ||
-      Number(meta.schemaVersion) !== MAP_SCHEMA_VERSION
-    ) {
+    if (!mapIsEditable(meta) || Number(meta.currentMapNumberMax) !== initialMapMax) {
       throw new Error("World map changed while editing. Retry.");
     }
-    if (!sectorSnapshot.exists) {
+    if (!sectorSnapshot.exists || coordinate.number > initialMapMax) {
       throw new Error(`Sector ${sector} does not exist in the materialized map.`);
     }
 
@@ -211,20 +210,33 @@ async function setZoneType(db, sectorRaw, zoneRaw, typeRaw) {
     );
   }
 
-  const meta = await requiredMeta(db);
-  if (zoneIndex > Number(meta.zonesPerSector)) {
+  const initialMeta = await requiredMeta(db);
+  const initialMapMax = Number(initialMeta.currentMapNumberMax);
+  if (zoneIndex > Number(initialMeta.zonesPerSector)) {
     throw new Error(
-      `Zone index must be between 1 and ${Number(meta.zonesPerSector)}.`,
+      `Zone index must be between 1 and ${Number(initialMeta.zonesPerSector)}.`,
     );
   }
 
+  const metaRef = db.collection(META_COLLECTION).doc(META_DOCUMENT);
   const sectorRef = db.collection(SECTORS_COLLECTION).doc(sector);
   return db.runTransaction(async (transaction) => {
-    const snapshot = await transaction.get(sectorRef);
-    if (!snapshot.exists) {
+    const [metaSnapshot, sectorSnapshot] = await transaction.getAll(
+      metaRef,
+      sectorRef,
+    );
+    const meta = metaSnapshot.data() || {};
+    if (!mapIsEditable(meta) || Number(meta.currentMapNumberMax) !== initialMapMax) {
+      throw new Error("World map changed while editing. Retry.");
+    }
+    if (!sectorSnapshot.exists || coordinate.number > initialMapMax) {
       throw new Error(`Sector ${sector} does not exist in the materialized map.`);
     }
-    const current = snapshot.data() || {};
+    if (zoneIndex > Number(meta.zonesPerSector)) {
+      throw new Error(`Zone index is outside the current sector definition.`);
+    }
+
+    const current = sectorSnapshot.data() || {};
     if (current.status !== "POPULATED") {
       throw new Error(
         `Sector ${sector} is UNGENERATED. Assign its sector type first with set-sector.`,
