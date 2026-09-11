@@ -1,9 +1,16 @@
 // Cloud Functions package bootstrap.
 //
-// Keep large subsystems isolated in their own modules while loading them as
-// part of the deployed backend bundle. Map administration itself is NOT
-// exposed as a client callable; scripts and future gameplay code reuse the
-// functions/map module directly.
+// Keep large subsystems isolated while exporting the deployed callable surface
+// from a single package entry point.
 require("./map");
 
-module.exports = require("./index");
+const deployedFunctions = require("./index");
+const {initializeBunker} = require("./onboarding");
+
+module.exports = {
+  ...deployedFunctions,
+  // Override the legacy initializer exported by index.js. The callable name
+  // remains exactly the same for Flutter, but first profile setup now reserves
+  // the player's real map sector in the same logical onboarding operation.
+  initializeBunker,
+};
