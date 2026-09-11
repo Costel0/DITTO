@@ -30,7 +30,7 @@ writes:
   1-3 chunks modificados
 ```
 
-Por tanto, normalmente hablamos de unas **10-13 lecturas** y **2-4 escrituras** de Firestore por alta real, más la invocación de Cloud Functions cuando se conecte al onboarding.
+Por tanto, normalmente hablamos de unas **11-14 lecturas** y **2-4 escrituras** de Firestore por alta real, más la invocación de Cloud Functions cuando se conecte al onboarding.
 
 No se leen otros jugadores ni todos los sectores de la ventana.
 
