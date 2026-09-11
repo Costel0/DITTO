@@ -1,31 +1,41 @@
 const {createHash} = require("node:crypto");
+const {
+  mapCoordinateId,
+  mapCoordinatesFromLocation,
+  mapCoordinatesToLegacy,
+  mapCoordinatesToWire,
+  mapDistance,
+  normalizedMapCoordinates,
+} = require("./map/coordinates");
+
 const EXPEDITION_ACTIVITY = "expedition";
 const EXPEDITION_ID_PATTERN = /^[a-z0-9_]+$/;
+const ZONE_TYPE_PATTERN = /^[A-Z][A-Z0-9_]*$/;
+const INTERACTIVE_COMPLETION = "interactive_outcome";
+const DISCOVER_ZONE_COMPLETION = "discover_zone";
+const DEFAULT_EXPEDITION_TRAVEL_SECONDS_PER_DISTANCE_UNIT = 300;
 
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+/**
+ * Compatibility boundary for BunkerState and old callers. Expedition APIs now
+ * also accept the modern sector-zone wire shape, but internally the existing
+ * bunker state still stores x/y/z where x=A..Z -> 0..25.
+ */
 function normalizedCoordinates(value, label = "coordinates") {
-  if (!isPlainObject(value)) {
-    throw new Error(`${label} must be an object.`);
-  }
+  return mapCoordinatesToLegacy(normalizedMapCoordinates(value, label));
+}
 
-  const result = {};
-  for (const axis of ["x", "y", "z"]) {
-    const coordinate = value[axis];
-    if (!Number.isSafeInteger(coordinate) || coordinate < 0) {
-      throw new Error(
-        `${label}.${axis} must be a non-negative safe integer.`,
-      );
-    }
-    result[axis] = coordinate;
-  }
-  return result;
+function coordinatesForClient(value) {
+  return mapCoordinatesToWire(normalizedMapCoordinates(value));
 }
 
 function sameCoordinates(left, right) {
-  return left.x === right.x && left.y === right.y && left.z === right.z;
+  const a = normalizedCoordinates(left, "leftCoordinates");
+  const b = normalizedCoordinates(right, "rightCoordinates");
+  return a.x === b.x && a.y === b.y && a.z === b.z;
 }
 
 function normalizedInventoryReward(value, label) {
@@ -223,6 +233,50 @@ function normalizedActionOutcomes(rawOutcomes, actionId) {
   return outcomes;
 }
 
+function normalizedAvailability(rawAvailability, actionId) {
+  // Compatibility with dataVersion <= 7.
+  if (rawAvailability === "bunker") {
+    return {
+      unknownZone: false,
+      zoneTypes: ["PLAYER_BUNKER"],
+    };
+  }
+
+  if (!isPlainObject(rawAvailability)) {
+    throw new Error(
+      `Expedition action ${actionId} availability must be an object.`,
+    );
+  }
+
+  const unknownZone = rawAvailability.unknownZone === true;
+  const zoneTypesRaw = rawAvailability.zoneTypes == null
+    ? []
+    : rawAvailability.zoneTypes;
+  if (!Array.isArray(zoneTypesRaw)) {
+    throw new Error(
+      `Expedition action ${actionId} availability.zoneTypes must be a list.`,
+    );
+  }
+  const zoneTypes = zoneTypesRaw.map((rawType) =>
+    typeof rawType === "string" ? rawType.trim().toUpperCase() : "",
+  );
+  if (
+    zoneTypes.some((type) => !ZONE_TYPE_PATTERN.test(type)) ||
+    new Set(zoneTypes).size !== zoneTypes.length
+  ) {
+    throw new Error(
+      `Expedition action ${actionId} availability.zoneTypes contains invalid values.`,
+    );
+  }
+  if (unknownZone === (zoneTypes.length > 0)) {
+    throw new Error(
+      `Expedition action ${actionId} must target either unknown zones or known zone types, not both/neither.`,
+    );
+  }
+
+  return {unknownZone, zoneTypes};
+}
+
 function normalizedActionDefinition(rawAction, actionId) {
   if (!isPlainObject(rawAction)) {
     throw new Error(`Expedition action ${actionId} must be an object.`);
@@ -237,10 +291,18 @@ function normalizedActionDefinition(rawAction, actionId) {
     );
   }
 
-  const availability = rawAction.availability;
-  if (availability !== "bunker") {
+  const availability = normalizedAvailability(rawAction.availability, actionId);
+  const completion = rawAction.completion == null
+    ? INTERACTIVE_COMPLETION
+    : rawAction.completion;
+  if (![INTERACTIVE_COMPLETION, DISCOVER_ZONE_COMPLETION].includes(completion)) {
     throw new Error(
-      `Expedition action ${actionId} has unsupported availability.`,
+      `Expedition action ${actionId} has an unsupported completion mode.`,
+    );
+  }
+  if (completion === DISCOVER_ZONE_COMPLETION && !availability.unknownZone) {
+    throw new Error(
+      `Expedition action ${actionId} discover_zone completion requires unknownZone availability.`,
     );
   }
 
@@ -265,9 +327,12 @@ function normalizedActionDefinition(rawAction, actionId) {
     id: actionId,
     expeditionType,
     availability,
+    completion,
     durationSeconds,
     energyDelta,
-    outcomes: normalizedActionOutcomes(rawAction.outcomes, actionId),
+    outcomes: completion === DISCOVER_ZONE_COMPLETION
+      ? {}
+      : normalizedActionOutcomes(rawAction.outcomes, actionId),
   };
 }
 
@@ -293,22 +358,35 @@ function expeditionDefinitionFromSnapshot(snapshot) {
   return {actions};
 }
 
+function normalizedZoneKnowledge(value) {
+  if (value == null) return null;
+  const zoneType = typeof value.zoneType === "string"
+    ? value.zoneType.trim().toUpperCase()
+    : "";
+  if (!ZONE_TYPE_PATTERN.test(zoneType)) {
+    throw new Error("Known zone has an invalid zone type.");
+  }
+  return {zoneType};
+}
+
+function availableActionsForZone(definition, zoneKnowledge) {
+  const known = normalizedZoneKnowledge(zoneKnowledge);
+  return Object.values(definition.actions).filter((action) => {
+    if (known == null) return action.availability.unknownZone;
+    return !action.availability.unknownZone &&
+      action.availability.zoneTypes.includes(known.zoneType);
+  });
+}
+
+// Compatibility helper retained for old unit tests/callers. The only known
+// location in the old model was the bunker itself.
 function availableActionsAtCoordinates(
   definition,
   coordinates,
   bunkerCoordinates,
 ) {
-  const normalizedTarget = normalizedCoordinates(coordinates);
-  const normalizedBunker = normalizedCoordinates(
-    bunkerCoordinates,
-    "bunkerCoordinates",
-  );
-
-  if (!sameCoordinates(normalizedTarget, normalizedBunker)) {
-    return [];
-  }
-  return Object.values(definition.actions)
-    .filter((action) => action.availability === "bunker");
+  if (!sameCoordinates(coordinates, bunkerCoordinates)) return [];
+  return availableActionsForZone(definition, {zoneType: "PLAYER_BUNKER"});
 }
 
 function normalizedActionIds(value) {
@@ -348,30 +426,48 @@ function actionDefinitionsByIds(definition, actionIds) {
   });
 }
 
+function selectedActionDefinitionsForZone(
+  definition,
+  zoneKnowledge,
+  actionIds,
+) {
+  const available = new Map(
+    availableActionsForZone(definition, zoneKnowledge)
+      .map((action) => [action.id, action]),
+  );
+
+  const selected = normalizedActionIds(actionIds).map((rawActionId) => {
+    const actionId = canonicalActionId(rawActionId);
+    const action = available.get(actionId);
+    if (!action) {
+      throw new Error(
+        `Expedition action ${rawActionId} is not available for this zone.`,
+      );
+    }
+    return action;
+  });
+
+  if (selected.some((action) => action.completion === DISCOVER_ZONE_COMPLETION) &&
+      selected.length !== 1) {
+    throw new Error("Explore must be launched as a single action.");
+  }
+  return selected;
+}
+
 function selectedActionDefinitions(
   definition,
   coordinates,
   bunkerCoordinates,
   actionIds,
 ) {
-  const available = new Map(
-    availableActionsAtCoordinates(
-      definition,
-      coordinates,
-      bunkerCoordinates,
-    ).map((action) => [action.id, action]),
+  if (!sameCoordinates(coordinates, bunkerCoordinates)) {
+    throw new Error("Expedition actions are not available at these coordinates.");
+  }
+  return selectedActionDefinitionsForZone(
+    definition,
+    {zoneType: "PLAYER_BUNKER"},
+    actionIds,
   );
-
-  return normalizedActionIds(actionIds).map((rawActionId) => {
-    const actionId = canonicalActionId(rawActionId);
-    const action = available.get(actionId);
-    if (!action) {
-      throw new Error(
-        `Expedition action ${rawActionId} is not available at these coordinates.`,
-      );
-    }
-    return action;
-  });
 }
 
 function expeditionTypeForActions(actions) {
@@ -387,12 +483,17 @@ function expeditionTypeForActions(actions) {
   return actions[0].expeditionType;
 }
 
+function isExplorationAction(action) {
+  return action?.completion === DISCOVER_ZONE_COMPLETION;
+}
+
 function deterministicUnitInterval(seed) {
   const digest = createHash("sha256").update(seed).digest();
   return digest.readUIntBE(0, 6) / 0x1000000000000;
 }
 
 function selectActionOutcome(action, executionSeed) {
+  if (isExplorationAction(action)) return null;
   const roll = deterministicUnitInterval(
     `${action.id}:${executionSeed}:expedition-outcome`,
   );
@@ -407,10 +508,12 @@ function selectActionOutcome(action, executionSeed) {
 }
 
 function selectExpeditionOutcomes(actions, executionSeed) {
-  return actions.map((action) => ({
-    actionId: action.id,
-    ...selectActionOutcome(action, executionSeed),
-  }));
+  return actions
+    .filter((action) => !isExplorationAction(action))
+    .map((action) => ({
+      actionId: action.id,
+      ...selectActionOutcome(action, executionSeed),
+    }));
 }
 
 function normalizedChoiceSelections(value) {
@@ -496,11 +599,39 @@ function applyInventoryReward(inventorySource, delta) {
   return inventory;
 }
 
-function expeditionDurationSeconds(actions) {
+function expeditionDurationSeconds(actions, travelSeconds = 0) {
+  if (!Number.isInteger(travelSeconds) || travelSeconds < 0) {
+    throw new Error("travelSeconds must be a non-negative integer.");
+  }
   return actions.reduce(
     (total, action) => total + action.durationSeconds,
-    0,
+    travelSeconds,
   );
+}
+
+function expeditionTravelSeconds(
+  originCoordinates,
+  targetCoordinates,
+  secondsPerDistanceUnit = DEFAULT_EXPEDITION_TRAVEL_SECONDS_PER_DISTANCE_UNIT,
+) {
+  if (
+    typeof secondsPerDistanceUnit !== "number" ||
+    !Number.isFinite(secondsPerDistanceUnit) ||
+    secondsPerDistanceUnit < 0
+  ) {
+    throw new Error("Expedition travel multiplier must be non-negative.");
+  }
+  return Math.ceil(
+    mapDistance(originCoordinates, targetCoordinates) * secondsPerDistanceUnit,
+  );
+}
+
+function expeditionTravelSecondsPerDistanceUnitFromConfig(snapshot) {
+  const value = snapshot?.data?.()?.config?.expeditionTravelSecondsPerDistanceUnit;
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+    return value;
+  }
+  return DEFAULT_EXPEDITION_TRAVEL_SECONDS_PER_DISTANCE_UNIT;
 }
 
 function expeditionEnergyDelta(actions) {
@@ -525,23 +656,11 @@ function actionIdsFromExpeditionTaskId(taskId) {
 }
 
 function expeditionLocation(coordinates) {
-  const normalized = normalizedCoordinates(coordinates);
-  return `${normalized.x},${normalized.y},${normalized.z}`;
+  return mapCoordinateId(normalizedMapCoordinates(coordinates));
 }
 
 function coordinatesFromExpeditionLocation(location) {
-  if (typeof location !== "string") {
-    throw new Error("Invalid expedition location.");
-  }
-  const parts = location.split(",").map((value) => Number(value));
-  if (parts.length !== 3) {
-    throw new Error("Invalid expedition location.");
-  }
-  return normalizedCoordinates({
-    x: parts[0],
-    y: parts[1],
-    z: parts[2],
-  });
+  return mapCoordinatesToLegacy(mapCoordinatesFromLocation(location));
 }
 
 function applyExpeditionAutomaticResolution(
@@ -620,6 +739,8 @@ function applyExpeditionInteractiveResolution(
 }
 
 module.exports = {
+  DEFAULT_EXPEDITION_TRAVEL_SECONDS_PER_DISTANCE_UNIT,
+  DISCOVER_ZONE_COMPLETION,
   EXPEDITION_ACTIVITY,
   actionDefinitionsByIds,
   actionIdsFromExpeditionTaskId,
@@ -628,19 +749,25 @@ module.exports = {
   applyExpeditionInteractiveResolution,
   applyInventoryReward,
   availableActionsAtCoordinates,
+  availableActionsForZone,
   canonicalActionId,
+  coordinatesForClient,
   coordinatesFromExpeditionLocation,
   expeditionDefinitionFromSnapshot,
   expeditionDurationSeconds,
   expeditionEnergyDelta,
   expeditionLocation,
   expeditionTaskId,
+  expeditionTravelSeconds,
+  expeditionTravelSecondsPerDistanceUnitFromConfig,
   expeditionTypeForActions,
+  isExplorationAction,
   normalizedActionIds,
   normalizedChoiceSelections,
   normalizedCoordinates,
   sameCoordinates,
   selectExpeditionOutcomes,
-  selectedResolutionOptions,
   selectedActionDefinitions,
+  selectedActionDefinitionsForZone,
+  selectedResolutionOptions,
 };
