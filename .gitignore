@@ -38,6 +38,7 @@ migrate_working_dir/
 
 # Firebase / Node
 functions/node_modules/
+functions/map_exports/
 firebase-debug.log
 firebase-debug.*.log
 
