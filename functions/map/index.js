@@ -208,9 +208,9 @@ async function deleteCollection(db, collectionName) {
   }
 }
 
-async function commitWriters(writers) {
+async function commitWriters(db, writers) {
   for (let start = 0; start < writers.length; start += BATCH_SIZE) {
-    const batch = writers[start].ref.firestore.batch();
+    const batch = db.batch();
     const slice = writers.slice(start, start + BATCH_SIZE);
     for (const entry of slice) {
       if (entry.type === "set") batch.set(entry.ref, entry.data, entry.options || {});
@@ -287,7 +287,7 @@ async function createMapRange(db, fromNumber, toNumber, config) {
     }
   }
 
-  await commitWriters(writers);
+  await commitWriters(db, writers);
   return {sectorsCreated, candidatesCreated};
 }
 
@@ -310,6 +310,7 @@ async function initializeMap(db, options = {}) {
 
   await ref.set({
     schemaVersion: 1,
+    initializationStatus: "INITIALIZING",
     ...config,
     currentMapNumberMax: config.initialNumberMax,
     activeSpawnNumberMin: config.initialSpawnNumberMin,
@@ -326,6 +327,11 @@ async function initializeMap(db, options = {}) {
     config,
   );
 
+  await ref.update({
+    initializationStatus: "READY",
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+
   return {
     initialized: true,
     config,
@@ -341,7 +347,13 @@ async function requiredMeta(db) {
   if (!snapshot.exists) {
     throw new Error("World map is not initialized. Run map init first.");
   }
-  return {snapshot, data: snapshot.data() || {}};
+  const data = snapshot.data() || {};
+  if (data.initializationStatus !== "READY") {
+    throw new Error(
+      "World map initialization is incomplete. Re-run map init --force to rebuild it.",
+    );
+  }
+  return {snapshot, data};
 }
 
 function configFromMeta(meta) {
@@ -467,7 +479,7 @@ async function allocatePlayerSector(db, options = {}) {
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const {data: meta} = await requiredMeta(db);
     const config = configFromMeta(meta);
-    let candidateSnapshot = await candidateSnapshotForActiveWindow(db, meta);
+    const candidateSnapshot = await candidateSnapshotForActiveWindow(db, meta);
 
     if (candidateSnapshot.empty) {
       await advanceSpawnWindow(db, meta);
@@ -490,78 +502,82 @@ async function allocatePlayerSector(db, options = {}) {
       candidateRef(db, sectorId(coordinate.letter, coordinate.number)),
     );
 
-    try {
-      const result = await db.runTransaction(async (transaction) => {
-        const transactionMeta = await transaction.get(metaRef(db));
-        const currentMeta = transactionMeta.data() || {};
-        const selectedCandidate = await transaction.get(selectedDoc.ref);
-        const selectedSector = await transaction.get(selectedSectorRef);
-        const nearbySectors = [];
-        const nearbyCandidates = [];
+    const result = await db.runTransaction(async (transaction) => {
+      const transactionMeta = await transaction.get(metaRef(db));
+      const currentMeta = transactionMeta.data() || {};
+      const selectedCandidate = await transaction.get(selectedDoc.ref);
+      const selectedSector = await transaction.get(selectedSectorRef);
+      const nearbySectors = [];
+      const nearbyCandidates = [];
 
-        for (const ref of neighbourSectorRefs) {
-          nearbySectors.push(await transaction.get(ref));
-        }
-        for (const ref of neighbourCandidateRefs) {
-          nearbyCandidates.push(await transaction.get(ref));
-        }
+      for (const ref of neighbourSectorRefs) {
+        nearbySectors.push(await transaction.get(ref));
+      }
+      for (const ref of neighbourCandidateRefs) {
+        nearbyCandidates.push(await transaction.get(ref));
+      }
 
-        if (!selectedCandidate.exists || !selectedSector.exists) {
-          throw new Error("SPAWN_CANDIDATE_CHANGED");
-        }
+      if (!selectedCandidate.exists || !selectedSector.exists) {
+        return {retry: true};
+      }
 
-        const sectorData = selectedSector.data() || {};
-        if (sectorData.status !== "UNGENERATED") {
-          throw new Error("SPAWN_CANDIDATE_CHANGED");
-        }
+      if (
+        selected.number < Number(currentMeta.activeSpawnNumberMin) ||
+        selected.number > Number(currentMeta.activeSpawnNumberMax)
+      ) {
+        return {retry: true};
+      }
 
-        if (nearbySectors.some((snapshot) =>
-          snapshot.exists && snapshot.data()?.type === "PLAYER_BUNKER",
-        )) {
-          throw new Error("SPAWN_CANDIDATE_CHANGED");
-        }
+      const sectorData = selectedSector.data() || {};
+      if (sectorData.status !== "UNGENERATED") {
+        transaction.delete(selectedDoc.ref);
+        return {retry: true};
+      }
 
-        const sequence = Number(currentMeta.simulatedPlayerSequence || 0) +
-          (providedPlayerId ? 0 : 1);
-        const playerId = providedPlayerId ||
-          `sim-player-${String(sequence).padStart(6, "0")}`;
+      if (nearbySectors.some((snapshot) =>
+        snapshot.exists && snapshot.data()?.type === "PLAYER_BUNKER",
+      )) {
+        transaction.delete(selectedDoc.ref);
+        return {retry: true};
+      }
 
-        transaction.set(selectedSectorRef, {
-          ...sectorData,
-          status: "POPULATED",
-          type: "PLAYER_BUNKER",
-          playerId,
-          zones: placeholderPlayerZones(playerId, config.zonesPerSector),
-          populatedAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp(),
-        });
+      const sequence = Number(currentMeta.simulatedPlayerSequence || 0) +
+        (providedPlayerId ? 0 : 1);
+      const playerId = providedPlayerId ||
+        `sim-player-${String(sequence).padStart(6, "0")}`;
 
-        for (const snapshot of nearbyCandidates) {
-          if (snapshot.exists) transaction.delete(snapshot.ref);
-        }
-
-        transaction.set(metaRef(db), {
-          ...(providedPlayerId ? {} : {simulatedPlayerSequence: sequence}),
-          updatedAt: FieldValue.serverTimestamp(),
-        }, {merge: true});
-
-        return {
-          playerId,
-          sectorId: selectedDoc.id,
-          letter: selected.letter,
-          number: selected.number,
-          priority: Number(selected.priority),
-          removedCandidates: nearbyCandidates.filter((doc) => doc.exists).length,
-        };
+      transaction.set(selectedSectorRef, {
+        ...sectorData,
+        status: "POPULATED",
+        type: "PLAYER_BUNKER",
+        playerId,
+        zones: placeholderPlayerZones(playerId, config.zonesPerSector),
+        populatedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
       });
 
-      return result;
-    } catch (error) {
-      if (error instanceof Error && error.message === "SPAWN_CANDIDATE_CHANGED") {
-        continue;
+      for (const snapshot of nearbyCandidates) {
+        if (snapshot.exists) transaction.delete(snapshot.ref);
       }
-      throw error;
-    }
+
+      transaction.set(metaRef(db), {
+        ...(providedPlayerId ? {} : {simulatedPlayerSequence: sequence}),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+
+      return {
+        retry: false,
+        playerId,
+        sectorId: selectedDoc.id,
+        letter: selected.letter,
+        number: selected.number,
+        priority: Number(selected.priority),
+        removedCandidates: nearbyCandidates.filter((doc) => doc.exists).length,
+      };
+    });
+
+    if (result.retry) continue;
+    return result;
   }
 
   throw new Error(`Unable to allocate a player sector after ${maxAttempts} attempts.`);
