@@ -52,54 +52,61 @@ class ExpeditionLauncherDialog extends StatefulWidget {
 class _ExpeditionLauncherDialogState extends State<ExpeditionLauncherDialog> {
   final Set<String> _selectedSurvivorIds = <String>{};
   final Set<String> _selectedActionIds = <String>{};
-  late final TextEditingController _xController;
-  late final TextEditingController _yController;
-  late final TextEditingController _zController;
+  late final TextEditingController _letterController;
+  late final TextEditingController _numberController;
+  late final TextEditingController _zoneController;
 
   @override
   void initState() {
     super.initState();
     final coordinates = widget.info.bunkerCoordinates;
-    _xController = TextEditingController(text: coordinates.x.toString());
-    _yController = TextEditingController(text: coordinates.y.toString());
-    _zController = TextEditingController(text: coordinates.z.toString());
+    _letterController = TextEditingController(text: coordinates.sectorLetter);
+    _numberController =
+        TextEditingController(text: coordinates.sectorNumber.toString());
+    _zoneController = TextEditingController(text: coordinates.zoneIndex.toString());
   }
 
   @override
   void dispose() {
-    _xController.dispose();
-    _yController.dispose();
-    _zController.dispose();
+    _letterController.dispose();
+    _numberController.dispose();
+    _zoneController.dispose();
     super.dispose();
   }
 
   ExpeditionCoordinates? get _coordinates {
-    int? parse(TextEditingController controller) {
-      final value = int.tryParse(controller.text);
-      if (value == null || value < 0 || value > 999) return null;
-      return value;
+    final letter = _letterController.text.trim().toUpperCase();
+    final number = int.tryParse(_numberController.text.trim());
+    final zone = int.tryParse(_zoneController.text.trim());
+    if (!RegExp(r'^[A-Z]$').hasMatch(letter) ||
+        number == null ||
+        number < 1 ||
+        zone == null ||
+        zone < 1 ||
+        zone > widget.info.zonesPerSector) {
+      return null;
     }
+    return ExpeditionCoordinates(
+      sectorLetter: letter,
+      sectorNumber: number,
+      zoneIndex: zone,
+    );
+  }
 
-    final x = parse(_xController);
-    final y = parse(_yController);
-    final z = parse(_zController);
-    if (x == null || y == null || z == null) return null;
-    return ExpeditionCoordinates(x: x, y: y, z: z);
+  ExpeditionKnownZone? get _knownZone {
+    final coordinates = _coordinates;
+    return coordinates == null ? null : widget.info.knownZoneAt(coordinates);
   }
 
   List<ExpeditionActionDefinition> get _availableActions {
     final coordinates = _coordinates;
-    if (coordinates == null ||
-        coordinates != widget.info.bunkerCoordinates) {
-      return const <ExpeditionActionDefinition>[];
-    }
-    return widget.info.bunkerActions;
+    if (coordinates == null) return const <ExpeditionActionDefinition>[];
+    return widget.info.actionsForCoordinates(coordinates);
   }
 
   bool get _canConfirm {
     final coordinates = _coordinates;
     if (coordinates == null || _selectedSurvivorIds.isEmpty) return false;
-
     final availableIds = _availableActions.map((action) => action.id).toSet();
     return _selectedActionIds.isNotEmpty &&
         _selectedActionIds.every(availableIds.contains);
@@ -107,12 +114,29 @@ class _ExpeditionLauncherDialogState extends State<ExpeditionLauncherDialog> {
 
   String _actionTitle(BuildContext context, String actionId) {
     switch (actionId) {
+      case 'explore':
+        return Localizations.localeOf(context).languageCode == 'es'
+            ? 'Explorar'
+            : 'Explore';
       case 'scavenge':
       case 'scout_surroundings':
         return context.l10n.expeditionScoutSurroundingsTitle;
       default:
         return context.l10n.expeditionActionFallbackTitle;
     }
+  }
+
+  String _zoneKnowledgeLabel(BuildContext context) {
+    final coordinates = _coordinates;
+    if (coordinates == null) return '';
+    final known = _knownZone;
+    final spanish = Localizations.localeOf(context).languageCode == 'es';
+    if (known == null) {
+      return spanish ? 'Zona desconocida' : 'Unknown zone';
+    }
+    return spanish
+        ? 'Zona conocida · ${known.zoneType}'
+        : 'Known zone · ${known.zoneType}';
   }
 
   void _coordinatesChanged() {
@@ -143,7 +167,6 @@ class _ExpeditionLauncherDialogState extends State<ExpeditionLauncherDialog> {
   void _confirm() {
     final coordinates = _coordinates;
     if (!_canConfirm || coordinates == null) return;
-
     Navigator.of(context).pop(
       ExpeditionLaunchSelection(
         survivorIds: List<String>.unmodifiable(_selectedSurvivorIds),
@@ -157,6 +180,10 @@ class _ExpeditionLauncherDialogState extends State<ExpeditionLauncherDialog> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final actions = _availableActions;
+    final coordinates = _coordinates;
+    final travelSeconds = coordinates == null
+        ? 0
+        : widget.info.travelSecondsTo(coordinates);
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -257,30 +284,53 @@ class _ExpeditionLauncherDialogState extends State<ExpeditionLauncherDialog> {
                       Row(
                         children: [
                           Expanded(
-                            child: _CoordinateField(
-                              label: 'X',
-                              controller: _xController,
+                            child: _LetterCoordinateField(
+                              controller: _letterController,
                               onChanged: _coordinatesChanged,
                             ),
                           ),
                           const SizedBox(width: 10),
                           Expanded(
-                            child: _CoordinateField(
-                              label: 'Y',
-                              controller: _yController,
+                            flex: 2,
+                            child: _NumberCoordinateField(
+                              label: 'Sector',
+                              controller: _numberController,
                               onChanged: _coordinatesChanged,
                             ),
                           ),
                           const SizedBox(width: 10),
                           Expanded(
-                            child: _CoordinateField(
-                              label: 'Z',
-                              controller: _zController,
+                            child: _NumberCoordinateField(
+                              label: Localizations.localeOf(context).languageCode == 'es'
+                                  ? 'Zona'
+                                  : 'Zone',
+                              controller: _zoneController,
                               onChanged: _coordinatesChanged,
                             ),
                           ),
                         ],
                       ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _zoneKnowledgeLabel(context),
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: _knownZone == null
+                              ? const Color(0xFFC7A970)
+                              : const Color(0xFFA6AD91),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      if (coordinates != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          '${coordinates.displayValue} · '
+                          '${_durationLabel(context, travelSeconds)} '
+                          '${Localizations.localeOf(context).languageCode == 'es' ? 'de viaje' : 'travel'}',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: const Color(0xFF8F8677),
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 22),
                       _SectionTitle(
                         title: context.l10n.expeditionActionsTitle,
@@ -292,9 +342,7 @@ class _ExpeditionLauncherDialogState extends State<ExpeditionLauncherDialog> {
                           decoration: BoxDecoration(
                             color: const Color(0xFF211F19),
                             borderRadius: BorderRadius.circular(7),
-                            border: Border.all(
-                              color: const Color(0xFF4A4134),
-                            ),
+                            border: Border.all(color: const Color(0xFF4A4134)),
                           ),
                           child: Text(
                             context.l10n.expeditionNoActionsAtCoordinates,
@@ -308,6 +356,8 @@ class _ExpeditionLauncherDialogState extends State<ExpeditionLauncherDialog> {
                           _ExpeditionActionChoice(
                             action: actions[index],
                             title: _actionTitle(context, actions[index].id),
+                            effectiveDurationSeconds:
+                                actions[index].durationSeconds + travelSeconds,
                             selected:
                                 _selectedActionIds.contains(actions[index].id),
                             onTap: () => _toggleAction(actions[index].id),
@@ -339,6 +389,14 @@ class _ExpeditionLauncherDialogState extends State<ExpeditionLauncherDialog> {
   }
 }
 
+String _durationLabel(BuildContext context, int seconds) {
+  final duration = Duration(seconds: seconds);
+  if (duration.inSeconds % 60 == 0) {
+    return context.l10n.expeditionDurationMinutes(duration.inMinutes);
+  }
+  return context.l10n.expeditionDurationSeconds(duration.inSeconds);
+}
+
 class _SectionTitle extends StatelessWidget {
   const _SectionTitle({required this.title});
 
@@ -356,8 +414,36 @@ class _SectionTitle extends StatelessWidget {
   }
 }
 
-class _CoordinateField extends StatelessWidget {
-  const _CoordinateField({
+class _LetterCoordinateField extends StatelessWidget {
+  const _LetterCoordinateField({
+    required this.controller,
+    required this.onChanged,
+  });
+
+  final TextEditingController controller;
+  final VoidCallback onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      textCapitalization: TextCapitalization.characters,
+      inputFormatters: <TextInputFormatter>[
+        FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z]')),
+        LengthLimitingTextInputFormatter(1),
+      ],
+      onChanged: (_) => onChanged(),
+      textAlign: TextAlign.center,
+      decoration: const InputDecoration(
+        labelText: 'A-Z',
+        border: OutlineInputBorder(),
+      ),
+    );
+  }
+}
+
+class _NumberCoordinateField extends StatelessWidget {
+  const _NumberCoordinateField({
     required this.label,
     required this.controller,
     required this.onChanged,
@@ -374,16 +460,13 @@ class _CoordinateField extends StatelessWidget {
       keyboardType: TextInputType.number,
       inputFormatters: <TextInputFormatter>[
         FilteringTextInputFormatter.digitsOnly,
-        LengthLimitingTextInputFormatter(3),
       ],
       onChanged: (_) => onChanged(),
       textAlign: TextAlign.center,
       decoration: InputDecoration(
         labelText: label,
-        counterText: '',
         border: const OutlineInputBorder(),
       ),
-      maxLength: 3,
     );
   }
 }
@@ -463,22 +546,16 @@ class _ExpeditionActionChoice extends StatelessWidget {
   const _ExpeditionActionChoice({
     required this.action,
     required this.title,
+    required this.effectiveDurationSeconds,
     required this.selected,
     required this.onTap,
   });
 
   final ExpeditionActionDefinition action;
   final String title;
+  final int effectiveDurationSeconds;
   final bool selected;
   final VoidCallback onTap;
-
-  String _durationLabel(BuildContext context) {
-    final duration = Duration(seconds: action.durationSeconds);
-    if (duration.inSeconds % 60 == 0) {
-      return context.l10n.expeditionDurationMinutes(duration.inMinutes);
-    }
-    return context.l10n.expeditionDurationSeconds(duration.inSeconds);
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -525,7 +602,7 @@ class _ExpeditionActionChoice extends StatelessWidget {
                       runSpacing: 4,
                       children: [
                         Text(
-                          _durationLabel(context),
+                          _durationLabel(context, effectiveDurationSeconds),
                           style: theme.textTheme.labelSmall?.copyWith(
                             color: const Color(0xFF9B9284),
                           ),
