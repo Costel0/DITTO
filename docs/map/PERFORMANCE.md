@@ -1,243 +1,74 @@
 # DITTO — Rendimiento y escalabilidad del mapa
 
-> Notas de rendimiento de la primera implementación del backend de mapa.
->
-> Última actualización: 2026-09-11.
+La asignación de un `PLAYER_BUNKER` no debe depender del tamaño histórico del mundo ni del número total de jugadores.
 
----
+## Asignación individual
 
-## 1. Principio esperado
-
-La asignación de un nuevo `PLAYER_BUNKER` no debe depender del tamaño total histórico del mundo ni del número total de jugadores existentes.
-
-El sistema consigue esto mediante dos propiedades:
-
-1. la selección se realiza únicamente sobre el **pool de candidatos de la ventana de spawn activa**;
-2. la comprobación autoritativa de separación mira únicamente las coordenadas enteras a distancia `<= minimumPlayerDistance` del candidato.
+El índice de spawn usa `worldMapSpawnChunks` con bloques de 5 columnas.
 
 Con la configuración actual:
 
 ```text
-spawn letters = D-W = 20 filas
-ventana inicial = 10-40 = 31 columnas
-ventanas posteriores = 40 columnas
-minimumPlayerDistance = 2
+D-W = 20 filas
+ventana inicial 10-40 = 7 chunks
+ventanas posteriores de 40 columnas = 8 chunks
 ```
 
-el pool consultado por una asignación individual contiene como máximo aproximadamente:
+Una asignación real normal hace aproximadamente:
 
 ```text
-20 × 40 = 800 candidatos
+1 read de meta
+7-8 reads de chunks activos
+
+transacción:
+  1 read de meta
+  1 read del sector elegido
+  1-3 reads de chunks afectados
+
+writes:
+  1 sector PLAYER_BUNKER
+  1-3 chunks modificados
 ```
 
-independientemente de que el mundo tenga 80, 8.000 o 800.000 columnas materializadas.
+Por tanto, normalmente hablamos de unas **10-13 lecturas** y **2-4 escrituras** de Firestore por alta real, más la invocación de Cloud Functions cuando se conecte al onboarding.
 
-La validación espacial del bunker consulta únicamente el vecindario local. Con distancia mínima `> 2`, existen 13 posiciones enteras a distancia `<= 2`, contando el propio sector. Por tanto, el número de sectores relevantes para validar una asignación es constante.
+No se leen otros jugadores ni todos los sectores de la ventana.
 
----
+La ruleta se realiza en dos niveles —chunk y candidato— usando las mismas prioridades, por lo que la distribución probabilística es equivalente a una ruleta global.
 
-## 2. Optimización de `add-players`
+## Concurrencia
 
-La primera implementación correcta pero poco eficiente hacía, para cada jugador simulado:
+La existencia de un candidato dentro de un chunk es parte de la validación autoritativa de spawn.
 
-```text
-leer metadata
-→ descargar de nuevo todo el pool activo
-→ escoger candidato
-→ abrir transacción
-→ leer vecinos uno a uno
-→ leer candidatos vecinos uno a uno
-→ escribir
-```
+Dos altas que intenten crear bunkers a `d <= 2` necesariamente afectan al menos un mismo chunk. Las transacciones de Firestore entran en conflicto y una de ellas debe reintentarse con el estado actualizado.
 
-Esto hacía que un comando con `X` jugadores repitiese muchas lecturas de red innecesarias.
+La expansión usa `expansionStatus` para impedir la carrera entre crear nuevas celdas en el borde y asignar simultáneamente un bunker cercano.
 
-La versión optimizada mantiene exactamente el comportamiento **1 jugador = 1 transacción**, pero durante una misma ejecución de:
+## `add-players --count=X`
 
-```text
-map add-players --count=X
-```
+Sigue siendo `O(X)` porque cada jugador se confirma en su propia transacción.
 
-reutiliza en memoria:
+Durante el mismo proceso se reutilizan en memoria los chunks de la ventana activa, de modo que los 7-8 chunks no se vuelven a descargar para cada jugador simulado salvo que haya un conflicto o cambie la ventana.
 
-- metadata estática de la ventana activa;
-- documentos de candidatos de esa ventana.
+## Operaciones que sí crecen con el mapa
 
-Después de cada asignación se eliminan del cache local las coordenadas invalidadas por el bunker recién creado.
+- `init`: proporcional al número de sectores materializados.
+- `expand`: proporcional únicamente a las nuevas columnas añadidas.
+- `download`: proporcional al total de sectores, porque descarga el mapa completo.
+- `render`: proporcional al total de sectores descargados, pero es local.
 
-El pool se vuelve a descargar solamente cuando:
+Resolver o descubrir un único sector sigue siendo `O(1)` respecto al tamaño global.
 
-- cambia la ventana activa;
-- una transacción detecta que el cache está obsoleto por concurrencia o por otro cambio inesperado.
+## Índices
 
-Por tanto, añadir 100 jugadores ya no implica descargar aproximadamente cientos de candidatos 100 veces.
+El campo `worldMapSpawnChunks.candidates` está excluido de los índices automáticos mediante `firestore.indexes.json`, ya que nunca se consulta por claves internas. Esto reduce almacenamiento y trabajo de indexación en cada modificación del chunk.
 
-La selección continúa siendo secuencial. No se asignan varios jugadores en paralelo y cada jugador ve el pool resultante del jugador anterior.
+## Escalabilidad
 
----
+Mientras se mantenga aproximadamente el tamaño actual de ventana y chunk:
 
-## 3. Lecturas de la transacción de asignación
+- 1.000 jugadores históricos no hacen más cara una nueva asignación;
+- 100.000 jugadores históricos tampoco;
+- que el mapa llegue a columnas numéricas muy altas tampoco incrementa el coste normal de spawn.
 
-Las lecturas autoritativas necesarias se agrupan mediante `Transaction.getAll(...)` en lugar de solicitar documentos uno a uno.
-
-La transacción comprueba:
-
-- metadata actual;
-- candidato elegido;
-- sector elegido;
-- sectores vecinos relevantes;
-- excepcionalmente, candidatos inmediatamente fuera de la ventana activa que ya estén materializados.
-
-Los candidatos vecinos dentro de la ventana activa no se vuelven a leer: el proceso ya conoce cuáles existían al cargar el pool.
-
-Esto reduce especialmente la **latencia de red**, aunque el número lógico de documentos que deben comprobarse siga siendo pequeño y constante.
-
----
-
-## 4. Expansión y borde entre ventanas
-
-Una ampliación del mapa no debe volver a convertir en candidato una celda situada a `<= 2` de un bunker creado antes de que esa celda existiera.
-
-Por ello, antes de crear nuevas columnas se inspecciona únicamente la franja final del mapa ya existente cuya anchura puede afectar a las nuevas celdas:
-
-```text
-ceil(minimumPlayerDistance)
-```
-
-Con la configuración actual son las últimas **2 columnas**, es decir, como máximo:
-
-```text
-26 × 2 = 52 sectores
-```
-
-Esta comprobación es constante respecto al número total de jugadores y al tamaño histórico del mundo.
-
----
-
-## 5. Complejidad por operación
-
-### Asignar un único jugador real
-
-Respecto al tamaño global del mapa:
-
-```text
-O(1) acotado por el tamaño de la ventana activa
-```
-
-La consulta del pool devuelve como máximo aproximadamente 800 documentos con la configuración actual. El número total de jugadores fuera de esa ventana no interviene.
-
-En la práctica, una asignación individual seguirá teniendo latencia de Firestore porque requiere una consulta y una transacción remotas.
-
-### `add-players --count=X`
-
-```text
-O(X)
-```
-
-Debe crecer aproximadamente de forma lineal con **el número de jugadores que se pide crear**, porque deliberadamente se crea uno, se persiste, se modifica el pool y solo entonces se crea el siguiente.
-
-No debería crecer adicionalmente por el número histórico de jugadores ni por el tamaño global del mapa.
-
-Dentro de una misma ventana, el pool se descarga una vez y se reutiliza.
-
-### Inicializar mapa
-
-Para un mapa de 26 filas y `N` columnas:
-
-```text
-O(26 × N)
-```
-
-Es inevitable: hay que crear físicamente cada sector materializado y los candidatos correspondientes.
-
-Las escrituras se procesan por lotes y ya no se acumula en memoria una lista proporcional al mapa completo.
-
-### Ampliar mapa
-
-Si se añaden `ΔN` nuevas columnas:
-
-```text
-O(26 × ΔN)
-```
-
-El coste depende de **cuánto se amplía**, no de cuánto mide previamente el mapa.
-
-Además se consultan como máximo las últimas `ceil(minimumPlayerDistance)` columnas existentes para proteger el borde frente a bunkers cercanos.
-
-### Resolver/descubrir un sector
-
-```text
-O(1)
-```
-
-Se modifica un único sector y se retira su entrada del pool si existe.
-
-No es necesario recorrer el mapa ni otros jugadores.
-
-### Descargar mapa completo
-
-```text
-O(total de sectores materializados + total de candidatos)
-```
-
-Esta operación **sí empeora necesariamente conforme crece el mundo**, porque su objetivo es precisamente descargar una representación completa del mapa actual.
-
-La exportación de candidatos solicita únicamente sus referencias/IDs, ya que no necesita volver a descargar sus campos internos.
-
-### Render local
-
-```text
-O(total de sectores descargados)
-```
-
-Es una operación local y normalmente barata, pero un SVG que representa cada celda individual crecerá proporcionalmente al tamaño del mapa.
-
-### `init --force`
-
-Además de reconstruir el mapa, primero elimina las colecciones existentes. Por ello su tiempo depende también del tamaño del mapa anterior.
-
----
-
-## 6. Qué NO debería empeorar al crecer el servidor
-
-Con la arquitectura actual, estos factores no deberían hacer cada vez más lenta la asignación normal de un jugador:
-
-- que existan miles de jugadores en ventanas antiguas;
-- que el eje numérico materializado llegue a valores muy altos;
-- que existan muchos sectores poblados lejos de la ventana activa.
-
-La asignación trabaja sobre la ventana activa y sobre un vecindario local fijo.
-
-Sí puede existir una pequeña variación por:
-
-- latencia normal de Firestore;
-- reintentos de transacción por concurrencia;
-- una ventana de spawn muy vacía o con entradas obsoletas;
-- cambio de ventana, porque puede requerir ampliar primero el mapa.
-
----
-
-## 7. Decisiones que podrían afectar al rendimiento futuro
-
-Si en el futuro se aumenta mucho:
-
-```text
-subsequentSpawnWindowSize
-```
-
-o se amplía considerablemente la banda `D-W`, la consulta del pool de una asignación individual crecerá con ese rectángulo.
-
-Por ejemplo, el comportamiento actual está acotado porque una ventana posterior tiene unas 800 celdas posibles. Una ventana de 1.000 columnas tendría hasta 20.000 candidatos y ya justificaría otra estructura de selección ponderada.
-
-Mientras mantengamos ventanas de decenas de columnas, no hace falta esa complejidad adicional.
-
----
-
-## 8. Conclusión
-
-La implementación actual diferencia deliberadamente entre:
-
-- operaciones **locales** del mapa, cuyo coste no depende del mundo completo;
-- operaciones **globales** como exportar o materializar celdas, que necesariamente son proporcionales a la cantidad de datos procesada.
-
-La creación de un bunker pertenece al primer grupo. El crecimiento del mundo y de la población histórica no debe convertir progresivamente el alta normal de un jugador en una operación más costosa.
+Lo que sí puede aumentar la latencia son los reintentos de transacción si muchas altas concurrentes compiten por los mismos chunks. Con 7-8 chunks activos la contención está distribuida y es muy inferior a guardar todo el pool en un único documento.
