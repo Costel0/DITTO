@@ -82,11 +82,13 @@ bash ./map.sh ...
 ```powershell
 .\users.cmd clear-data --confirm=DELETE
 ```
-Borra recursivamente de Firestore toda la información bajo `users/{uid}` para todas las cuentas, incluidos estados, Survivors y subcolecciones.
+Borra recursivamente de Firestore toda la información bajo `users/{uid}` para todas las cuentas configuradas, incluidos estados, Survivors y subcolecciones.
 
-**No borra las cuentas de Firebase Authentication.** Tampoco modifica el mapa compartido.
+**No accede ni borra las cuentas de Firebase Authentication.** Tampoco modifica el mapa compartido.
 
-Para dejar un entorno de pruebas completamente limpio, normalmente se usarán ambos comandos:
+Si se conserva el mapa, cuando una de esas mismas cuentas complete de nuevo nombre + personaje inicial, el onboarding detectará su `PLAYER_BUNKER` persistente y reconstruirá sus datos usando **el mismo sector**, sin crear un segundo bunker.
+
+Para dejar un entorno de pruebas completamente limpio —datos de usuario y mundo— se usan ambos comandos:
 
 ```powershell
 .\users.cmd clear-data --confirm=DELETE
