@@ -38,25 +38,20 @@ class FirebaseFunctionsExpeditionService implements ExpeditionService {
   @override
   Future<ExpeditionLauncherInfo> fetchLauncherInfo() async {
     final callable = _functions.httpsCallable('getExpeditionLauncherInfo');
-    final results = await Future.wait<dynamic>(<Future<dynamic>>[
-      callable.call(),
-      _bunkerReference.get(),
-    ]);
-
-    final callableResult = results[0] as HttpsCallableResult<dynamic>;
-    final snapshot = results[1]
-        as DocumentSnapshot<Map<String, dynamic>>;
-    final data = callableResult.data;
-    final bunkerData = snapshot.data();
-    if (data is! Map || !snapshot.exists || bunkerData == null) {
+    final result = await callable.call();
+    final data = result.data;
+    if (data is! Map) {
       throw const FormatException('Invalid expedition launcher response.');
     }
 
-    final launcherData = _normalizeMap(Map<String, dynamic>.from(data));
-    launcherData['knownZones'] = _normalizeValue(
-      bunkerData['knownZones'] ?? const <dynamic>[],
+    // The callable is the single authoritative launcher payload. In
+    // particular, it normalizes knownZones and always includes the player's
+    // own bunker as PLAYER_BUNKER. Do not overwrite that list with a separate
+    // Firestore read, otherwise stale/legacy bunker documents can make the UI
+    // incorrectly treat the player's own bunker as an unknown zone.
+    return ExpeditionLauncherInfo.fromMap(
+      _normalizeMap(Map<String, dynamic>.from(data)),
     );
-    return ExpeditionLauncherInfo.fromMap(launcherData);
   }
 
   @override
