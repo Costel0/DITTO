@@ -109,6 +109,34 @@ class ExpeditionCoordinates {
   int get hashCode => Object.hash(sectorLetter, sectorNumber, zoneIndex);
 }
 
+class ExpeditionKnownZone {
+  const ExpeditionKnownZone({
+    required this.coordinates,
+    required this.zoneType,
+  });
+
+  final ExpeditionCoordinates coordinates;
+  final String zoneType;
+
+  factory ExpeditionKnownZone.fromMap(Map<String, dynamic> map) {
+    final coordinatesRaw = map['coordinates'];
+    final zoneTypeRaw = map['zoneType'];
+    if (coordinatesRaw is! Map || zoneTypeRaw is! String) {
+      throw const FormatException('Invalid known expedition zone.');
+    }
+    final zoneType = zoneTypeRaw.trim().toUpperCase();
+    if (!RegExp(r'^[A-Z][A-Z0-9_]*$').hasMatch(zoneType)) {
+      throw const FormatException('Invalid known expedition zone type.');
+    }
+    return ExpeditionKnownZone(
+      coordinates: ExpeditionCoordinates.fromMap(
+        Map<String, dynamic>.from(coordinatesRaw),
+      ),
+      zoneType: zoneType,
+    );
+  }
+}
+
 class ExpeditionActionDefinition {
   const ExpeditionActionDefinition({
     required this.id,
@@ -208,17 +236,30 @@ class ExpeditionLauncherInfo {
     required this.zonesPerSector,
     required this.travelSecondsPerDistanceUnit,
     required this.actions,
+    required this.knownZones,
   });
 
   final ExpeditionCoordinates bunkerCoordinates;
   final int zonesPerSector;
   final double travelSecondsPerDistanceUnit;
   final List<ExpeditionActionDefinition> actions;
+  final List<ExpeditionKnownZone> knownZones;
 
-  List<ExpeditionActionDefinition> actionsForZone(String? zoneType) =>
-      List<ExpeditionActionDefinition>.unmodifiable(
-        actions.where((action) => action.isAvailableForZone(zoneType)),
-      );
+  ExpeditionKnownZone? knownZoneAt(ExpeditionCoordinates coordinates) {
+    for (final zone in knownZones) {
+      if (zone.coordinates == coordinates) return zone;
+    }
+    return null;
+  }
+
+  List<ExpeditionActionDefinition> actionsForCoordinates(
+    ExpeditionCoordinates coordinates,
+  ) {
+    final zoneType = knownZoneAt(coordinates)?.zoneType;
+    return List<ExpeditionActionDefinition>.unmodifiable(
+      actions.where((action) => action.isAvailableForZone(zoneType)),
+    );
+  }
 
   int travelSecondsTo(ExpeditionCoordinates coordinates) =>
       (bunkerCoordinates.distanceTo(coordinates) * travelSecondsPerDistanceUnit)
@@ -237,9 +278,12 @@ class ExpeditionLauncherInfo {
   factory ExpeditionLauncherInfo.fromMap(Map<String, dynamic> map) {
     final coordinatesRaw = map['bunkerCoordinates'];
     final actionsRaw = map['actions'] ?? map['bunkerActions'];
+    final knownZonesRaw = map['knownZones'] ?? const <dynamic>[];
     final zonesRaw = map['zonesPerSector'] ?? 1;
     final travelRaw = map['travelSecondsPerDistanceUnit'] ?? 300;
-    if (coordinatesRaw is! Map || actionsRaw is! List) {
+    if (coordinatesRaw is! Map ||
+        actionsRaw is! List ||
+        knownZonesRaw is! List) {
       throw const FormatException('Invalid expedition launcher information.');
     }
     if (zonesRaw is! num ||
@@ -264,6 +308,16 @@ class ExpeditionLauncherInfo {
             throw const FormatException('Invalid expedition action.');
           }
           return ExpeditionActionDefinition.fromMap(
+            Map<String, dynamic>.from(raw),
+          );
+        }),
+      ),
+      knownZones: List<ExpeditionKnownZone>.unmodifiable(
+        knownZonesRaw.map((raw) {
+          if (raw is! Map) {
+            throw const FormatException('Invalid known expedition zone.');
+          }
+          return ExpeditionKnownZone.fromMap(
             Map<String, dynamic>.from(raw),
           );
         }),
