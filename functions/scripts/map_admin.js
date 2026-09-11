@@ -1,5 +1,6 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const {spawn} = require("node:child_process");
 const {
   applicationDefault,
   initializeApp,
@@ -11,6 +12,10 @@ const {
   exportMap,
   initializeMap,
 } = require("../map");
+
+const MAP_EXPORT_DIRECTORY = path.resolve(__dirname, "..", "map_exports");
+const DEFAULT_MAP_EXPORT_BASE = path.join(MAP_EXPORT_DIRECTORY, "latest_map");
+const DEFAULT_MAP_RENDER_PATH = path.join(MAP_EXPORT_DIRECTORY, "latest_map.svg");
 
 function parseArgs(argv) {
   const [command, ...rest] = argv;
@@ -53,7 +58,7 @@ function numberOption(options, name, fallback = null) {
 }
 
 function usage() {
-  console.log(`DITTO map administration\n\nUsage:\n  node scripts/map_admin.js init [--force] [--project=ID] [--max=50] [--alpha=2]\n  node scripts/map_admin.js expand --max=80 [--project=ID]\n  node scripts/map_admin.js add-players --count=100 [--project=ID]\n  node scripts/map_admin.js download [--project=ID] [--out=PATH] [--format=json|csv|both]\n\nRoot wrappers:\n  .\\map.cmd init --force\n  .\\map.cmd expand --max=80\n  .\\map.cmd add-players --count=100\n  .\\map.cmd download\n`);
+  console.log(`DITTO map administration\n\nUsage:\n  node scripts/map_admin.js init [--force] [--project=ID] [--max=50] [--alpha=2]\n  node scripts/map_admin.js expand --max=80 [--project=ID]\n  node scripts/map_admin.js add-players --count=100 [--project=ID]\n  node scripts/map_admin.js download [--project=ID] [--out=PATH] [--format=json|csv|both]\n  node scripts/map_admin.js render [--in=PATH] [--out=PATH] [--open=true|false]\n\nRoot wrappers:\n  .\\map.cmd init --force\n  .\\map.cmd expand --max=80\n  .\\map.cmd add-players --count=100\n  .\\map.cmd download\n  .\\map.cmd render\n\nDefault local files (overwritten on every run):\n  functions/map_exports/latest_map.json\n  functions/map_exports/latest_map.csv\n  functions/map_exports/latest_map.svg\n`);
 }
 
 function projectIdFromFirebaseRc() {
@@ -133,9 +138,145 @@ function mapToCsv(payload) {
     .join("\n");
 }
 
-function defaultExportBase() {
-  const stamp = new Date().toISOString().replaceAll(":", "-").replaceAll(".", "-");
-  return path.resolve(__dirname, "..", "map_exports", `map_${stamp}`);
+function normalizedExportBase(rawPath) {
+  if (!rawPath) return DEFAULT_MAP_EXPORT_BASE;
+  return path.resolve(rawPath).replace(/\.(json|csv)$/i, "");
+}
+
+function booleanOption(options, name, fallback) {
+  if (options[name] === undefined) return fallback;
+  const value = String(options[name]).trim().toLowerCase();
+  if (value === "true" || value === "1" || value === "yes") return true;
+  if (value === "false" || value === "0" || value === "no") return false;
+  throw new Error(`--${name} must be true or false.`);
+}
+
+function xmlEscape(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
+}
+
+function buildMapSvg(payload) {
+  if (!payload || !Array.isArray(payload.sectors) || payload.sectors.length === 0) {
+    throw new Error("Downloaded map contains no sectors to render.");
+  }
+
+  const sectors = payload.sectors;
+  const letters = [...new Set(sectors.map((sector) => sector.letter))]
+    .filter((letter) => typeof letter === "string")
+    .sort((a, b) => a.localeCompare(b));
+  const numbers = [...new Set(sectors.map((sector) => Number(sector.number)))]
+    .filter(Number.isFinite)
+    .sort((a, b) => a - b);
+
+  if (letters.length === 0 || numbers.length === 0) {
+    throw new Error("Downloaded map has invalid sector coordinates.");
+  }
+
+  const cellSize = 22;
+  const labelWidth = 42;
+  const titleHeight = 64;
+  const numberLabelHeight = 24;
+  const legendHeight = 42;
+  const gridX = labelWidth;
+  const gridY = titleHeight + numberLabelHeight;
+  const gridWidth = numbers.length * cellSize;
+  const gridHeight = letters.length * cellSize;
+  const width = gridX + gridWidth + 24;
+  const height = gridY + gridHeight + legendHeight + 18;
+  const sectorById = new Map(sectors.map((sector) => [sector.id, sector]));
+
+  const counts = payload.counts || {};
+  const title = `DITTO map - ${numbers[0]}..${numbers[numbers.length - 1]}`;
+  const subtitle = `Sectors: ${counts.sectors ?? sectors.length} | Bunkers: ${counts.playerBunkers ?? "?"} | Populated: ${counts.populated ?? "?"}`;
+
+  const parts = [
+    `<?xml version="1.0" encoding="UTF-8"?>`,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`,
+    `<rect width="100%" height="100%" fill="#ffffff"/>`,
+    `<text x="18" y="25" font-family="Arial, sans-serif" font-size="18" font-weight="700" fill="#202124">${xmlEscape(title)}</text>`,
+    `<text x="18" y="46" font-family="Arial, sans-serif" font-size="11" fill="#5f6368">${xmlEscape(subtitle)}</text>`,
+  ];
+
+  numbers.forEach((number, column) => {
+    const x = gridX + column * cellSize + cellSize / 2;
+    parts.push(
+      `<text x="${x}" y="${gridY - 8}" font-family="Arial, sans-serif" font-size="8" text-anchor="middle" fill="#5f6368">${number}</text>`,
+    );
+  });
+
+  letters.forEach((letter, row) => {
+    const centerY = gridY + row * cellSize + cellSize / 2;
+    parts.push(
+      `<text x="${gridX - 12}" y="${centerY + 3}" font-family="Arial, sans-serif" font-size="9" text-anchor="middle" fill="#5f6368">${xmlEscape(letter)}</text>`,
+    );
+
+    numbers.forEach((number, column) => {
+      const id = `${letter}${number}`;
+      const sector = sectorById.get(id);
+      const x = gridX + column * cellSize;
+      const y = gridY + row * cellSize;
+
+      let fill = "#f5f6f7";
+      let titleText = `${id}: UNGENERATED`;
+      if (sector?.type === "PLAYER_BUNKER") {
+        fill = "#d85b57";
+        titleText = `${id}: PLAYER_BUNKER${sector.playerId ? ` (${sector.playerId})` : ""}`;
+      } else if (sector?.status === "POPULATED") {
+        fill = "#b8bec7";
+        titleText = `${id}: ${sector.type || "POPULATED"}`;
+      }
+
+      parts.push(
+        `<rect x="${x}" y="${y}" width="${cellSize}" height="${cellSize}" fill="${fill}" stroke="#d0d4d9" stroke-width="1"><title>${xmlEscape(titleText)}</title></rect>`,
+      );
+    });
+  });
+
+  const legendY = gridY + gridHeight + 22;
+  const legendItems = [
+    {label: "Ungenerated", fill: "#f5f6f7"},
+    {label: "Populated", fill: "#b8bec7"},
+    {label: "Player bunker", fill: "#d85b57"},
+  ];
+  let legendX = gridX;
+  for (const item of legendItems) {
+    parts.push(
+      `<rect x="${legendX}" y="${legendY - 10}" width="13" height="13" fill="${item.fill}" stroke="#aeb4bc" stroke-width="1"/>`,
+      `<text x="${legendX + 19}" y="${legendY}" font-family="Arial, sans-serif" font-size="10" fill="#3c4043">${xmlEscape(item.label)}</text>`,
+    );
+    legendX += item.label.length * 6.2 + 44;
+  }
+
+  parts.push(`</svg>`);
+  return parts.join("\n");
+}
+
+function openLocalFile(filePath) {
+  let command;
+  let args;
+
+  if (process.platform === "win32") {
+    command = "cmd.exe";
+    args = ["/c", "start", "", filePath];
+  } else if (process.platform === "darwin") {
+    command = "open";
+    args = [filePath];
+  } else {
+    command = "xdg-open";
+    args = [filePath];
+  }
+
+  const child = spawn(command, args, {
+    detached: true,
+    stdio: "ignore",
+    windowsHide: true,
+  });
+  child.unref();
 }
 
 async function runInit(db, options) {
@@ -175,10 +316,7 @@ async function runDownload(db, options) {
     throw new Error("--format must be json, csv, or both.");
   }
 
-  const requestedOut = options.out ? path.resolve(options.out) : null;
-  const base = requestedOut
-    ? requestedOut.replace(/\.(json|csv)$/i, "")
-    : defaultExportBase();
+  const base = normalizedExportBase(options.out);
   fs.mkdirSync(path.dirname(base), {recursive: true});
 
   const written = [];
@@ -197,10 +335,44 @@ async function runDownload(db, options) {
   for (const file of written) console.log(file);
 }
 
+function runRender(options) {
+  const input = options.in
+    ? path.resolve(options.in)
+    : `${DEFAULT_MAP_EXPORT_BASE}.json`;
+  const output = options.out
+    ? path.resolve(options.out)
+    : DEFAULT_MAP_RENDER_PATH;
+  const shouldOpen = booleanOption(options, "open", true);
+
+  if (!fs.existsSync(input)) {
+    throw new Error(
+      `Downloaded map not found: ${input}. Run map download first or use --in=PATH.`,
+    );
+  }
+
+  const payload = JSON.parse(fs.readFileSync(input, "utf8"));
+  const svg = buildMapSvg(payload);
+  fs.mkdirSync(path.dirname(output), {recursive: true});
+  fs.writeFileSync(output, `${svg}\n`, "utf8");
+
+  console.log(`Map image written to ${output}`);
+  if (shouldOpen) {
+    openLocalFile(output);
+    console.log("Opened map image with the system default viewer/browser.");
+  }
+}
+
 async function main() {
   const {command, options} = parseArgs(process.argv.slice(2));
   if (!command || command === "help" || command === "--help" || command === "-h") {
     usage();
+    return;
+  }
+
+  // render is intentionally local-only: it uses the most recently downloaded
+  // JSON file and must not require Firebase credentials or a network call.
+  if (command === "render") {
+    runRender(options);
     return;
   }
 
