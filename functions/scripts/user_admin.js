@@ -4,7 +4,6 @@ const {
   applicationDefault,
   initializeApp,
 } = require("firebase-admin/app");
-const {getAuth} = require("firebase-admin/auth");
 const {getFirestore} = require("firebase-admin/firestore");
 
 function parseArgs(argv) {
@@ -42,7 +41,7 @@ function initializeFirebase(explicitProjectId) {
 
   if (process.env.FIRESTORE_EMULATOR_HOST) {
     initializeApp({projectId: projectId || "ditto-local"});
-    return {db: getFirestore(), auth: getAuth()};
+    return getFirestore();
   }
   if (!projectId) {
     throw new Error("Firebase project ID was not found. Use --project=PROJECT_ID.");
@@ -51,34 +50,14 @@ function initializeFirebase(explicitProjectId) {
     credential: applicationDefault(),
     projectId,
   });
-  return {db: getFirestore(), auth: getAuth()};
+  return getFirestore();
 }
 
-async function allAuthUserIds(auth) {
-  const ids = [];
-  let pageToken;
-  do {
-    const page = await auth.listUsers(1000, pageToken);
-    ids.push(...page.users.map((user) => user.uid));
-    pageToken = page.pageToken;
-  } while (pageToken);
-  return ids;
-}
-
-async function allFirestoreUserIds(db) {
+async function clearAllUserData(db) {
+  // All game/account information created by DITTO is rooted below users/{uid}.
+  // This script deliberately never initializes or calls Firebase Auth.
   const snapshot = await db.collection("users").select().get();
-  return snapshot.docs.map((doc) => doc.id);
-}
-
-async function clearAllUserData(db, auth) {
-  // Union both sources: Auth guarantees that even an account with a missing
-  // parent user document but surviving subcollections gets cleaned; Firestore
-  // also catches stale game data whose Auth account was previously removed.
-  const [authIds, firestoreIds] = await Promise.all([
-    allAuthUserIds(auth),
-    allFirestoreUserIds(db),
-  ]);
-  const ids = [...new Set([...authIds, ...firestoreIds])];
+  const ids = snapshot.docs.map((doc) => doc.id);
 
   let cleared = 0;
   for (const uid of ids) {
@@ -89,14 +68,13 @@ async function clearAllUserData(db, auth) {
     }
   }
   return {
-    authAccountsPreserved: authIds.length,
-    firestoreRootsFound: firestoreIds.length,
+    firestoreUserTreesFound: ids.length,
     userTreesCleared: cleared,
   };
 }
 
 function usage() {
-  console.log(`DITTO user administration\n\nUsage:\n  node scripts/user_admin.js clear-data --confirm=DELETE [--project=ID]\n\nclear-data recursively deletes users/{uid} Firestore data for every account.\nFirebase Authentication accounts are NOT deleted. The shared map is NOT reset.\n`);
+  console.log(`DITTO user administration\n\nUsage:\n  node scripts/user_admin.js clear-data --confirm=DELETE [--project=ID]\n\nclear-data recursively deletes users/{uid} Firestore data for every configured account.\nFirebase Authentication is never accessed or modified. The shared map is NOT reset.\n`);
 }
 
 async function main() {
@@ -114,10 +92,10 @@ async function main() {
     );
   }
 
-  const {db, auth} = initializeFirebase(options.project);
-  const result = await clearAllUserData(db, auth);
+  const db = initializeFirebase(options.project);
+  const result = await clearAllUserData(db);
   console.log(JSON.stringify(result, null, 2));
-  console.log("Firebase Authentication accounts were preserved.");
+  console.log("Firebase Authentication was not accessed or modified.");
   console.log(
     "The shared world map was not changed. Use map init --force separately for a clean world.",
   );
