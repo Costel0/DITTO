@@ -59,10 +59,6 @@ Durante el mismo proceso se reutilizan en memoria los chunks de la ventana activ
 
 Resolver o descubrir un único sector sigue siendo `O(1)` respecto al tamaño global.
 
-## Índices
-
-El campo `worldMapSpawnChunks.candidates` está excluido de los índices automáticos mediante `firestore.indexes.json`, ya que nunca se consulta por claves internas. Esto reduce almacenamiento y trabajo de indexación en cada modificación del chunk.
-
 ## Escalabilidad
 
 Mientras se mantenga aproximadamente el tamaño actual de ventana y chunk:
