@@ -254,7 +254,13 @@ function candidateDocument(letter, number, config) {
   };
 }
 
-async function createMapRange(db, fromNumber, toNumber, config) {
+async function createMapRange(
+  db,
+  fromNumber,
+  toNumber,
+  config,
+  blockedCandidateIds = new Set(),
+) {
   if (toNumber < fromNumber) return {sectorsCreated: 0, candidatesCreated: 0};
 
   let writers = [];
@@ -282,7 +288,10 @@ async function createMapRange(db, fromNumber, toNumber, config) {
       });
       sectorsCreated += 1;
 
-      if (canEverBeSpawnCandidate(letter, number, config)) {
+      if (
+        canEverBeSpawnCandidate(letter, number, config) &&
+        !blockedCandidateIds.has(id)
+      ) {
         writers.push({
           type: "set",
           ref: candidateRef(db, id),
@@ -385,6 +394,55 @@ function configFromMeta(meta) {
   });
 }
 
+async function expansionBlockedCandidateIds(
+  db,
+  currentMaximum,
+  newMaximum,
+  config,
+) {
+  const radius = Math.ceil(config.minimumPlayerDistance);
+  if (radius <= 0) return new Set();
+
+  const firstRelevantExistingNumber = Math.max(
+    config.initialNumberMin,
+    currentMaximum + 1 - radius,
+  );
+  const refs = [];
+  for (
+    let number = firstRelevantExistingNumber;
+    number <= currentMaximum;
+    number += 1
+  ) {
+    for (
+      let li = letterIndex(config.letterMin);
+      li <= letterIndex(config.letterMax);
+      li += 1
+    ) {
+      refs.push(sectorRef(db, sectorId(indexLetter(li), number)));
+    }
+  }
+
+  if (refs.length === 0) return new Set();
+  const snapshots = await db.getAll(...refs);
+  const blocked = new Set();
+
+  for (const snapshot of snapshots) {
+    if (!snapshot.exists || snapshot.data()?.type !== "PLAYER_BUNKER") continue;
+    const bunker = parseSectorId(snapshot.id);
+    for (const coordinate of neighbourCoordinates(bunker, config)) {
+      if (
+        coordinate.number > currentMaximum &&
+        coordinate.number <= newMaximum &&
+        canEverBeSpawnCandidate(coordinate.letter, coordinate.number, config)
+      ) {
+        blocked.add(sectorId(coordinate.letter, coordinate.number));
+      }
+    }
+  }
+
+  return blocked;
+}
+
 async function expandMap(db, newMaximum) {
   if (!Number.isInteger(newMaximum) || newMaximum < 1) {
     throw new Error("newMaximum must be a positive integer.");
@@ -403,11 +461,18 @@ async function expandMap(db, newMaximum) {
     };
   }
 
+  const blockedCandidateIds = await expansionBlockedCandidateIds(
+    db,
+    currentMaximum,
+    newMaximum,
+    config,
+  );
   const created = await createMapRange(
     db,
     currentMaximum + 1,
     newMaximum,
     config,
+    blockedCandidateIds,
   );
 
   await metaRef(db).update({
@@ -419,6 +484,7 @@ async function expandMap(db, newMaximum) {
     expanded: true,
     previousMapNumberMax: currentMaximum,
     currentMapNumberMax: newMaximum,
+    blockedCandidatesSkipped: blockedCandidateIds.size,
     ...created,
   };
 }
@@ -431,6 +497,7 @@ function clearCandidateCache(cache) {
   if (!cache || typeof cache !== "object") return;
   cache.windowKey = null;
   cache.docs = null;
+  cache.meta = null;
 }
 
 function removeCandidateIdsFromCache(cache, ids) {
@@ -457,8 +524,18 @@ async function candidateDocsForActiveWindow(db, meta, cache = null) {
   if (cache) {
     cache.windowKey = windowKey;
     cache.docs = snapshot.docs;
+    cache.meta = meta;
   }
   return snapshot.docs;
+}
+
+async function metaForAllocation(db, cache) {
+  if (cache?.meta && cache.windowKey === activeWindowKey(cache.meta)) {
+    return cache.meta;
+  }
+  const {data} = await requiredMeta(db);
+  if (cache) cache.meta = data;
+  return data;
 }
 
 function randomUnit() {
@@ -522,7 +599,7 @@ async function allocatePlayerSector(db, options = {}) {
     : null;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    const {data: meta} = await requiredMeta(db);
+    const meta = await metaForAllocation(db, candidateCache);
     const config = configFromMeta(meta);
     const candidateDocs = await candidateDocsForActiveWindow(
       db,
@@ -545,15 +622,29 @@ async function allocatePlayerSector(db, options = {}) {
     const selectedCoordinate = {letter: selected.letter, number: selected.number};
     const allForbiddenCoordinates = neighbourCoordinates(selectedCoordinate, config);
     const selectedId = selectedDoc.id;
+    const activeCandidateIds = new Set(candidateDocs.map((doc) => doc.id));
     const nearbyCoordinates = allForbiddenCoordinates.filter((coordinate) =>
       sectorId(coordinate.letter, coordinate.number) !== selectedId,
     );
     const nearbySectorRefs = nearbyCoordinates.map((coordinate) =>
       sectorRef(db, sectorId(coordinate.letter, coordinate.number)),
     );
-    const candidateRefsToDelete = allForbiddenCoordinates.map((coordinate) =>
-      candidateRef(db, sectorId(coordinate.letter, coordinate.number)),
-    );
+    const activeCandidateRefsToDelete = allForbiddenCoordinates
+      .map((coordinate) => sectorId(coordinate.letter, coordinate.number))
+      .filter((id) => activeCandidateIds.has(id))
+      .map((id) => candidateRef(db, id));
+    const externalCandidateRefs = allForbiddenCoordinates
+      .filter((coordinate) =>
+        canEverBeSpawnCandidate(coordinate.letter, coordinate.number, config) &&
+        coordinate.number <= Number(meta.currentMapNumberMax) &&
+        (
+          coordinate.number < Number(meta.activeSpawnNumberMin) ||
+          coordinate.number > Number(meta.activeSpawnNumberMax)
+        ),
+      )
+      .map((coordinate) =>
+        candidateRef(db, sectorId(coordinate.letter, coordinate.number)),
+      );
     const invalidatedCandidateIds = new Set(
       allForbiddenCoordinates.map((coordinate) =>
         sectorId(coordinate.letter, coordinate.number),
@@ -567,13 +658,12 @@ async function allocatePlayerSector(db, options = {}) {
         selectedDoc.ref,
         selectedSectorRef,
         ...nearbySectorRefs,
+        ...externalCandidateRefs,
       );
-      const [
-        transactionMeta,
-        selectedCandidate,
-        selectedSector,
-        ...nearbySectors
-      ] = snapshots;
+      const nearbySectorEnd = 3 + nearbySectorRefs.length;
+      const [transactionMeta, selectedCandidate, selectedSector] = snapshots;
+      const nearbySectors = snapshots.slice(3, nearbySectorEnd);
+      const externalCandidates = snapshots.slice(nearbySectorEnd);
       const currentMeta = transactionMeta.data() || {};
 
       if (!selectedCandidate.exists || !selectedSector.exists) {
@@ -615,10 +705,11 @@ async function allocatePlayerSector(db, options = {}) {
         updatedAt: FieldValue.serverTimestamp(),
       });
 
-      // No candidate reads are required here. Deleting a missing document is
-      // harmless, and all forbidden coordinates are known from geometry.
-      for (const ref of candidateRefsToDelete) {
+      for (const ref of activeCandidateRefsToDelete) {
         transaction.delete(ref);
+      }
+      for (const snapshot of externalCandidates) {
+        if (snapshot.exists) transaction.delete(snapshot.ref);
       }
 
       transaction.set(metaRef(db), {
@@ -658,9 +749,8 @@ async function addSimulatedPlayers(db, count) {
   }
 
   // A batch simulation is still strictly one player at a time. The only thing
-  // reused is the already-downloaded candidate pool for the active window.
-  // Each successful allocation removes its forbidden cells from this cache,
-  // while every player still gets its own Firestore transaction.
+  // reused is the already-downloaded candidate pool and static map metadata for
+  // the active window. Every player still gets an independent transaction.
   const candidateCache = {};
   const added = [];
   for (let index = 0; index < count; index += 1) {
@@ -712,8 +802,6 @@ async function exportMap(db) {
   const {data: meta} = await requiredMeta(db);
   const [sectorSnapshot, candidateSnapshot] = await Promise.all([
     db.collection(SECTORS_COLLECTION).get(),
-    // Only candidate document IDs are needed for the export. Avoid downloading
-    // their priority/coordinate fields again on large maps.
     db.collection(CANDIDATES_COLLECTION).select().get(),
   ]);
 
