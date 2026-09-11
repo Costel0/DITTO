@@ -6,7 +6,7 @@ const test = require("node:test");
 test("server data dry-run validation succeeds", () => {
   const result = spawnSync(
     process.execPath,
-    ["scripts/sync_server_data.js", "--dry-run"],
+    ["scripts/sync_server_data_v2.js", "--dry-run"],
     {
       cwd: path.resolve(__dirname, ".."),
       encoding: "utf8",
@@ -17,7 +17,7 @@ test("server data dry-run validation succeeds", () => {
     result.status,
     0,
     [
-      "sync_server_data.js --dry-run failed.",
+      "sync_server_data_v2.js --dry-run failed.",
       result.stdout,
       result.stderr,
     ].filter(Boolean).join("\n"),
