@@ -310,7 +310,24 @@ function sectorDocument(letter, number, config) {
   };
 }
 
-function chunkWriteData(chunk, candidates, weight, count) {
+function normalizeCandidates(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const result = {};
+  for (const [id, rawWeight] of Object.entries(value)) {
+    const weight = Number(rawWeight);
+    if (/^[A-Z]\d+$/.test(id) && Number.isFinite(weight) && weight > 0) {
+      result[id] = weight;
+    }
+  }
+  return result;
+}
+
+function candidateWeightSum(candidates) {
+  return Object.values(candidates)
+    .reduce((sum, weight) => sum + Number(weight), 0);
+}
+
+function chunkWriteData(chunk, candidates) {
   return {
     id: chunk.id,
     windowMin: chunk.windowMin,
@@ -318,8 +335,8 @@ function chunkWriteData(chunk, candidates, weight, count) {
     numberMin: chunk.min,
     numberMax: chunk.max,
     candidates,
-    totalWeight: FieldValue.increment(weight),
-    candidateCount: FieldValue.increment(count),
+    totalWeight: candidateWeightSum(candidates),
+    candidateCount: Object.keys(candidates).length,
     updatedAt: FieldValue.serverTimestamp(),
   };
 }
@@ -341,7 +358,6 @@ async function createMapRange(
   let chunksTouched = 0;
   let activeChunk = null;
   let activeChunkCandidates = {};
-  let activeChunkWeight = 0;
   let activeChunkCount = 0;
 
   const flushWriters = async () => {
@@ -354,26 +370,24 @@ async function createMapRange(
     if (!activeChunk || activeChunkCount === 0) {
       activeChunk = null;
       activeChunkCandidates = {};
-      activeChunkWeight = 0;
       activeChunkCount = 0;
       return;
     }
 
+    const ref = spawnChunkRef(db, activeChunk.id);
+    const existing = await ref.get();
+    const candidates = {
+      ...normalizeCandidates(existing.exists ? existing.data()?.candidates : null),
+      ...activeChunkCandidates,
+    };
     writers.push({
       type: "set",
-      ref: spawnChunkRef(db, activeChunk.id),
-      data: chunkWriteData(
-        activeChunk,
-        activeChunkCandidates,
-        activeChunkWeight,
-        activeChunkCount,
-      ),
-      options: {merge: true},
+      ref,
+      data: chunkWriteData(activeChunk, candidates),
     });
     chunksTouched += 1;
     activeChunk = null;
     activeChunkCandidates = {};
-    activeChunkWeight = 0;
     activeChunkCount = 0;
 
     if (writers.length >= BATCH_SIZE) await flushWriters();
@@ -407,7 +421,6 @@ async function createMapRange(
       ) {
         const priority = proximityWeight({letter, number}, config);
         activeChunkCandidates[id] = priority;
-        activeChunkWeight += priority;
         activeChunkCount += 1;
         candidatesCreated += 1;
       }
@@ -642,26 +655,15 @@ function activeWindowKey(meta) {
   return `${Number(meta.activeSpawnNumberMin)}:${Number(meta.activeSpawnNumberMax)}`;
 }
 
-function normalizeCandidates(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-  const result = {};
-  for (const [id, rawWeight] of Object.entries(value)) {
-    const weight = Number(rawWeight);
-    if (/^[A-Z]\d+$/.test(id) && Number.isFinite(weight) && weight > 0) {
-      result[id] = weight;
-    }
-  }
-  return result;
-}
-
-function candidateWeightSum(candidates) {
-  return Object.values(candidates)
-    .reduce((sum, weight) => sum + Number(weight), 0);
-}
-
-function chunkRecordFromSnapshot(snapshot) {
+function chunkRecordFromSnapshot(
+  snapshot,
+  currentMapNumberMax = Number.MAX_SAFE_INTEGER,
+) {
   const data = snapshot.data() || {};
-  const candidates = normalizeCandidates(data.candidates);
+  const candidates = Object.fromEntries(
+    Object.entries(normalizeCandidates(data.candidates))
+      .filter(([id]) => parseSectorId(id).number <= currentMapNumberMax),
+  );
   return {
     id: snapshot.id,
     ref: snapshot.ref,
@@ -708,9 +710,10 @@ async function chunkRecordsForActiveWindow(db, meta, config, cache = null) {
   const snapshots = await db.getAll(
     ...chunks.map((chunk) => spawnChunkRef(db, chunk.id)),
   );
+  const currentMapNumberMax = Number(meta.currentMapNumberMax);
   const records = snapshots
     .filter((snapshot) => snapshot.exists)
-    .map(chunkRecordFromSnapshot);
+    .map((snapshot) => chunkRecordFromSnapshot(snapshot, currentMapNumberMax));
 
   if (cache) {
     cache.windowKey = windowKey;
@@ -800,7 +803,7 @@ function affectedChunkIds(coordinates, config, currentMapNumberMax) {
 
 function updatedChunkAfterInvalidation(snapshot, invalidatedIds) {
   const record = chunkRecordFromSnapshot(snapshot);
-  const candidates = {...record.candidates};
+  const candidates = {...normalizeCandidates(snapshot.data()?.candidates)};
   for (const id of invalidatedIds) delete candidates[id];
   return {
     ...record,
@@ -879,6 +882,7 @@ async function allocatePlayerSector(db, options = {}) {
       if (
         Number(currentMeta.schemaVersion) !== MAP_SCHEMA_VERSION ||
         currentMeta.expansionStatus === "EXPANDING" ||
+        selectedCoordinate.number > Number(currentMeta.currentMapNumberMax) ||
         selectedCoordinate.number < Number(currentMeta.activeSpawnNumberMin) ||
         selectedCoordinate.number > Number(currentMeta.activeSpawnNumberMax)
       ) {
