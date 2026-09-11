@@ -53,6 +53,12 @@ class BunkerCoordinates {
   final int y;
   final int z;
 
+  bool get isPlayableMapCoordinate => x >= 0 && x <= 25 && y >= 1 && z >= 1;
+
+  String get sectorLetter => x >= 0 && x <= 25
+      ? String.fromCharCode(65 + x)
+      : '?';
+
   factory BunkerCoordinates.fromJson(Object? raw) {
     if (raw is! Map) {
       throw const FormatException(
@@ -66,10 +72,9 @@ class BunkerCoordinates {
       if (value is! num ||
           !value.isFinite ||
           value != value.toInt() ||
-          value < 0 ||
-          value > 999) {
+          value < 0) {
         throw FormatException(
-          'bunkerCoordinates.$axis must be an integer from 0 to 999.',
+          'bunkerCoordinates.$axis must be a non-negative integer.',
         );
       }
       return value.toInt();
@@ -82,7 +87,9 @@ class BunkerCoordinates {
     );
   }
 
-  String get displayValue => '$x, $y, $z';
+  String get displayValue => isPlayableMapCoordinate
+      ? '$sectorLetter$y-$z'
+      : '$x, $y, $z';
 
   @override
   bool operator ==(Object other) =>
@@ -93,6 +100,35 @@ class BunkerCoordinates {
 
   @override
   int get hashCode => Object.hash(x, y, z);
+}
+
+class KnownZone {
+  const KnownZone({
+    required this.coordinates,
+    required this.zoneType,
+  });
+
+  final BunkerCoordinates coordinates;
+  final String zoneType;
+
+  factory KnownZone.fromJson(Object? raw) {
+    if (raw is! Map) {
+      throw const FormatException('Each knownZones entry must be an object.');
+    }
+    final map = Map<String, dynamic>.from(raw);
+    final coordinates = BunkerCoordinates.fromJson(map['coordinates']);
+    final zoneTypeRaw = map['zoneType'];
+    final zoneType = zoneTypeRaw is String
+        ? zoneTypeRaw.trim().toUpperCase()
+        : '';
+    if (!coordinates.isPlayableMapCoordinate) {
+      throw const FormatException('knownZones contains invalid map coordinates.');
+    }
+    if (!RegExp(r'^[A-Z][A-Z0-9_]*$').hasMatch(zoneType)) {
+      throw const FormatException('knownZones contains an invalid zone type.');
+    }
+    return KnownZone(coordinates: coordinates, zoneType: zoneType);
+  }
 }
 
 class BusySurvivor {
@@ -273,15 +309,18 @@ class BunkerState {
     required List<String> completedTaskIds,
     required Map<String, int> inventory,
     required this.bunkerCoordinates,
+    required List<KnownZone> knownZones,
   })  : survivors = List<Survivor>.unmodifiable(survivors),
         idleSurvivors = List<String>.unmodifiable(idleSurvivors),
         busySurvivors = List<BusySurvivor>.unmodifiable(busySurvivors),
         activeBackgroundTasks =
             List<ActiveBackgroundTask>.unmodifiable(activeBackgroundTasks),
         completedTaskIds = List<String>.unmodifiable(completedTaskIds),
-        inventory = Map<String, int>.unmodifiable(inventory);
+        inventory = Map<String, int>.unmodifiable(inventory),
+        knownZones = List<KnownZone>.unmodifiable(knownZones);
 
-  static const int supportedSchemaVersion = 9;
+  static const int supportedSchemaVersion = 10;
+  static const int knownZonesSchemaVersion = 10;
   static const int backgroundTasksSchemaVersion = 9;
   static const int bunkerCoordinatesSchemaVersion = 7;
   static const int completedTasksSchemaVersion = 6;
@@ -314,10 +353,11 @@ class BunkerState {
   final Map<String, int> inventory;
 
   /// Server-authoritative position of this player's bunker.
-  ///
-  /// Until coordinate assignment exists, older states use the temporary
-  /// 0,0,0 fallback. Schema v7+ must explicitly carry this field.
   final BunkerCoordinates bunkerCoordinates;
+
+  /// Player-specific map knowledge. The authoritative world can contain more
+  /// zones; the client must only reason from this discovered subset.
+  final List<KnownZone> knownZones;
 
   Survivor? survivorById(String id) {
     for (final survivor in survivors) {
@@ -329,6 +369,13 @@ class BunkerState {
   BusySurvivor? busySurvivorById(String id) {
     for (final busySurvivor in busySurvivors) {
       if (busySurvivor.survivorId == id) return busySurvivor;
+    }
+    return null;
+  }
+
+  KnownZone? knownZoneAt(BunkerCoordinates coordinates) {
+    for (final zone in knownZones) {
+      if (zone.coordinates == coordinates) return zone;
     }
     return null;
   }
@@ -412,6 +459,27 @@ class BunkerState {
         ? BunkerCoordinates.fromJson(json['bunkerCoordinates'])
         : BunkerCoordinates.temporaryDefault;
 
+    final knownZones = schemaVersion >= knownZonesSchemaVersion
+        ? _parseKnownZones(json['knownZones'])
+        : bunkerCoordinates.isPlayableMapCoordinate
+            ? <KnownZone>[
+                KnownZone(
+                  coordinates: bunkerCoordinates,
+                  zoneType: 'PLAYER_BUNKER',
+                ),
+              ]
+            : const <KnownZone>[];
+    if (bunkerCoordinates.isPlayableMapCoordinate) {
+      final ownZone = knownZones.where(
+        (zone) => zone.coordinates == bunkerCoordinates,
+      );
+      if (ownZone.length != 1 || ownZone.single.zoneType != 'PLAYER_BUNKER') {
+        throw const FormatException(
+          'knownZones must contain the player bunker as PLAYER_BUNKER.',
+        );
+      }
+    }
+
     final inventoryRaw = json['inventory'];
     if (inventoryRaw is! Map) {
       throw const FormatException('inventory must be an object.');
@@ -441,7 +509,26 @@ class BunkerState {
       completedTaskIds: completedTaskIds,
       inventory: inventory,
       bunkerCoordinates: bunkerCoordinates,
+      knownZones: knownZones,
     );
+  }
+
+  static List<KnownZone> _parseKnownZones(Object? raw) {
+    if (raw is! List) {
+      throw const FormatException('knownZones must be a list.');
+    }
+    final result = <KnownZone>[];
+    final seen = <BunkerCoordinates>{};
+    for (final entry in raw) {
+      final zone = KnownZone.fromJson(entry);
+      if (!seen.add(zone.coordinates)) {
+        throw const FormatException(
+          'knownZones cannot contain duplicate coordinates.',
+        );
+      }
+      result.add(zone);
+    }
+    return result;
   }
 
   static List<ActiveBackgroundTask> _parseActiveBackgroundTasks(
