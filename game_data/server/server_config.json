@@ -1,7 +1,8 @@
 {
   "schemaVersion": 1,
-  "dataVersion": 4,
+  "dataVersion": 5,
   "config": {
-    "sleepingSecondsPerNegativeEnergy": 60
+    "sleepingSecondsPerNegativeEnergy": 60,
+    "expeditionTravelSecondsPerDistanceUnit": 300
   }
 }
