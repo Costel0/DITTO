@@ -19,7 +19,8 @@
     "map:init": "node scripts/map_admin.js init",
     "map:expand": "node scripts/map_admin.js expand",
     "map:add-players": "node scripts/map_admin.js add-players",
-    "map:download": "node scripts/map_admin.js download"
+    "map:download": "node scripts/map_admin.js download",
+    "map:render": "node scripts/map_admin.js render"
   },
   "dependencies": {
     "firebase-admin": "^14.2.0",
