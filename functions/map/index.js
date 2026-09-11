@@ -4,7 +4,9 @@ const {FieldValue} = require("firebase-admin/firestore");
 const META_COLLECTION = "worldMap";
 const META_DOCUMENT = "meta";
 const SECTORS_COLLECTION = "worldMapSectors";
-const CANDIDATES_COLLECTION = "worldMapSpawnCandidates";
+const SPAWN_CHUNKS_COLLECTION = "worldMapSpawnChunks";
+const LEGACY_CANDIDATES_COLLECTION = "worldMapSpawnCandidates";
+const MAP_SCHEMA_VERSION = 2;
 const BATCH_SIZE = 400;
 
 const DEFAULT_CONFIG = Object.freeze({
@@ -22,6 +24,7 @@ const DEFAULT_CONFIG = Object.freeze({
   minimumPlayerDistance: 2,
   priorityAlpha: 2,
   subsequentSpawnWindowSize: 40,
+  spawnChunkWidth: 5,
 });
 
 function letterIndex(letter) {
@@ -116,8 +119,8 @@ function sectorRef(db, id) {
   return db.collection(SECTORS_COLLECTION).doc(id);
 }
 
-function candidateRef(db, id) {
-  return db.collection(CANDIDATES_COLLECTION).doc(id);
+function spawnChunkRef(db, id) {
+  return db.collection(SPAWN_CHUNKS_COLLECTION).doc(id);
 }
 
 function normalizeConfig(overrides = {}) {
@@ -131,6 +134,7 @@ function normalizeConfig(overrides = {}) {
     "initialSpawnNumberMin",
     "initialSpawnNumberMax",
     "subsequentSpawnWindowSize",
+    "spawnChunkWidth",
   ];
   for (const field of integerFields) {
     if (!Number.isInteger(config[field])) {
@@ -161,6 +165,9 @@ function normalizeConfig(overrides = {}) {
   }
   if (config.subsequentSpawnWindowSize < 1) {
     throw new Error("subsequentSpawnWindowSize must be >= 1.");
+  }
+  if (config.spawnChunkWidth < 1) {
+    throw new Error("spawnChunkWidth must be >= 1.");
   }
 
   for (const field of [
@@ -196,6 +203,71 @@ function normalizeConfig(overrides = {}) {
   }
 
   return config;
+}
+
+function spawnWindowForNumber(number, config = DEFAULT_CONFIG) {
+  if (!Number.isInteger(number) || number < config.initialSpawnNumberMin) {
+    return null;
+  }
+
+  if (number <= config.initialSpawnNumberMax) {
+    return {
+      min: config.initialSpawnNumberMin,
+      max: config.initialSpawnNumberMax,
+    };
+  }
+
+  const firstLaterNumber = config.initialSpawnNumberMax + 1;
+  const offset = number - firstLaterNumber;
+  const windowIndex = Math.floor(offset / config.subsequentSpawnWindowSize);
+  const min = firstLaterNumber + windowIndex * config.subsequentSpawnWindowSize;
+  return {
+    min,
+    max: min + config.subsequentSpawnWindowSize - 1,
+  };
+}
+
+function spawnChunkForNumber(number, config = DEFAULT_CONFIG) {
+  const window = spawnWindowForNumber(number, config);
+  if (!window) return null;
+
+  const chunkIndex = Math.floor(
+    (number - window.min) / config.spawnChunkWidth,
+  );
+  const min = window.min + chunkIndex * config.spawnChunkWidth;
+  const max = Math.min(window.max, min + config.spawnChunkWidth - 1);
+  return {
+    id: `${min}-${max}`,
+    min,
+    max,
+    windowMin: window.min,
+    windowMax: window.max,
+  };
+}
+
+function chunksForWindow(windowMin, windowMax, config = DEFAULT_CONFIG) {
+  const chunks = [];
+  for (let number = windowMin; number <= windowMax;) {
+    const chunk = spawnChunkForNumber(number, config);
+    if (!chunk || chunk.windowMin !== windowMin || chunk.windowMax !== windowMax) {
+      throw new Error(`Invalid spawn window: ${windowMin}-${windowMax}.`);
+    }
+    chunks.push(chunk);
+    number = chunk.max + 1;
+  }
+  return chunks;
+}
+
+function canEverBeSpawnCandidate(letter, number, config) {
+  return isLetterInRange(letter, config.spawnLetterMin, config.spawnLetterMax) &&
+    number >= config.initialSpawnNumberMin;
+}
+
+function candidateChunkForCoordinate(coordinate, config) {
+  if (!canEverBeSpawnCandidate(coordinate.letter, coordinate.number, config)) {
+    return null;
+  }
+  return spawnChunkForNumber(coordinate.number, config);
 }
 
 async function deleteCollection(db, collectionName) {
@@ -238,19 +310,17 @@ function sectorDocument(letter, number, config) {
   };
 }
 
-function canEverBeSpawnCandidate(letter, number, config) {
-  return isLetterInRange(letter, config.spawnLetterMin, config.spawnLetterMax) &&
-    number >= config.initialSpawnNumberMin;
-}
-
-function candidateDocument(letter, number, config) {
+function chunkWriteData(chunk, candidates, weight, count) {
   return {
-    id: sectorId(letter, number),
-    letter,
-    letterIndex: letterIndex(letter),
-    number,
-    priority: proximityWeight({letter, number}, config),
-    createdAt: FieldValue.serverTimestamp(),
+    id: chunk.id,
+    windowMin: chunk.windowMin,
+    windowMax: chunk.windowMax,
+    numberMin: chunk.min,
+    numberMax: chunk.max,
+    candidates,
+    totalWeight: FieldValue.increment(weight),
+    candidateCount: FieldValue.increment(count),
+    updatedAt: FieldValue.serverTimestamp(),
   };
 }
 
@@ -261,19 +331,61 @@ async function createMapRange(
   config,
   blockedCandidateIds = new Set(),
 ) {
-  if (toNumber < fromNumber) return {sectorsCreated: 0, candidatesCreated: 0};
+  if (toNumber < fromNumber) {
+    return {sectorsCreated: 0, candidatesCreated: 0, chunksTouched: 0};
+  }
 
   let writers = [];
   let sectorsCreated = 0;
   let candidatesCreated = 0;
+  let chunksTouched = 0;
+  let activeChunk = null;
+  let activeChunkCandidates = {};
+  let activeChunkWeight = 0;
+  let activeChunkCount = 0;
 
-  const flush = async () => {
+  const flushWriters = async () => {
     if (writers.length === 0) return;
     await commitWriters(db, writers);
     writers = [];
   };
 
+  const flushChunk = async () => {
+    if (!activeChunk || activeChunkCount === 0) {
+      activeChunk = null;
+      activeChunkCandidates = {};
+      activeChunkWeight = 0;
+      activeChunkCount = 0;
+      return;
+    }
+
+    writers.push({
+      type: "set",
+      ref: spawnChunkRef(db, activeChunk.id),
+      data: chunkWriteData(
+        activeChunk,
+        activeChunkCandidates,
+        activeChunkWeight,
+        activeChunkCount,
+      ),
+      options: {merge: true},
+    });
+    chunksTouched += 1;
+    activeChunk = null;
+    activeChunkCandidates = {};
+    activeChunkWeight = 0;
+    activeChunkCount = 0;
+
+    if (writers.length >= BATCH_SIZE) await flushWriters();
+  };
+
   for (let number = fromNumber; number <= toNumber; number += 1) {
+    const numberChunk = spawnChunkForNumber(number, config);
+    if (activeChunk && (!numberChunk || activeChunk.id !== numberChunk.id)) {
+      await flushChunk();
+    }
+    if (numberChunk && !activeChunk) activeChunk = numberChunk;
+
     for (
       let li = letterIndex(config.letterMin);
       li <= letterIndex(config.letterMax);
@@ -289,25 +401,28 @@ async function createMapRange(
       sectorsCreated += 1;
 
       if (
+        numberChunk &&
         canEverBeSpawnCandidate(letter, number, config) &&
         !blockedCandidateIds.has(id)
       ) {
-        writers.push({
-          type: "set",
-          ref: candidateRef(db, id),
-          data: candidateDocument(letter, number, config),
-        });
+        const priority = proximityWeight({letter, number}, config);
+        activeChunkCandidates[id] = priority;
+        activeChunkWeight += priority;
+        activeChunkCount += 1;
         candidatesCreated += 1;
       }
 
-      if (writers.length >= BATCH_SIZE) {
-        await flush();
-      }
+      if (writers.length >= BATCH_SIZE) await flushWriters();
+    }
+
+    if (numberChunk && number === numberChunk.max) {
+      await flushChunk();
     }
   }
 
-  await flush();
-  return {sectorsCreated, candidatesCreated};
+  await flushChunk();
+  await flushWriters();
+  return {sectorsCreated, candidatesCreated, chunksTouched};
 }
 
 async function initializeMap(db, options = {}) {
@@ -322,13 +437,14 @@ async function initializeMap(db, options = {}) {
   }
 
   if (options.force) {
-    await deleteCollection(db, CANDIDATES_COLLECTION);
+    await deleteCollection(db, SPAWN_CHUNKS_COLLECTION);
+    await deleteCollection(db, LEGACY_CANDIDATES_COLLECTION);
     await deleteCollection(db, SECTORS_COLLECTION);
     await ref.delete();
   }
 
   await ref.set({
-    schemaVersion: 1,
+    schemaVersion: MAP_SCHEMA_VERSION,
     initializationStatus: "INITIALIZING",
     ...config,
     currentMapNumberMax: config.initialNumberMax,
@@ -372,6 +488,12 @@ async function requiredMeta(db) {
       "World map initialization is incomplete. Re-run map init --force to rebuild it.",
     );
   }
+  if (Number(data.schemaVersion) !== MAP_SCHEMA_VERSION) {
+    throw new Error(
+      `World map schema ${data.schemaVersion ?? "unknown"} is obsolete. ` +
+      "Run map init --force once to rebuild the spawn index.",
+    );
+  }
   return {snapshot, data};
 }
 
@@ -391,6 +513,7 @@ function configFromMeta(meta) {
     minimumPlayerDistance: meta.minimumPlayerDistance,
     priorityAlpha: meta.priorityAlpha,
     subsequentSpawnWindowSize: meta.subsequentSpawnWindowSize,
+    spawnChunkWidth: meta.spawnChunkWidth,
   });
 }
 
@@ -458,6 +581,7 @@ async function expandMap(db, newMaximum) {
       currentMapNumberMax: currentMaximum,
       sectorsCreated: 0,
       candidatesCreated: 0,
+      chunksTouched: 0,
     };
   }
 
@@ -493,40 +617,82 @@ function activeWindowKey(meta) {
   return `${Number(meta.activeSpawnNumberMin)}:${Number(meta.activeSpawnNumberMax)}`;
 }
 
+function normalizeCandidates(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const result = {};
+  for (const [id, rawWeight] of Object.entries(value)) {
+    const weight = Number(rawWeight);
+    if (/^[A-Z]\d+$/.test(id) && Number.isFinite(weight) && weight > 0) {
+      result[id] = weight;
+    }
+  }
+  return result;
+}
+
+function candidateWeightSum(candidates) {
+  return Object.values(candidates)
+    .reduce((sum, weight) => sum + Number(weight), 0);
+}
+
+function chunkRecordFromSnapshot(snapshot) {
+  const data = snapshot.data() || {};
+  const candidates = normalizeCandidates(data.candidates);
+  return {
+    id: snapshot.id,
+    ref: snapshot.ref,
+    windowMin: Number(data.windowMin),
+    windowMax: Number(data.windowMax),
+    numberMin: Number(data.numberMin),
+    numberMax: Number(data.numberMax),
+    candidates,
+    totalWeight: candidateWeightSum(candidates),
+    candidateCount: Object.keys(candidates).length,
+  };
+}
+
 function clearCandidateCache(cache) {
   if (!cache || typeof cache !== "object") return;
   cache.windowKey = null;
-  cache.docs = null;
+  cache.chunks = null;
   cache.meta = null;
 }
 
-function removeCandidateIdsFromCache(cache, ids) {
-  if (!cache || !Array.isArray(cache.docs) || !ids || ids.size === 0) return;
-  cache.docs = cache.docs.filter((doc) => !ids.has(doc.id));
+function updateCandidateCache(cache, updatedChunks) {
+  if (!cache || !Array.isArray(cache.chunks) || !Array.isArray(updatedChunks)) {
+    return;
+  }
+  const updates = new Map(updatedChunks.map((chunk) => [chunk.id, chunk]));
+  cache.chunks = cache.chunks.map((chunk) => updates.get(chunk.id) || chunk);
 }
 
-async function candidateDocsForActiveWindow(db, meta, cache = null) {
+async function chunkRecordsForActiveWindow(db, meta, config, cache = null) {
   const windowKey = activeWindowKey(meta);
   if (
     cache &&
     cache.windowKey === windowKey &&
-    Array.isArray(cache.docs)
+    Array.isArray(cache.chunks)
   ) {
-    return cache.docs;
+    return cache.chunks;
   }
 
-  const snapshot = await db.collection(CANDIDATES_COLLECTION)
-    .where("number", ">=", Number(meta.activeSpawnNumberMin))
-    .where("number", "<=", Number(meta.activeSpawnNumberMax))
-    .select("letter", "number", "priority")
-    .get();
+  const chunks = chunksForWindow(
+    Number(meta.activeSpawnNumberMin),
+    Number(meta.activeSpawnNumberMax),
+    config,
+  );
+  const snapshots = await db.getAll(
+    ...chunks.map((chunk) => spawnChunkRef(db, chunk.id)),
+  );
+  const records = snapshots
+    .filter((snapshot) => snapshot.exists)
+    .map(chunkRecordFromSnapshot);
 
   if (cache) {
     cache.windowKey = windowKey;
-    cache.docs = snapshot.docs;
+    cache.chunks = records;
     cache.meta = meta;
   }
-  return snapshot.docs;
+  return records;
 }
 
 async function metaForAllocation(db, cache) {
@@ -544,20 +710,30 @@ function randomUnit() {
   return integer / 0x1000000000000;
 }
 
-function chooseWeightedCandidate(docs, random = randomUnit) {
-  if (!Array.isArray(docs) || docs.length === 0) return null;
-  const weighted = docs
-    .map((doc) => ({doc, weight: Number(doc.data().priority)}))
+function chooseWeightedEntry(entries, getWeight, random = randomUnit) {
+  const weighted = entries
+    .map((entry) => ({entry, weight: Number(getWeight(entry))}))
     .filter(({weight}) => Number.isFinite(weight) && weight > 0);
   if (weighted.length === 0) return null;
 
-  const total = weighted.reduce((sum, entry) => sum + entry.weight, 0);
+  const total = weighted.reduce((sum, item) => sum + item.weight, 0);
   let target = random() * total;
-  for (const entry of weighted) {
-    target -= entry.weight;
-    if (target <= 0) return entry.doc;
+  for (const item of weighted) {
+    target -= item.weight;
+    if (target <= 0) return item.entry;
   }
-  return weighted[weighted.length - 1].doc;
+  return weighted[weighted.length - 1].entry;
+}
+
+function chooseWeightedChunk(chunks, random = randomUnit) {
+  return chooseWeightedEntry(chunks, (chunk) => chunk.totalWeight, random);
+}
+
+function chooseWeightedCandidate(candidates, random = randomUnit) {
+  const entries = Object.entries(normalizeCandidates(candidates));
+  const selected = chooseWeightedEntry(entries, ([, weight]) => weight, random);
+  if (!selected) return null;
+  return {id: selected[0], priority: Number(selected[1])};
 }
 
 function placeholderPlayerZones(playerId, zonesPerSector) {
@@ -587,6 +763,28 @@ async function advanceSpawnWindow(db, meta) {
   return {activeSpawnNumberMin: nextMin, activeSpawnNumberMax: nextMax};
 }
 
+function affectedChunkIds(coordinates, config, currentMapNumberMax) {
+  const ids = new Set();
+  for (const coordinate of coordinates) {
+    if (coordinate.number > currentMapNumberMax) continue;
+    const chunk = candidateChunkForCoordinate(coordinate, config);
+    if (chunk) ids.add(chunk.id);
+  }
+  return [...ids];
+}
+
+function updatedChunkAfterInvalidation(snapshot, invalidatedIds) {
+  const record = chunkRecordFromSnapshot(snapshot);
+  const candidates = {...record.candidates};
+  for (const id of invalidatedIds) delete candidates[id];
+  return {
+    ...record,
+    candidates,
+    totalWeight: candidateWeightSum(candidates),
+    candidateCount: Object.keys(candidates).length,
+  };
+}
+
 async function allocatePlayerSector(db, options = {}) {
   const providedPlayerId = typeof options.playerId === "string" &&
     options.playerId.trim()
@@ -601,92 +799,72 @@ async function allocatePlayerSector(db, options = {}) {
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const meta = await metaForAllocation(db, candidateCache);
     const config = configFromMeta(meta);
-    const candidateDocs = await candidateDocsForActiveWindow(
+    const chunks = await chunkRecordsForActiveWindow(
       db,
       meta,
+      config,
       candidateCache,
     );
+    const selectableChunks = chunks.filter((chunk) => chunk.totalWeight > 0);
 
-    if (candidateDocs.length === 0) {
+    if (selectableChunks.length === 0) {
       await advanceSpawnWindow(db, meta);
       clearCandidateCache(candidateCache);
       continue;
     }
 
-    const selectedDoc = chooseWeightedCandidate(candidateDocs);
-    if (!selectedDoc) {
-      throw new Error("Spawn candidate pool contains no positive priorities.");
+    const selectedChunk = chooseWeightedChunk(selectableChunks);
+    const selectedCandidate = selectedChunk
+      ? chooseWeightedCandidate(selectedChunk.candidates)
+      : null;
+    if (!selectedChunk || !selectedCandidate) {
+      clearCandidateCache(candidateCache);
+      continue;
     }
 
-    const selected = selectedDoc.data();
-    const selectedCoordinate = {letter: selected.letter, number: selected.number};
-    const allForbiddenCoordinates = neighbourCoordinates(selectedCoordinate, config);
-    const selectedId = selectedDoc.id;
-    const activeCandidateIds = new Set(candidateDocs.map((doc) => doc.id));
-    const nearbyCoordinates = allForbiddenCoordinates.filter((coordinate) =>
-      sectorId(coordinate.letter, coordinate.number) !== selectedId,
-    );
-    const nearbySectorRefs = nearbyCoordinates.map((coordinate) =>
-      sectorRef(db, sectorId(coordinate.letter, coordinate.number)),
-    );
-    const activeCandidateRefsToDelete = allForbiddenCoordinates
-      .map((coordinate) => sectorId(coordinate.letter, coordinate.number))
-      .filter((id) => activeCandidateIds.has(id))
-      .map((id) => candidateRef(db, id));
-    const externalCandidateRefs = allForbiddenCoordinates
-      .filter((coordinate) =>
-        canEverBeSpawnCandidate(coordinate.letter, coordinate.number, config) &&
-        coordinate.number <= Number(meta.currentMapNumberMax) &&
-        (
-          coordinate.number < Number(meta.activeSpawnNumberMin) ||
-          coordinate.number > Number(meta.activeSpawnNumberMax)
-        ),
-      )
-      .map((coordinate) =>
-        candidateRef(db, sectorId(coordinate.letter, coordinate.number)),
-      );
+    const selectedCoordinate = parseSectorId(selectedCandidate.id);
+    const forbiddenCoordinates = neighbourCoordinates(selectedCoordinate, config);
     const invalidatedCandidateIds = new Set(
-      allForbiddenCoordinates.map((coordinate) =>
+      forbiddenCoordinates.map((coordinate) =>
         sectorId(coordinate.letter, coordinate.number),
       ),
     );
-    const selectedSectorRef = sectorRef(db, selectedId);
+    const affectedIds = affectedChunkIds(
+      forbiddenCoordinates,
+      config,
+      Number(meta.currentMapNumberMax),
+    );
+    const selectedSectorRef = sectorRef(db, selectedCandidate.id);
+    const affectedRefs = affectedIds.map((id) => spawnChunkRef(db, id));
 
     const result = await db.runTransaction(async (transaction) => {
       const snapshots = await transaction.getAll(
         metaRef(db),
-        selectedDoc.ref,
         selectedSectorRef,
-        ...nearbySectorRefs,
-        ...externalCandidateRefs,
+        ...affectedRefs,
       );
-      const nearbySectorEnd = 3 + nearbySectorRefs.length;
-      const [transactionMeta, selectedCandidate, selectedSector] = snapshots;
-      const nearbySectors = snapshots.slice(3, nearbySectorEnd);
-      const externalCandidates = snapshots.slice(nearbySectorEnd);
+      const [transactionMeta, selectedSector, ...affectedChunkSnapshots] = snapshots;
       const currentMeta = transactionMeta.data() || {};
 
-      if (!selectedCandidate.exists || !selectedSector.exists) {
-        return {retry: true};
-      }
-
       if (
-        selected.number < Number(currentMeta.activeSpawnNumberMin) ||
-        selected.number > Number(currentMeta.activeSpawnNumberMax)
+        Number(currentMeta.schemaVersion) !== MAP_SCHEMA_VERSION ||
+        selectedCoordinate.number < Number(currentMeta.activeSpawnNumberMin) ||
+        selectedCoordinate.number > Number(currentMeta.activeSpawnNumberMax)
       ) {
         return {retry: true};
       }
 
-      const sectorData = selectedSector.data() || {};
-      if (sectorData.status !== "UNGENERATED") {
-        transaction.delete(selectedDoc.ref);
+      if (!selectedSector.exists || selectedSector.data()?.status !== "UNGENERATED") {
         return {retry: true};
       }
 
-      if (nearbySectors.some((snapshot) =>
-        snapshot.exists && snapshot.data()?.type === "PLAYER_BUNKER",
-      )) {
-        transaction.delete(selectedDoc.ref);
+      const authoritativeSelectedChunk = affectedChunkSnapshots.find(
+        (snapshot) => snapshot.id === selectedChunk.id,
+      );
+      const authoritativeCandidates = authoritativeSelectedChunk?.exists
+        ? normalizeCandidates(authoritativeSelectedChunk.data()?.candidates)
+        : {};
+      if (!(Number(authoritativeCandidates[selectedCandidate.id]) > 0)) {
         return {retry: true};
       }
 
@@ -694,6 +872,7 @@ async function allocatePlayerSector(db, options = {}) {
         (providedPlayerId ? 0 : 1);
       const playerId = providedPlayerId ||
         `sim-player-${String(sequence).padStart(6, "0")}`;
+      const sectorData = selectedSector.data() || {};
 
       transaction.set(selectedSectorRef, {
         ...sectorData,
@@ -705,26 +884,47 @@ async function allocatePlayerSector(db, options = {}) {
         updatedAt: FieldValue.serverTimestamp(),
       });
 
-      for (const ref of activeCandidateRefsToDelete) {
-        transaction.delete(ref);
-      }
-      for (const snapshot of externalCandidates) {
-        if (snapshot.exists) transaction.delete(snapshot.ref);
+      const updatedChunks = [];
+      for (const snapshot of affectedChunkSnapshots) {
+        if (!snapshot.exists) continue;
+        const updated = updatedChunkAfterInvalidation(
+          snapshot,
+          invalidatedCandidateIds,
+        );
+        transaction.set(snapshot.ref, {
+          candidates: updated.candidates,
+          totalWeight: updated.totalWeight,
+          candidateCount: updated.candidateCount,
+          updatedAt: FieldValue.serverTimestamp(),
+        }, {merge: true});
+        updatedChunks.push({
+          id: updated.id,
+          ref: snapshot.ref,
+          windowMin: updated.windowMin,
+          windowMax: updated.windowMax,
+          numberMin: updated.numberMin,
+          numberMax: updated.numberMax,
+          candidates: updated.candidates,
+          totalWeight: updated.totalWeight,
+          candidateCount: updated.candidateCount,
+        });
       }
 
-      transaction.set(metaRef(db), {
-        ...(providedPlayerId ? {} : {simulatedPlayerSequence: sequence}),
-        updatedAt: FieldValue.serverTimestamp(),
-      }, {merge: true});
+      if (!providedPlayerId) {
+        transaction.set(metaRef(db), {
+          simulatedPlayerSequence: sequence,
+          updatedAt: FieldValue.serverTimestamp(),
+        }, {merge: true});
+      }
 
       return {
         retry: false,
         playerId,
-        sectorId: selectedId,
-        letter: selected.letter,
-        number: selected.number,
-        priority: Number(selected.priority),
-        invalidatedCandidateIds: [...invalidatedCandidateIds],
+        sectorId: selectedCandidate.id,
+        letter: selectedCoordinate.letter,
+        number: selectedCoordinate.number,
+        priority: selectedCandidate.priority,
+        updatedChunks,
       };
     });
 
@@ -733,8 +933,15 @@ async function allocatePlayerSector(db, options = {}) {
       continue;
     }
 
-    removeCandidateIdsFromCache(candidateCache, invalidatedCandidateIds);
-    return result;
+    updateCandidateCache(candidateCache, result.updatedChunks);
+    return {
+      playerId: result.playerId,
+      sectorId: result.sectorId,
+      letter: result.letter,
+      number: result.number,
+      priority: result.priority,
+      chunksUpdated: result.updatedChunks.length,
+    };
   }
 
   throw new Error(`Unable to allocate a player sector after ${maxAttempts} attempts.`);
@@ -748,9 +955,6 @@ async function addSimulatedPlayers(db, count) {
     throw new Error("Refusing to add more than 10000 simulated players in one command.");
   }
 
-  // A batch simulation is still strictly one player at a time. The only thing
-  // reused is the already-downloaded candidate pool and static map metadata for
-  // the active window. Every player still gets an independent transaction.
   const candidateCache = {};
   const added = [];
   for (let index = 0; index < count; index += 1) {
@@ -761,12 +965,21 @@ async function addSimulatedPlayers(db, count) {
 
 async function markSectorResolved(db, id, resolution) {
   const parsed = parseSectorId(id);
+  const {data: meta} = await requiredMeta(db);
+  const config = configFromMeta(meta);
   const ref = sectorRef(db, id);
+  const chunk = candidateChunkForCoordinate(parsed, config);
+  const chunkRef = chunk && parsed.number <= Number(meta.currentMapNumberMax)
+    ? spawnChunkRef(db, chunk.id)
+    : null;
   const zones = Array.isArray(resolution?.zones) ? resolution.zones : [];
   let changed = false;
 
   await db.runTransaction(async (transaction) => {
-    const current = await transaction.get(ref);
+    const snapshots = chunkRef
+      ? await transaction.getAll(ref, chunkRef)
+      : [await transaction.get(ref)];
+    const [current, chunkSnapshot] = snapshots;
     if (!current.exists) throw new Error(`Sector ${id} does not exist.`);
     if (current.data()?.status === "POPULATED") return;
 
@@ -778,7 +991,19 @@ async function markSectorResolved(db, id, resolution) {
       populatedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
-    transaction.delete(candidateRef(db, sectorId(parsed.letter, parsed.number)));
+
+    if (chunkSnapshot?.exists) {
+      const updated = updatedChunkAfterInvalidation(
+        chunkSnapshot,
+        new Set([id]),
+      );
+      transaction.set(chunkSnapshot.ref, {
+        candidates: updated.candidates,
+        totalWeight: updated.totalWeight,
+        candidateCount: updated.candidateCount,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+    }
     changed = true;
   });
 
@@ -800,12 +1025,20 @@ function serializeFirestoreValue(value) {
 
 async function exportMap(db) {
   const {data: meta} = await requiredMeta(db);
-  const [sectorSnapshot, candidateSnapshot] = await Promise.all([
+  const [sectorSnapshot, chunkSnapshot] = await Promise.all([
     db.collection(SECTORS_COLLECTION).get(),
-    db.collection(CANDIDATES_COLLECTION).select().get(),
+    db.collection(SPAWN_CHUNKS_COLLECTION).get(),
   ]);
 
-  const candidateIds = new Set(candidateSnapshot.docs.map((doc) => doc.id));
+  const candidateIds = new Set();
+  for (const chunkDocument of chunkSnapshot.docs) {
+    for (const id of Object.keys(
+      normalizeCandidates(chunkDocument.data()?.candidates),
+    )) {
+      candidateIds.add(id);
+    }
+  }
+
   const sectors = sectorSnapshot.docs
     .map((doc) => ({
       ...serializeFirestoreValue(doc.data()),
@@ -818,7 +1051,8 @@ async function exportMap(db) {
     meta: serializeFirestoreValue(meta),
     counts: {
       sectors: sectors.length,
-      spawnCandidates: candidateSnapshot.size,
+      spawnCandidates: candidateIds.size,
+      spawnChunks: chunkSnapshot.size,
       playerBunkers: sectors.filter((sector) => sector.type === "PLAYER_BUNKER").length,
       populated: sectors.filter((sector) => sector.status === "POPULATED").length,
     },
@@ -827,14 +1061,18 @@ async function exportMap(db) {
 }
 
 module.exports = {
-  CANDIDATES_COLLECTION,
   DEFAULT_CONFIG,
+  LEGACY_CANDIDATES_COLLECTION,
+  MAP_SCHEMA_VERSION,
   META_COLLECTION,
   META_DOCUMENT,
   SECTORS_COLLECTION,
+  SPAWN_CHUNKS_COLLECTION,
   addSimulatedPlayers,
   allocatePlayerSector,
   chooseWeightedCandidate,
+  chooseWeightedChunk,
+  chunksForWindow,
   expandMap,
   exportMap,
   forbiddenOffsets,
@@ -846,4 +1084,6 @@ module.exports = {
   proximityWeight,
   sectorDistance,
   sectorId,
+  spawnChunkForNumber,
+  spawnWindowForNumber,
 };
