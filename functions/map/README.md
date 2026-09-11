@@ -1,273 +1,93 @@
 # DITTO map backend
 
-Primera implementación del sistema persistente de mapa descrito en `docs/map/`.
+El mapa autoritativo sigue almacenándose por sector en Firestore. El índice de spawn está separado y optimizado para que asignar un bunker no requiera leer cientos de documentos.
 
-Este módulo vive aislado en `functions/map/` y contiene la lógica reutilizable por Cloud Functions y por las herramientas administrativas. Los scripts no duplican el algoritmo: importan `functions/map/index.js`.
+## Colecciones
 
-## Colecciones Firestore
+- `worldMap/meta`: configuración y estado global.
+- `worldMapSectors/{sectorId}`: verdad persistente del mundo, un documento por sector.
+- `worldMapSpawnChunks/{chunkId}`: índice auxiliar de candidatos de spawn agrupados por bloques numéricos.
 
-- `worldMap/meta`: configuración y estado global del mapa.
-- `worldMapSectors/{sectorId}`: una entrada persistente por sector materializado.
-- `worldMapSpawnCandidates/{sectorId}`: pool persistente de sectores que todavía pueden recibir un bunker.
+La colección antigua `worldMapSpawnCandidates` queda obsoleta con `schemaVersion = 2` y se elimina al ejecutar `init --force`.
 
-Cada sector almacena su `spawnPriority`, calculada una única vez al crear la celda. El pool guarda además esa prioridad para la selección ponderada.
+## Chunks de spawn
 
-La prioridad inicial usa:
+Con `spawnChunkWidth = 5`, la ventana inicial `10-40` se divide en 7 chunks y las ventanas posteriores de 40 columnas en 8 chunks.
 
-```text
-priority = 1 / (1 + distanceToM25)^alpha
-```
-
-La primera versión utiliza `alpha = 2`, configurable al inicializar el mapa.
-
-## Reglas ya implementadas
-
-- mapa inicial `A-Z × 1-50`;
-- banda de spawn `D-W`;
-- ventana inicial `10-40`;
-- origen de prioridad `M25`;
-- separación estricta entre bunkers `d > 2`;
-- selección aleatoria ponderada por prioridad;
-- al colocar un bunker se eliminan del pool el sector y todas las celdas con `d <= 2`;
-- un sector resuelto por otra mecánica puede eliminarse del pool mediante `markSectorResolved`;
-- si se agota la ventana activa, el asignador avanza automáticamente a la siguiente ventana y amplía el mapa si hace falta;
-- los sectores `PLAYER_BUNKER` se resuelven completos al asignarlos.
-
-### Composición temporal de `PLAYER_BUNKER`
-
-Hasta que definamos los tipos reales de zonas iniciales, la implementación usa una composición deliberadamente neutral:
+Cada chunk contiene un mapa de candidato a prioridad:
 
 ```text
-zone 1 = PLAYER_BUNKER
-rest   = EMPTY
+candidates = {
+  D41: priority,
+  E41: priority,
+  ...
+}
 ```
 
-Esto permite probar el mapa sin introducir ventajas aleatorias iniciales. Debe sustituirse cuando se diseñe la composición definitiva de los sectores de jugador.
+Una asignación individual:
 
-## Comandos desde la raíz del repositorio
+1. lee los 7-8 chunks de la ventana activa;
+2. elige un chunk ponderadamente por la suma de sus candidatos;
+3. elige un candidato dentro de ese chunk por su prioridad;
+4. en transacción relee `meta`, el sector elegido y solo los 1-3 chunks afectados por `d <= 2`;
+5. convierte el sector en `PLAYER_BUNKER` y elimina de esos chunks los candidatos invalidados.
 
-En Windows:
+La selección en dos pasos conserva exactamente la misma probabilidad que una única ruleta sobre todos los candidatos.
 
-```powershell
-.\map.cmd init
-.\map.cmd expand --max=80
-.\map.cmd add-players --count=100
-.\map.cmd download
-.\map.cmd render
-```
+El mapa completo no se consulta para asignar un jugador y tampoco se recorren jugadores históricos.
 
-También existe `map.ps1`. En Linux/macOS puede utilizarse:
+## Concurrencia
 
-```bash
-bash ./map.sh init
-bash ./map.sh expand --max=80
-bash ./map.sh add-players --count=100
-bash ./map.sh download
-bash ./map.sh render
-```
+Los chunks forman parte de la validación autoritativa. Dos asignaciones incompatibles necesariamente leen/escriben al menos un mismo chunk, por lo que Firestore obliga a reintentar una de las transacciones.
 
-Desde `functions/` se puede ejecutar directamente:
+La expansión marca temporalmente `expansionStatus = EXPANDING` para impedir que una alta concurrente cree un bunker justo mientras nacen nuevas celdas en el borde del mapa.
 
-```bash
-npm run map -- init
-npm run map -- expand --max=80
-npm run map -- add-players --count=100
-npm run map -- download
-npm run map -- render
-```
+## Índices
 
-O mediante los aliases:
+`firestore.indexes.json` excluye `worldMapSpawnChunks.candidates` de los índices automáticos, porque nunca se consulta por los campos internos de ese mapa. Esto reduce escritura y almacenamiento de índices.
 
-```bash
-npm run map:init
-npm run map:expand -- --max=80
-npm run map:add-players -- --count=100
-npm run map:download
-npm run map:render
-```
-
-Los comandos que acceden a Firebase aceptan opcionalmente:
-
-```text
---project=FIREBASE_PROJECT_ID
-```
-
-La autenticación sigue el mismo patrón que los scripts administrativos existentes del proyecto: Firebase Admin `applicationDefault()`. Por tanto hay que tener disponibles Application Default Credentials o `GOOGLE_APPLICATION_CREDENTIALS`.
-
-`render` es una excepción: es una operación **100 % local**. Lee el último JSON descargado y no inicializa Firebase ni necesita credenciales.
-
-## 1. Inicializar mapa
-
-```powershell
-.\map.cmd init
-```
-
-Valores iniciales:
-
-```text
-A-Z
-1-50
-spawn D-W
-spawn numbers 10-40
-origin M25
-alpha 2
-```
-
-Para cambiar temporalmente el máximo inicial o alpha:
-
-```powershell
-.\map.cmd init --max=50 --alpha=1.5
-```
-
-Si el mapa ya existe, `init` falla deliberadamente. Para borrar el mapa de pruebas y reconstruirlo:
+Después de bajar esta versión hay que reconstruir una vez el mapa de pruebas porque cambia el esquema del índice de spawn:
 
 ```powershell
 .\map.cmd init --force
 ```
 
-`--force` elimina `worldMapSectors` y `worldMapSpawnCandidates`, así que debe tratarse como una operación destructiva.
-
-## 2. Ampliar mapa
+Y desplegar una vez la configuración de índices:
 
 ```powershell
+firebase deploy --only firestore:indexes
+```
+
+## Comandos
+
+```powershell
+.\map.cmd init
 .\map.cmd expand --max=80
-```
-
-Crea únicamente las nuevas columnas numéricas. Las celdas nacen como `UNGENERATED` y reciben su prioridad una sola vez.
-
-Las nuevas celdas dentro de la banda `D-W` entran en el pool de spawn salvo que una futura integración las invalide inmediatamente por estado del mundo.
-
-## 3. Añadir jugadores simulados
-
-```powershell
-.\map.cmd add-players --count=100
-```
-
-Los añade **uno a uno**, no en bloque. Cada alta ejecuta la misma ruleta ponderada y actualiza el pool antes de asignar la siguiente.
-
-Los IDs son:
-
-```text
-sim-player-000001
-sim-player-000002
-...
-```
-
-Estos registros existen únicamente en el mapa. No crean usuarios de Firebase Auth ni documentos `users/`. El objetivo es poder estudiar y validar el algoritmo antes de conectarlo al alta real de cuentas.
-
-## 4. Descargar mapa
-
-Por defecto:
-
-```powershell
-.\map.cmd download
-```
-
-sobrescribe siempre el mismo archivo:
-
-```text
-functions/map_exports/latest_map.json
-```
-
-Esto evita acumular automáticamente una exportación distinta cada vez que se descarga el mapa.
-
-También se puede pedir CSV o ambos:
-
-```powershell
-.\map.cmd download --format=csv
-.\map.cmd download --format=both
-```
-
-En ese caso se utilizan, según corresponda:
-
-```text
-functions/map_exports/latest_map.json
-functions/map_exports/latest_map.csv
-```
-
-Cada ejecución sustituye la versión local anterior.
-
-Si se quiere conservar manualmente una exportación histórica se puede especificar una ruta distinta:
-
-```powershell
-.\map.cmd download --format=both --out=../map_test_100_players
-```
-
-El JSON incluye metadatos, contadores y todos los sectores. Cada sector indica también si continúa presente en el pool de spawn.
-
-## 5. Renderizar y abrir el último mapa descargado
-
-Después de descargar:
-
-```powershell
-.\map.cmd download
-.\map.cmd render
-```
-
-`render` lee por defecto:
-
-```text
-functions/map_exports/latest_map.json
-```
-
-y genera/sobrescribe:
-
-```text
-functions/map_exports/latest_map.svg
-```
-
-Después abre automáticamente la imagen con el visor/navegador predeterminado del sistema operativo.
-
-La imagen representa la cuadrícula completa del mapa materializado:
-
-- una celda por sector;
-- `UNGENERATED` en gris muy claro;
-- sectores `POPULATED` normales en gris;
-- sectores `PLAYER_BUNKER` en rojo;
-- letras y números de coordenadas;
-- leyenda y contadores básicos.
-
-El SVG contiene además un `<title>` por celda, de modo que en navegadores compatibles se puede ver información básica del sector al pasar el cursor.
-
-Para generar la imagen sin abrirla:
-
-```powershell
-.\map.cmd render --open=false
-```
-
-Para usar un JSON concreto o guardar la imagen en otra ruta:
-
-```powershell
-.\map.cmd render --in=../map_test_100_players.json --out=../map_test_100_players.svg
-```
-
-`latest_map.svg` es deliberadamente temporal y se sustituye cada vez que se ejecuta `render`.
-
-## Flujo recomendado para probar distribución
-
-Por ejemplo:
-
-```powershell
-.\map.cmd init --force --alpha=2
 .\map.cmd add-players --count=100
 .\map.cmd download
 .\map.cmd render
 ```
 
-Esto permite regenerar el experimento, descargar el estado real de Firestore y abrir inmediatamente una representación visual de la distribución de bunkers.
+`add-players` sigue asignando estrictamente uno a uno. Durante una misma ejecución reutiliza en memoria los chunks ya leídos.
 
-## Integración futura
+`download` sobrescribe por defecto `functions/map_exports/latest_map.json` y `render` sobrescribe `latest_map.svg`.
 
-La función reutilizable que deberá usar el alta real de una cuenta es:
+`render` es completamente local y no consume Firebase.
+
+## Integración con altas reales
+
+La función reutilizable para el alta real sigue siendo:
 
 ```js
 allocatePlayerSector(db, {playerId: uid})
 ```
 
-Cuando implementemos reconocimiento real, la resolución autoritativa del sector deberá llamar a:
+Con `playerId` real no se actualiza `simulatedPlayerSequence`, evitando una escritura y un punto de contención innecesarios en `worldMap/meta`.
+
+Cuando un reconocimiento resuelva un sector debe utilizar:
 
 ```js
 markSectorResolved(db, sectorId, resolution)
 ```
 
-para poblarlo y retirarlo del pool de spawn en la misma operación lógica.
+para poblarlo y retirarlo del chunk de spawn en la misma transacción lógica.
