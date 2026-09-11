@@ -67,24 +67,10 @@ function candidateWeightSum(candidates) {
     .reduce((sum, weight) => sum + Number(weight), 0);
 }
 
-function chunkRecord(snapshot, currentMapNumberMax = Number.MAX_SAFE_INTEGER) {
-  const data = snapshot.data() || {};
-  const candidates = Object.fromEntries(
-    Object.entries(normalizeCandidates(data.candidates))
-      .filter(([id]) => parseSectorId(id).number <= currentMapNumberMax),
-  );
-  return {
-    id: snapshot.id,
-    ref: snapshot.ref,
-    candidates,
-    totalWeight: candidateWeightSum(candidates),
-  };
-}
-
 function placeholderPlayerZones(playerId, zonesPerSector) {
   return Array.from({length: zonesPerSector}, (_, index) => ({
     index: index + 1,
-    type: index === 0 ? "PLAYER_BUNKER" : "EMPTY",
+    type: index === 0 ? "PLAYER_BUNKER" : "EMPTY_FIELD",
     playerId: index === 0 ? playerId : null,
     status: "RESOLVED",
   }));
