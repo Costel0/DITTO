@@ -261,8 +261,12 @@ class ExpeditionLauncherInfo {
     );
   }
 
+  /// The server multiplier is per distance unit and per leg. Every expedition
+  /// returns to the bunker, so the local duration preview includes both legs.
   int travelSecondsTo(ExpeditionCoordinates coordinates) =>
-      (bunkerCoordinates.distanceTo(coordinates) * travelSecondsPerDistanceUnit)
+      (bunkerCoordinates.distanceTo(coordinates) *
+              travelSecondsPerDistanceUnit *
+              2)
           .ceil();
 
   int durationSecondsFor(
