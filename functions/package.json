@@ -20,7 +20,12 @@
     "map:expand": "node scripts/map_admin.js expand",
     "map:add-players": "node scripts/map_admin.js add-players",
     "map:download": "node scripts/map_admin.js download",
-    "map:render": "node scripts/map_admin.js render"
+    "map:render": "node scripts/map_admin.js render",
+    "map:edit": "node scripts/map_edit.js",
+    "map:set-sector": "node scripts/map_edit.js set-sector",
+    "map:set-zone": "node scripts/map_edit.js set-zone",
+    "users": "node scripts/user_admin.js",
+    "users:clear-data": "node scripts/user_admin.js clear-data"
   },
   "dependencies": {
     "firebase-admin": "^14.2.0",
