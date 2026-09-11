@@ -7,6 +7,11 @@ const {
 } = require("./bunker_status");
 const {VALID_DUPLICATE_IDS} = require("./survivor_progression");
 const {
+  SECTORS_COLLECTION,
+  letterIndex,
+  parseSectorId,
+} = require("./map");
+const {
   allocatePlayerSectorWithTransaction,
 } = require("./map/player_allocation");
 
@@ -136,6 +141,133 @@ async function existingBunkerResult(
   });
 }
 
+function playerBunkerZoneIndex(sector, uid) {
+  const zones = Array.isArray(sector?.zones) ? sector.zones : [];
+  const owned = zones.find((zone) =>
+    zone?.type === "PLAYER_BUNKER" && zone?.playerId === uid,
+  );
+  return Number.isInteger(owned?.index) && owned.index >= 1 ? owned.index : 1;
+}
+
+async function findExistingMapAssignment(db, uid) {
+  const snapshot = await db.collection(SECTORS_COLLECTION)
+    .where("playerId", "==", uid)
+    .limit(2)
+    .get();
+  const assignments = snapshot.docs.filter((doc) =>
+    doc.data()?.type === "PLAYER_BUNKER",
+  );
+
+  if (assignments.length > 1) {
+    throw new HttpsError(
+      "failed-precondition",
+      "This account has more than one map bunker assignment.",
+    );
+  }
+  return assignments[0] || null;
+}
+
+async function restoreBunkerFromMapAssignment(
+  db,
+  {uid, email, username, duplicateId},
+  mapAssignment,
+) {
+  const userRef = db.collection("users").doc(uid);
+  const bunkerRef = bunkerRefForUid(db, uid);
+  const legacyInitialRef = userRef.collection("survivors").doc("initial");
+  const generatedSurvivorRef = userRef.collection("survivors").doc();
+
+  return db.runTransaction(async (transaction) => {
+    const [
+      assignmentSnapshot,
+      userSnapshot,
+      bunkerSnapshot,
+      legacyInitialSnapshot,
+    ] = await transaction.getAll(
+      mapAssignment.ref,
+      userRef,
+      bunkerRef,
+      legacyInitialRef,
+    );
+
+    if (bunkerSnapshot.exists) {
+      throw new BunkerAlreadyInitializedDuringAllocation();
+    }
+    if (
+      !assignmentSnapshot.exists ||
+      assignmentSnapshot.data()?.type !== "PLAYER_BUNKER" ||
+      assignmentSnapshot.data()?.playerId !== uid
+    ) {
+      throw new Error("Existing map bunker assignment changed. Retry onboarding.");
+    }
+
+    const legacySurvivor = legacyInitialSnapshot.exists
+      ? legacyInitialSnapshot.data()
+      : null;
+    const reusesLegacySurvivor = legacySurvivor?.duplicateId === duplicateId;
+    const survivorRef = reusesLegacySurvivor
+      ? legacyInitialRef
+      : generatedSurvivorRef;
+    const survivorId = survivorRef.id;
+    const survivor = normalizedSurvivor(
+      reusesLegacySurvivor ? legacySurvivor : null,
+      survivorId,
+      duplicateId,
+    );
+    const coordinate = parseSectorId(assignmentSnapshot.id);
+    const zoneIndex = playerBunkerZoneIndex(assignmentSnapshot.data(), uid);
+    const bunkerCoordinates = {
+      x: letterIndex(coordinate.letter),
+      y: coordinate.number,
+      z: zoneIndex,
+    };
+    const statusNow = new Date();
+    const metadataNow = FieldValue.serverTimestamp();
+
+    const bunker = await fixStatus({
+      transaction,
+      db,
+      now: statusNow,
+      bunker: {
+        revision: 0,
+        survivors: [survivor],
+        idleSurvivors: [survivorId],
+        busySurvivors: [],
+        activeBackgroundTasks: [],
+        completedTaskIds: [],
+        inventory: {},
+        bunkerCoordinates: normalizedBunkerCoordinates(bunkerCoordinates),
+      },
+    });
+
+    const profileData = {
+      email,
+      username,
+      initialDuplicateId: duplicateId,
+      updatedAt: metadataNow,
+    };
+    if (!userSnapshot.exists) profileData.createdAt = metadataNow;
+
+    transaction.set(userRef, profileData, {merge: true});
+    transaction.set(survivorRef, {
+      ...survivor,
+      createdAt: reusesLegacySurvivor
+        ? legacyInitialSnapshot.get("createdAt") || metadataNow
+        : metadataNow,
+      updatedAt: metadataNow,
+    });
+    transaction.create(bunkerRef, bunker);
+
+    return {
+      survivorId,
+      created: true,
+      sectorId: assignmentSnapshot.id,
+      bunkerCoordinates,
+      reusedMapAssignment: true,
+    };
+  });
+}
+
 async function initializeNewBunker(
   db,
   {uid, email, username, duplicateId},
@@ -230,8 +362,7 @@ const initializeBunker = onCall(
     const db = getFirestore();
 
     // Normal first onboarding pays only one lightweight existence read before
-    // loading the map chunks. Existing/retried accounts take the idempotent
-    // transaction path below.
+    // loading the map. Existing/retried accounts take the idempotent path.
     const existingSnapshot = await bunkerRefForUid(db, setup.uid).get();
     if (existingSnapshot.exists) {
       const existing = await existingBunkerResult(db, setup);
@@ -239,6 +370,14 @@ const initializeBunker = onCall(
     }
 
     try {
+      // A development/global Firestore reset deliberately preserves the shared
+      // world. Reuse the same persistent PLAYER_BUNKER for that Auth UID rather
+      // than creating a second bunker elsewhere.
+      const mapAssignment = await findExistingMapAssignment(db, setup.uid);
+      if (mapAssignment) {
+        return await restoreBunkerFromMapAssignment(db, setup, mapAssignment);
+      }
+
       const allocation = await initializeNewBunker(db, setup);
       return {
         ...allocation.handlerResult,
@@ -247,7 +386,8 @@ const initializeBunker = onCall(
       };
     } catch (error) {
       // A second concurrent/retried onboarding request may have completed after
-      // the initial existence check but before this request reserved a sector.
+      // the initial existence check but before this request reserved/restored a
+      // sector.
       if (error instanceof BunkerAlreadyInitializedDuringAllocation) {
         const result = await existingBunkerResult(db, setup);
         if (result) return result;
