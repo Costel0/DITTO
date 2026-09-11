@@ -3,13 +3,14 @@ const {
   normalizedStatMods,
 } = require("./survivor_progression");
 
-const BUNKER_SCHEMA_VERSION = 9;
+const BUNKER_SCHEMA_VERSION = 10;
 const DEFAULT_SURVIVOR_ENERGY = 50;
 const DEFAULT_SLEEPING_SECONDS_PER_NEGATIVE_ENERGY = 60;
 const SLEEPING_ACTIVITY = "sleeping";
 const SLEEPING_LOCATION = "beds";
 const UNKNOWN_LOCATION = "unknown";
 const DEFAULT_BUNKER_COORDINATES = Object.freeze({x: 0, y: 0, z: 0});
+const ZONE_TYPE_PATTERN = /^[A-Z][A-Z0-9_]*$/;
 
 function normalizedBunkerCoordinates(source) {
   const value = source && typeof source === "object" ? source : {};
@@ -21,6 +22,92 @@ function normalizedBunkerCoordinates(source) {
       : DEFAULT_BUNKER_COORDINATES[axis];
   }
   return result;
+}
+
+function isPlayableMapCoordinates(coordinates) {
+  return coordinates &&
+    Number.isInteger(coordinates.x) &&
+    coordinates.x >= 0 &&
+    coordinates.x <= 25 &&
+    Number.isSafeInteger(coordinates.y) &&
+    coordinates.y >= 1 &&
+    Number.isSafeInteger(coordinates.z) &&
+    coordinates.z >= 1;
+}
+
+function knownZoneKey(coordinates) {
+  return `${coordinates.x}:${coordinates.y}:${coordinates.z}`;
+}
+
+function normalizedKnownZones(source, bunkerCoordinates = null) {
+  const byCoordinate = new Map();
+
+  if (Array.isArray(source)) {
+    for (const entry of source) {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+      const coordinates = normalizedBunkerCoordinates(entry.coordinates);
+      const zoneType = typeof entry.zoneType === "string"
+        ? entry.zoneType.trim().toUpperCase()
+        : "";
+      if (!isPlayableMapCoordinates(coordinates) || !ZONE_TYPE_PATTERN.test(zoneType)) {
+        continue;
+      }
+      byCoordinate.set(knownZoneKey(coordinates), {
+        coordinates,
+        zoneType,
+      });
+    }
+  }
+
+  const normalizedBunker = normalizedBunkerCoordinates(bunkerCoordinates);
+  if (isPlayableMapCoordinates(normalizedBunker)) {
+    // A player always knows their own bunker zone. This also migrates any
+    // schema-v9 bunker the next time fixStatus touches it.
+    byCoordinate.set(knownZoneKey(normalizedBunker), {
+      coordinates: normalizedBunker,
+      zoneType: "PLAYER_BUNKER",
+    });
+  }
+
+  return [...byCoordinate.values()].sort((left, right) =>
+    left.coordinates.y - right.coordinates.y ||
+    left.coordinates.x - right.coordinates.x ||
+    left.coordinates.z - right.coordinates.z,
+  );
+}
+
+function knownZoneAt(source, coordinates, bunkerCoordinates = null) {
+  const target = normalizedBunkerCoordinates(coordinates);
+  if (!isPlayableMapCoordinates(target)) return null;
+  const key = knownZoneKey(target);
+  return normalizedKnownZones(source, bunkerCoordinates)
+    .find((entry) => knownZoneKey(entry.coordinates) === key) || null;
+}
+
+function upsertKnownZone(
+  source,
+  coordinates,
+  zoneTypeRaw,
+  bunkerCoordinates = null,
+) {
+  const coordinatesNormalized = normalizedBunkerCoordinates(coordinates);
+  const zoneType = typeof zoneTypeRaw === "string"
+    ? zoneTypeRaw.trim().toUpperCase()
+    : "";
+  if (!isPlayableMapCoordinates(coordinatesNormalized)) {
+    throw new Error("Known zone coordinates are invalid.");
+  }
+  if (!ZONE_TYPE_PATTERN.test(zoneType)) {
+    throw new Error("Known zone type is invalid.");
+  }
+
+  const zones = normalizedKnownZones(source, bunkerCoordinates);
+  const key = knownZoneKey(coordinatesNormalized);
+  const filtered = zones.filter((entry) =>
+    knownZoneKey(entry.coordinates) !== key,
+  );
+  filtered.push({coordinates: coordinatesNormalized, zoneType});
+  return normalizedKnownZones(filtered, bunkerCoordinates);
 }
 
 function normalizedSurvivor(source, survivorId, duplicateId) {
@@ -355,6 +442,9 @@ async function fixStatus({transaction, db, bunker, now = new Date()}) {
   const currentRevision = Number.isInteger(bunker.revision)
     ? bunker.revision
     : 0;
+  const bunkerCoordinates = normalizedBunkerCoordinates(
+    bunker.bunkerCoordinates,
+  );
 
   return {
     ...bunker,
@@ -366,7 +456,8 @@ async function fixStatus({transaction, db, bunker, now = new Date()}) {
     busySurvivors: [...busyBySurvivorId.values()],
     activeBackgroundTasks,
     completedTaskIds: uniqueStringList(bunker.completedTaskIds),
-    bunkerCoordinates: normalizedBunkerCoordinates(bunker.bunkerCoordinates),
+    bunkerCoordinates,
+    knownZones: normalizedKnownZones(bunker.knownZones, bunkerCoordinates),
     pendingExpeditionReviews: normalizedPendingExpeditionReviews(
       bunker.pendingExpeditionReviews,
     ),
@@ -381,11 +472,14 @@ module.exports = {
   SLEEPING_ACTIVITY,
   SLEEPING_LOCATION,
   fixStatus,
-  normalizedBunkerSurvivors,
-  normalizedBunkerCoordinates,
-  normalizedBusySurvivors,
+  knownZoneAt,
   normalizedActiveBackgroundTasks,
+  normalizedBunkerCoordinates,
+  normalizedBunkerSurvivors,
+  normalizedBusySurvivors,
+  normalizedKnownZones,
   normalizedPendingExpeditionReviews,
   normalizedSurvivor,
   truncateToSecond,
+  upsertKnownZone,
 };
