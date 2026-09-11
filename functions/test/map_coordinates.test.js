@@ -24,6 +24,6 @@ test("expedition coordinates accept the map's unbounded numeric axis", () => {
   );
   assert.throws(
     () => normalizedCoordinates({x: 12, y: -1, z: 3}),
-    /non-negative safe integer/,
+    /positive safe integer/,
   );
 });
