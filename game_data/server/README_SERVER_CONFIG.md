@@ -11,9 +11,10 @@ Se sincroniza con `/serverData/serverConfig` y contiene parámetros de balance o
 ```json
 {
   "schemaVersion": 1,
-  "dataVersion": 4,
+  "dataVersion": 5,
   "config": {
-    "sleepingSecondsPerNegativeEnergy": 60
+    "sleepingSecondsPerNegativeEnergy": 60,
+    "expeditionTravelSecondsPerDistanceUnit": 300
   }
 }
 ```
@@ -44,6 +45,36 @@ sleeping = 8 × 60 = 480 segundos
 ```
 
 Cuando esa ocupación de `sleeping` se resuelve, la energía del Survivor pasa a `100`.
+
+## `expeditionTravelSecondsPerDistanceUnit`
+
+Controla el tiempo de desplazamiento de expediciones por cada unidad de distancia y **por trayecto**.
+
+```json
+"expeditionTravelSecondsPerDistanceUnit": 300
+```
+
+`300` equivale a 5 minutos por unidad de distancia. Como una expedición sale del bunker y vuelve al bunker, el tiempo total de viaje es:
+
+```text
+segundos de viaje = ceil(
+  distancia(bunker, destino)
+  × expeditionTravelSecondsPerDistanceUnit
+  × 2
+)
+```
+
+El `× 2` representa ida y vuelta y pertenece a la lógica de expediciones, no al valor de configuración. Por tanto, el parámetro debe seguir expresando el coste de **un solo trayecto**.
+
+Ejemplos con `300`:
+
+```text
+distancia 1.0  -> 10 min de viaje total
+distancia 0.1  -> 1 min de viaje total
+distancia √2   -> ceil(√2 × 300 × 2) = 849 s
+```
+
+A ese viaje se suma después la duración base de las acciones de la expedición. `Explore`, por ejemplo, añade actualmente 60 segundos.
 
 ## Añadir nuevos parámetros
 
