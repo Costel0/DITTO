@@ -80,14 +80,14 @@ test("map expedition distance follows canonical sector-zone rules", () => {
   );
 });
 
-test("travel time uses configured seconds per distance unit", () => {
+test("travel time uses configured seconds per distance unit for both legs", () => {
   assert.equal(
     expeditionTravelSeconds(
       M25_1,
       {sectorLetter: "N", sectorNumber: 25, zoneIndex: 3},
       300,
     ),
-    300,
+    600,
   );
   assert.equal(
     expeditionTravelSeconds(
@@ -95,7 +95,15 @@ test("travel time uses configured seconds per distance unit", () => {
       {sectorLetter: "M", sectorNumber: 25, zoneIndex: 2},
       300,
     ),
-    30,
+    60,
+  );
+  assert.equal(
+    expeditionTravelSeconds(
+      M25_1,
+      {sectorLetter: "N", sectorNumber: 26, zoneIndex: 5},
+      300,
+    ),
+    Math.ceil(Math.sqrt(2) * 300 * 2),
   );
 });
 
@@ -116,6 +124,11 @@ test("known zones expose only actions configured for their zone type", () => {
       .map((action) => action.id),
     ["bunker_action"],
   );
+  assert.deepEqual(
+    availableActionsForZone(definition(), {zoneType: "EMPTY"})
+      .map((action) => action.id),
+    [],
+  );
 });
 
 test("Explore cannot be combined with another action", () => {
@@ -130,10 +143,20 @@ test("Explore cannot be combined with another action", () => {
   );
 });
 
-test("Explore duration is one minute plus travel once", () => {
+test("Explore duration is one minute plus round-trip travel", () => {
   const [explore] = availableActionsForZone(definition(), null);
-  assert.equal(expeditionDurationSeconds([explore], 300), 360);
-  assert.equal(expeditionDurationSeconds([explore], 30), 90);
+  const adjacentTravel = expeditionTravelSeconds(
+    M25_1,
+    {sectorLetter: "N", sectorNumber: 25, zoneIndex: 1},
+    300,
+  );
+  const sameSectorTravel = expeditionTravelSeconds(
+    M25_1,
+    {sectorLetter: "M", sectorNumber: 25, zoneIndex: 2},
+    300,
+  );
+  assert.equal(expeditionDurationSeconds([explore], adjacentTravel), 660);
+  assert.equal(expeditionDurationSeconds([explore], sameSectorTravel), 120);
 });
 
 test("expedition locations use the sector-zone coordinate format", () => {
