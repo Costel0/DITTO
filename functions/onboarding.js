@@ -65,12 +65,16 @@ function validatedSetupRequest(request) {
   };
 }
 
+function bunkerRefForUid(db, uid) {
+  return db.collection("users").doc(uid).collection("state").doc("bunker");
+}
+
 async function existingBunkerResult(
   db,
   {uid, email, username, duplicateId},
 ) {
   const userRef = db.collection("users").doc(uid);
-  const bunkerRef = userRef.collection("state").doc("bunker");
+  const bunkerRef = bunkerRefForUid(db, uid);
 
   return db.runTransaction(async (transaction) => {
     const [userSnapshot, bunkerSnapshot] = await transaction.getAll(
@@ -137,7 +141,7 @@ async function initializeNewBunker(
   {uid, email, username, duplicateId},
 ) {
   const userRef = db.collection("users").doc(uid);
-  const bunkerRef = userRef.collection("state").doc("bunker");
+  const bunkerRef = bunkerRefForUid(db, uid);
   const legacyInitialRef = userRef.collection("survivors").doc("initial");
   // Keep the same generated document ID across Firestore transaction retries.
   const generatedSurvivorRef = userRef.collection("survivors").doc();
@@ -225,8 +229,14 @@ const initializeBunker = onCall(
     const setup = validatedSetupRequest(request);
     const db = getFirestore();
 
-    const existing = await existingBunkerResult(db, setup);
-    if (existing) return existing;
+    // Normal first onboarding pays only one lightweight existence read before
+    // loading the map chunks. Existing/retried accounts take the idempotent
+    // transaction path below.
+    const existingSnapshot = await bunkerRefForUid(db, setup.uid).get();
+    if (existingSnapshot.exists) {
+      const existing = await existingBunkerResult(db, setup);
+      if (existing) return existing;
+    }
 
     try {
       const allocation = await initializeNewBunker(db, setup);
