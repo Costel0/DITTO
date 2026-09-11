@@ -16,9 +16,7 @@ function normalizedBunkerCoordinates(source) {
   const result = {};
   for (const axis of ["x", "y", "z"]) {
     const coordinate = value[axis];
-    result[axis] = Number.isInteger(coordinate) &&
-      coordinate >= 0 &&
-      coordinate <= 999
+    result[axis] = Number.isSafeInteger(coordinate) && coordinate >= 0
       ? coordinate
       : DEFAULT_BUNKER_COORDINATES[axis];
   }
