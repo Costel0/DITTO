@@ -1,6 +1,6 @@
 # DITTO — Algoritmo de colocación de jugadores
 
-> Especificación detallada del algoritmo de asignación de sectores `PLAYER_BUNKER`.
+> Especificación detallada del sistema persistente de candidatos para asignar sectores `PLAYER_BUNKER`.
 >
 > Estado: **diseño propuesto para primera implementación**.
 >
@@ -10,22 +10,24 @@
 
 ## 1. Objetivo
 
-El algoritmo de spawn debe asignar un sector inicial a cada nueva cuenta de forma que la población:
+La asignación de bunkers iniciales debe cumplir simultáneamente estos objetivos:
 
-- nazca cerca del centro de la primera zona poblable;
-- crezca de forma compacta y progresiva;
-- no coloque dos bunkers demasiado cerca;
-- no cree una rejilla visual excesivamente perfecta;
-- no coloque jugadores en los bordes físicos `A`, `Z` o cerca del inicio numérico del mundo;
-- pueda seguir creciendo indefinidamente hacia números superiores;
-- no modifique sectores cuyo contenido ya haya sido resuelto;
-- sea seguro ante altas simultáneas.
+- concentrar los primeros jugadores alrededor de `M25`;
+- hacer que la población se expanda progresivamente desde ese núcleo;
+- mantener una separación estrictamente mayor que `2.0` entre bunkers;
+- evitar una distribución completamente determinista o geométricamente perfecta;
+- impedir que una celda ya descubierta/poblada por el mundo se reutilice como spawn de jugador;
+- evitar recalcular toda la cuadrícula cada vez que se registra una cuenta;
+- permitir que el mapa crezca indefinidamente por el eje numérico;
+- ser compatible con altas concurrentes.
 
-La estrategia propuesta es un **crecimiento radial con frontera preferente y jitter determinista**.
+La estrategia elegida es un **pool persistente de candidatos con prioridad estática y selección aleatoria ponderada**.
+
+La idea clave es que cada celda candidata recibe su valor de prioridad una sola vez cuando entra en el mapa/pool. Después el sistema únicamente elimina candidatos conforme dejan de ser válidos y utiliza sus prioridades ya calculadas para elegir nuevos sectores.
 
 ---
 
-## 2. Configuración inicial propuesta
+## 2. Configuración base
 
 ```text
 WORLD_LETTERS = [A, Z]
@@ -35,711 +37,714 @@ SPAWN_LETTERS = [D, W]
 INITIAL_SPAWN_NUMBERS = [10, 40]
 SPAWN_ORIGIN = M25
 
-MIN_PLAYER_DISTANCE = 2.0          // condición estricta: d > 2.0
-PREFERRED_LINK_DISTANCE = 4.0     // preferencia, no restricción absoluta
-SPAWN_JITTER_MAX = 0.75           // configurable
-
-NEXT_SPAWN_WINDOW = [41, 80]
-FOLLOWING_WINDOWS = [81,120], [121,160], ...
+MIN_PLAYER_DISTANCE = 2.0
 ```
 
-Los valores son parámetros de diseño y deben vivir en configuración, no dispersos como constantes mágicas por las Cloud Functions.
+La condición entre bunkers es estricta:
 
-`SPAWN_ORIGIN = M25` permanece como referencia global aunque la ventana activa avance posteriormente a `[41,80]`, `[81,120]`, etc.
+```text
+distance(playerA, playerB) > 2.0
+```
 
-Esto hace que las nuevas ventanas empiecen a llenarse por el extremo más cercano a la población anterior, en lugar de crear una colonia nueva aislada en el centro de cada ventana.
+La banda `D-W` deja margen respecto a los límites físicos `A` y `Z`.
+
+La ventana numérica inicial `[10,40]` deja margen respecto al límite inferior del mundo y sitúa `M25` aproximadamente en el centro de la primera región de aparición.
 
 ---
 
-## 3. Qué sectores pueden ser candidatos
+## 3. Concepto de pool de candidatos
 
-Para asignar un nuevo jugador se parte de todos los sectores dentro de:
+El backend mantiene un conjunto lógico persistente de sectores que todavía pueden utilizarse como `PLAYER_BUNKER`.
 
-```text
-SPAWN_LETTERS × activeSpawnNumberRange
-```
-
-Por ejemplo, inicialmente:
+Cada entrada contiene como mínimo:
 
 ```text
-[D-W] × [10-40]
+coordinate
+priorityWeight
 ```
 
-Un sector candidato debe cumplir **todas** estas condiciones:
+Ejemplo conceptual:
 
-1. estar dentro de la banda de letras `D-W`;
-2. estar dentro de la ventana numérica de spawn activa;
-3. ser una coordenada válida del mundo;
-4. no estar reservado por otra operación de alta;
-5. no contener ya un `PLAYER_BUNKER`;
-6. no haber sido ya poblado/resuelto con otro tipo de sector;
-7. poder convertirse legalmente en `PLAYER_BUNKER`;
-8. estar a distancia estrictamente mayor que `2.0` de todos los bunkers de jugador existentes.
+```text
+M25 -> 1.0000
+N25 -> 0.5000
+M26 -> 0.5000
+N26 -> 0.4142
+...
+```
 
-La regla 6 es importante: el sistema de spawn no debe sobrescribir el mundo ya resuelto. Si un reconocimiento previo generó un sector como `HUNTING`, `LAKE`, `RUINS`, etc., ese sector ya forma parte de la verdad persistente del servidor y deja de ser candidato para un nuevo jugador.
+Los valores exactos del ejemplo dependen de la fórmula de proximidad elegida.
+
+La palabra **lista** o **pool** describe el concepto. En Firestore no es obligatorio guardar todos los candidatos como un único array dentro de un solo documento. La implementación podrá utilizar una colección o estructura equivalente para evitar límites de tamaño y contención de escrituras.
+
+Lo importante es que el servidor pueda:
+
+1. conocer qué sectores siguen siendo candidatos;
+2. recuperar su peso de prioridad;
+3. eliminar candidatos cuando dejan de ser válidos;
+4. añadir nuevos candidatos cuando se amplía el mapa.
 
 ---
 
-## 4. Separación mínima
+## 4. Prioridad basada en proximidad a M25
 
-La separación se calcula usando las coordenadas de **sector**, no la zona interna.
-
-Un candidato `C` es válido únicamente si:
-
-```text
-para todo bunker P:
-    distance(C, P) > 2.0
-```
-
-Como los bunkers ocupan coordenadas enteras de la cuadrícula, para comprobar esta regla no es necesario comparar contra todos los jugadores del servidor.
-
-Un candidato solo puede violar `d > 2` si existe otro bunker en uno de estos desplazamientos relativos:
-
-```text
-( 0, 0)
-( 1, 0) (-1, 0)
-( 0, 1) ( 0,-1)
-( 2, 0) (-2, 0)
-( 0, 2) ( 0,-2)
-( 1, 1) ( 1,-1) (-1, 1) (-1,-1)
-```
-
-Es decir, basta comprobar el propio sector y los sectores enteros cuya distancia euclídea sea `<= 2`.
-
-Ejemplos desde `M25`:
-
-```text
-M25 -> M27 = 2.0       NO permitido
-M25 -> N26 = sqrt(2)   NO permitido
-M25 -> N27 = sqrt(5)   SÍ permitido
-M25 -> O26 = sqrt(5)   SÍ permitido
-M25 -> P25 = 3.0       SÍ permitido
-```
-
-Esta comprobación local evita tener que recorrer toda la lista de jugadores para validar cada candidato.
-
----
-
-## 5. Primer jugador
-
-El primer jugador intenta utilizar directamente:
-
-```text
-M25
-```
-
-Si `M25` está disponible, se asigna ese sector.
-
-Si por configuración, contenido presembrado o cualquier otra razón `M25` ya no puede utilizarse, se aplica el mismo algoritmo general y se selecciona el candidato válido con mayor prioridad alrededor del origen.
-
-Una vez elegido el sector:
-
-```text
-reservar sector
-→ convertirlo en PLAYER_BUNKER
-→ elegir zona interna del bunker
-→ resolver todas las zonas del sector
-→ persistir el sector completo
-→ revelar al jugador únicamente el conocimiento inicial permitido
-```
-
----
-
-## 6. Frontera preferente de crecimiento
-
-Después del primer jugador, no interesa escoger cualquier hueco de la ventana activa. Se quiere que los nuevos bunkers aparezcan cerca de la población existente.
-
-Se define como **candidato de frontera preferente** aquel candidato válido que además tenga al menos un bunker existente a una distancia menor o igual que:
-
-```text
-PREFERRED_LINK_DISTANCE = 4.0
-```
-
-Manteniendo siempre la regla dura:
-
-```text
-d > 2.0
-```
-
-Por tanto, la zona preferida de aparición respecto a algún jugador existente es conceptualmente:
-
-```text
-2.0 < d <= 4.0
-```
-
-`4.0` no es una restricción absoluta. Es solo una preferencia para conseguir crecimiento compacto.
-
-Si existen candidatos de frontera, el algoritmo elige entre ellos.
-
-Si no existe ninguno pero todavía existen sectores válidos dentro de la ventana, el algoritmo entra en **modo de recuperación** y puede seleccionar un candidato válido más alejado. Así un conjunto de ruinas predefinidas, sectores ya explorados u otros obstáculos nunca bloquea artificialmente el alta de jugadores mientras siga existiendo espacio legal.
-
----
-
-## 7. Prioridad radial
-
-Entre los candidatos de frontera se favorecen los más próximos al origen global:
+Cada candidato recibe una prioridad en función de su **proximidad** a:
 
 ```text
 SPAWN_ORIGIN = M25
 ```
 
-Para cada candidato `C` se calcula:
+No se utiliza la distancia directamente como valor a maximizar. Se utiliza una función inversa: cuanto más cerca de `M25`, mayor peso tiene la celda.
+
+Una fórmula adecuada es:
 
 ```text
-radialDistance(C) = distance(C, M25)
+priorityWeight(C) = 1 / (1 + distance(C, M25))^alpha
 ```
 
-La prioridad básica es menor cuanto menor sea esa distancia.
+con:
 
-Esto genera un comportamiento natural:
+```text
+alpha > 0
+```
 
-- primero se ocupan posiciones alrededor de `M25`;
-- después se forma una corona algo más externa;
-- luego otra;
-- y así sucesivamente;
-- al cambiar a `[41,80]`, las posiciones cercanas a `41` siguen siendo mucho más próximas a `M25` que las cercanas a `80`, por lo que la población continúa desde el frente anterior.
+Inicialmente puede utilizarse:
 
-No se reinicia el centro de crecimiento al cambiar de ventana.
+```text
+alpha = 1
+```
+
+Por ejemplo:
+
+```text
+M25   d = 0       weight = 1.0000
+M26   d = 1       weight = 0.5000
+N26   d = sqrt(2) weight ≈ 0.4142
+M27   d = 2       weight ≈ 0.3333
+M30   d = 5       weight ≈ 0.1667
+```
+
+### 4.1 Por qué `1 / (1 + d)` y no `1 / d`
+
+La fórmula estricta `1 / d` no está definida en `M25`, porque allí:
+
+```text
+d = 0
+```
+
+Añadir `1` al denominador conserva exactamente el comportamiento buscado —más proximidad implica mayor prioridad— y produce un valor máximo finito de `1` en el origen.
+
+### 4.2 Parámetro `alpha`
+
+`alpha` controla cuánto favorecemos el centro.
+
+```text
+alpha pequeño -> distribución más dispersa
+alpha grande  -> concentración más fuerte alrededor de M25
+```
+
+Debe ser configurable para poder ajustar el comportamiento con simulaciones sin modificar código.
+
+### 4.3 La prioridad es estática
+
+Una vez calculado:
+
+```text
+priorityWeight(M32)
+```
+
+ese valor no cambia porque aparezcan nuevos jugadores, porque se descubran otros sectores o porque avance el tiempo.
+
+La prioridad depende únicamente de:
+
+```text
+coordenada del sector
++
+SPAWN_ORIGIN
++
+alpha
+```
+
+Por tanto se calcula una sola vez cuando la celda entra en el pool.
 
 ---
 
-## 8. Jitter determinista
+## 5. Construcción inicial del pool
 
-Si siempre se escogiera estrictamente la coordenada de menor distancia al origen, la distribución podría adquirir patrones demasiado perfectos.
-
-Para romper esa simetría se añade una pequeña perturbación determinista a la prioridad.
-
-Para cada coordenada se calcula:
+Al inicializar el servidor se materializa inicialmente el mapa:
 
 ```text
-jitter(C) = hash01(worldSeed, C) * SPAWN_JITTER_MAX
+[A-Z] × [1-50]
 ```
 
-Donde:
+Pero el pool de spawn no necesita incluir todo el mapa. Solo incluye celdas que pertenecen a la zona permitida para nuevos jugadores.
+
+Inicialmente:
 
 ```text
-0 <= hash01(...) < 1
-SPAWN_JITTER_MAX = 0.75
+[D-W] × [10-40]
 ```
 
-La puntuación de prioridad queda:
+Para cada sector `C` de esa región:
 
 ```text
-priority(C) = radialDistance(C) + jitter(C)
+1. comprobar que es apto para spawn;
+2. calcular distance(C, M25);
+3. calcular priorityWeight(C);
+4. persistir C dentro del pool.
 ```
 
-Y se selecciona el candidato con **menor** `priority`.
-
-El jitter debe ser pequeño. Su objetivo es cambiar el orden entre sectores de distancia parecida, no permitir que una coordenada muy lejana adelante a una claramente más cercana.
-
-Se propone inicialmente:
-
-```text
-SPAWN_JITTER_MAX = 0.75
-```
-
-Este valor puede ajustarse posteriormente.
-
-### ¿Por qué determinista?
-
-En lugar de utilizar `Math.random()` en cada intento, el valor depende de:
-
-- una semilla del mundo;
-- la coordenada del sector.
-
-Por tanto, una misma coordenada siempre recibe el mismo jitter dentro del mismo mundo.
-
-Esto aporta:
-
-- distribución visual irregular;
-- comportamiento reproducible;
-- facilidad para depurar;
-- seguridad frente a reintentos de transacciones;
-- ausencia de cambios de resultado simplemente porque Firestore haya reejecutado la operación.
+Este trabajo se realiza una sola vez para esas celdas.
 
 ---
 
-## 9. Algoritmo completo
+## 6. Selección de una posición para un nuevo jugador
 
-### Paso 1 — cargar estado de spawn
+Cuando se crea una cuenta no se recalculan prioridades ni se vuelve a analizar geométricamente toda la ventana.
 
-Leer al menos:
+Se parte del pool persistente actual.
 
-```text
-activeSpawnNumberMin
-activeSpawnNumberMax
-spawnLetterMin = D
-spawnLetterMax = W
-spawnOrigin = M25
-minimumPlayerDistance = 2.0
-preferredLinkDistance = 4.0
-worldSeed
-```
-
-### Paso 2 — obtener candidatos de la ventana activa
-
-Generar las coordenadas de:
+Si contiene candidatos:
 
 ```text
-[D-W] × [activeSpawnNumberMin-activeSpawnNumberMax]
-```
-
-No es necesario que la lista esté almacenada físicamente como un array gigante. Las coordenadas se pueden derivar de la geometría.
-
-### Paso 3 — eliminar sectores no disponibles
-
-Descartar:
-
-```text
-POPULATED
-RESERVED
-PLAYER_BUNKER
-fuera de rango
-coordenadas inválidas
-```
-
-En la práctica, `PLAYER_BUNKER` ya será `POPULATED`, pero se mantiene la distinción conceptual.
-
-### Paso 4 — aplicar separación mínima
-
-Para cada candidato restante comprobar los sectores vecinos con distancia `<= 2.0`.
-
-Si alguno contiene un bunker de jugador:
-
-```text
-candidato = INVALID
-```
-
-### Paso 5 — construir frontera preferente
-
-Entre los candidatos válidos, conservar como preferentes aquellos para los que exista al menos un jugador con:
-
-```text
-2.0 < distance(C, player) <= 4.0
-```
-
-Si existe al menos un candidato preferente:
-
-```text
-selectionPool = preferredCandidates
-```
-
-Si no existe ninguno:
-
-```text
-selectionPool = allValidCandidates
-```
-
-### Paso 6 — calcular prioridad
-
-Para cada candidato del pool:
-
-```text
-radial = distance(C, M25)
-jitter = hash01(worldSeed, C) * 0.75
-priority = radial + jitter
-```
-
-### Paso 7 — seleccionar
-
-Escoger el candidato con menor prioridad.
-
-En caso extremadamente improbable de empate exacto, desempatar de forma determinista por:
-
-```text
-letra
-→ número
-```
-
-o por un segundo hash estable.
-
-### Paso 8 — reservar y crear el sector de jugador
-
-La selección debe confirmarse de forma atómica:
-
-```text
-validar de nuevo
-→ reservar
-→ asignar jugador
-→ resolver sector completo
-→ persistir
-```
-
-Si la validación falla porque otra alta concurrente acaba de ocupar el sector o una posición incompatible, la operación se reintenta con el nuevo estado.
-
-### Paso 9 — si no existe ningún candidato válido
-
-La ventana está **saturada**.
-
-Entonces:
-
-```text
-cerrar ventana actual para nuevas altas
-→ avanzar activeSpawnNumberRange
-→ ampliar el mapa materializado si es necesario
-→ repetir el algoritmo
-```
-
----
-
-## 10. Pseudocódigo
-
-```text
-function allocatePlayerSector(playerId):
-    repeat:
-        state = loadSpawnState()
-
-        candidates = coordinates(
-            letters = D..W,
-            numbers = state.activeNumberMin..state.activeNumberMax
-        )
-
-        valid = []
-
-        for candidate in candidates:
-            if sectorIsAlreadyResolvedOrReserved(candidate):
-                continue
-
-            if hasPlayerWithinOrAtDistance2(candidate):
-                continue
-
-            valid.add(candidate)
-
-        if valid.isEmpty():
-            atomicallyAdvanceSpawnWindow(state)
-            ensureMapCoversNewWindow()
-            continue
-
-        preferred = [
-            c in valid
-            where hasPlayerAtDistanceBetween(c, 2.0, 4.0)
-        ]
-
-        pool = preferred if preferred.isNotEmpty else valid
-
-        chosen = minBy(pool, candidate =>
-            distance(candidate, M25)
-            + deterministicJitter(worldSeed, candidate, 0.75)
-        )
-
-        success = atomicallyReserveAndCreatePlayerSector(
-            playerId,
-            chosen
-        )
-
-        if success:
-            return chosen
-
-        // conflicto concurrente: repetir con estado actualizado
-```
-
-El pseudocódigo describe comportamiento, no una implementación literal de Firestore.
-
----
-
-## 11. Ejemplo de crecimiento
-
-### Jugador 1
-
-```text
-M25
-```
-
-### Jugador 2
-
-No puede aparecer a `d <= 2` de `M25`.
-
-Entre las posiciones más cercanas legalmente posibles están desplazamientos como:
-
-```text
-(+1,+2)
-(+2,+1)
-(-1,+2)
-(-2,+1)
+C1 con peso w1
+C2 con peso w2
 ...
+Cn con peso wn
 ```
 
-cuya distancia es:
+se calcula:
 
 ```text
-sqrt(5) ≈ 2.236
+W = w1 + w2 + ... + wn
 ```
 
-Por ejemplo, `N27` podría ser un candidato válido.
-
-El jitter determina cuál de los candidatos de prioridad similar queda antes.
-
-### Jugadores posteriores
-
-Cada alta añade nuevos sectores posibles alrededor de la frontera del conjunto existente.
-
-El resultado esperado no es:
+La probabilidad de elegir `Ci` es:
 
 ```text
-X..X..X..X
-...........
-X..X..X..X
+P(Ci) = wi / W
 ```
 
-como patrón rígido perfecto.
+Esto es una **selección aleatoria ponderada** o ruleta ponderada.
 
-Se busca algo más parecido conceptualmente a una mancha irregular:
+Ejemplo simple:
 
 ```text
-      X   X
-   X        X
-      X  X
-  X          X
-     X   X
+A -> weight 10
+B -> weight 5
+C -> weight 1
+
+Total = 16
+
+P(A) = 10/16 = 62.5%
+P(B) =  5/16 = 31.25%
+P(C) =  1/16 = 6.25%
 ```
 
-manteniendo en todos los casos `d > 2`.
+La celda más cercana no gana automáticamente, pero tiene más posibilidades de ser elegida.
+
+Eso permite que el crecimiento sea:
+
+- claramente concentrado alrededor de `M25`;
+- progresivo;
+- irregular;
+- diferente entre mundos/servidores;
+- sin necesidad de jitter artificial ni de recalcular puntuaciones dinámicas.
 
 ---
 
-## 12. Comportamiento al cambiar de ventana
+## 7. Primer jugador
 
-Supongamos:
+`M25` tiene el peso máximo porque su distancia al origen es `0`.
 
-```text
-ventana actual = [10,40]
-```
+No es necesario forzar que el primer jugador esté exactamente en `M25` si se quiere respetar al 100 % la ruleta desde el inicio.
 
-Se declara saturada únicamente cuando **no queda ningún candidato legal** dentro de `D-W × 10-40`.
-
-Entonces se activa:
+Sin embargo, si se desea garantizar un núcleo idéntico entre servidores, puede establecerse una excepción simple:
 
 ```text
-[41,80]
+si no existe ningún PLAYER_BUNKER:
+    elegir M25 si sigue disponible
 ```
 
-El origen de prioridad sigue siendo:
+Esta decisión puede mantenerse configurable.
 
-```text
-M25
-```
-
-Por ello, dentro de la nueva ventana, una coordenada alrededor de `M41` obtiene mucha más prioridad que una alrededor de `M80`.
-
-La nueva población continúa longitudinalmente desde el frente de la anterior.
-
-La siguiente saturación activa:
-
-```text
-[81,120]
-```
-
-y así sucesivamente.
+El diseño principal no depende de ella: incluso sin excepción, `M25` y sus alrededores son las celdas con mayor probabilidad.
 
 ---
 
-## 13. Interacción con exploración
+## 8. Qué hace que una celda salga del pool
 
-Los jugadores pueden explorar fuera de la ventana de spawn activa.
+Una entrada desaparece del pool en cuanto deja de ser legal como futura ubicación de jugador.
 
-Si un jugador explora un sector futuro y ese sector queda `POPULATED`, el algoritmo de spawn debe respetarlo.
+Hay dos causas principales.
+
+### 8.1 Sector descubierto o poblado
+
+Cuando cualquier mecánica resuelve un sector que todavía estaba en el pool, ese sector se elimina inmediatamente.
 
 Ejemplo:
 
 ```text
-activeSpawnRange = [41,80]
-sector M45 ya fue explorado y generado como RUINS
+H28 está en el pool
+↓
+un jugador completa un reconocimiento de H28
+↓
+el backend genera H28 como HUNTING
+↓
+H28 se elimina del pool de spawn
 ```
 
-`M45` ya no puede ser transformado posteriormente en `PLAYER_BUNKER`.
+No importa qué tipo de sector haya generado el reconocimiento. El hecho relevante es que `H28` ya forma parte de la verdad persistente del mundo y no debe sobrescribirse posteriormente para colocar un bunker.
 
-El algoritmo simplemente lo descarta y continúa con otros candidatos.
+Regla:
 
-Así se mantiene la regla fundamental de que el mundo persistente no se reescribe para acomodar nuevas cuentas.
+```text
+sector pasa de UNGENERATED a POPULATED
+=> removeFromSpawnPool(sector)
+```
+
+### 8.2 Aparición de un bunker
+
+Cuando una celda `B` se asigna como `PLAYER_BUNKER`, se elimina:
+
+```text
+B
+```
+
+y además se eliminan del pool todas las coordenadas que violarían la distancia mínima respecto a `B`.
+
+Como la condición legal es:
+
+```text
+d > 2.0
+```
+
+se eliminan todas las celdas con:
+
+```text
+d <= 2.0
+```
+
+respecto al nuevo bunker.
 
 ---
 
-## 14. Saturación real vs. ausencia de frontera
+## 9. Vecindario que se invalida al crear un bunker
 
-Estos conceptos no deben confundirse.
-
-### Sin candidatos de frontera
-
-Puede no existir ningún sector a `2 < d <= 4` de un bunker y, sin embargo, seguir habiendo sectores legales en la ventana.
-
-En ese caso se utiliza el **modo de recuperación** y se selecciona el candidato válido de mayor prioridad global.
-
-### Ventana saturada
-
-Solo se considera saturada cuando:
+Con coordenadas enteras, los desplazamientos cuyo valor euclídeo es `<= 2` son:
 
 ```text
-allValidCandidates.isEmpty()
+             (0,+2)
+
+      (-1,+1) (0,+1) (+1,+1)
+
+(-2,0) (-1,0) (0,0) (+1,0) (+2,0)
+
+      (-1,-1) (0,-1) (+1,-1)
+
+             (0,-2)
 ```
 
-Es decir, no queda ningún sector que cumpla todas las reglas duras.
+Por tanto, cada nuevo bunker invalida como máximo **13 posiciones** del pool, contando su propio sector.
 
-Solo entonces se avanza a la siguiente ventana numérica.
+Ejemplo con bunker en `M25`:
+
+```text
+M25  eliminado
+L25  eliminado
+N25  eliminado
+M24  eliminado
+M26  eliminado
+K25  eliminado
+O25  eliminado
+M23  eliminado
+M27  eliminado
+L24  eliminado
+L26  eliminado
+N24  eliminado
+N26  eliminado
+```
+
+Posiciones como:
+
+```text
+N27
+O26
+```
+
+tienen distancia `sqrt(5) ≈ 2.236`, por lo que siguen siendo legales.
+
+Esta invalidación permite garantizar la separación sin tener que recalcular distancias contra todos los bunkers en cada alta.
 
 ---
 
-## 15. Concurrencia
-
-La asignación de spawn es una operación poco frecuente comparada con acciones normales de juego, por lo que es aceptable serializar las altas mediante un pequeño estado autoritativo de asignación.
-
-Se propone mantener un documento conceptual similar a:
+## 10. Flujo completo de alta
 
 ```text
-WORLD_SPAWN_STATE
+Nueva cuenta
+   ↓
+Leer candidatos disponibles del pool activo
+   ↓
+Seleccionar aleatoriamente según priorityWeight
+   ↓
+Revalidar la celda de forma transaccional
+   ↓
+Reservarla para el jugador
+   ↓
+Eliminar del pool la celda elegida
+   ↓
+Eliminar del pool las posiciones a distancia <= 2
+   ↓
+Convertir el sector en PLAYER_BUNKER
+   ↓
+Resolver TODAS las zonas del sector
+   ↓
+Persistir el sector completo
+   ↓
+Revelar al jugador únicamente el conocimiento inicial permitido
+```
+
+Las modificaciones de reserva e invalidación deben ser seguras frente a concurrencia.
+
+---
+
+## 11. Concurrencia
+
+Dos jugadores pueden registrarse prácticamente al mismo tiempo.
+
+El sistema no puede permitir este escenario:
+
+```text
+alta A elige M25
+alta B elige N26
+ambas validan antes de que la otra escriba
+```
+
+porque `M25` y `N26` están a `sqrt(2)` y violarían la distancia mínima.
+
+Por ello la selección aleatoria puede realizarse fuera de la transacción, pero antes de confirmar debe existir una validación atómica que garantice que:
+
+- la celda elegida sigue en el pool;
+- no ha sido reservada;
+- no ha sido poblada por otra acción;
+- ningún bunker concurrente acaba de invalidarla.
+
+Si falla:
+
+```text
+abortar intento
+→ cargar pool actualizado
+→ volver a seleccionar
+```
+
+La implementación exacta se decidirá al diseñar Firestore, pero la garantía funcional es obligatoria.
+
+---
+
+## 12. Interacción con la exploración
+
+La exploración y el spawn comparten el mismo mundo.
+
+Si una misión de reconocimiento descubre una celda que estaba disponible para futuros jugadores:
+
+```text
+UNGENERATED -> POPULATED
+```
+
+esa coordenada sale del pool.
+
+No se recalculan los pesos de las demás.
+
+Ejemplo:
+
+```text
+pool contiene:
+M30, M31, N30, N31, ...
+
+un jugador reconoce N31
+
+nuevo pool:
+M30, M31, N30, ...
+```
+
+El resto conserva exactamente el mismo `priorityWeight` que ya tenía.
+
+Esto significa que la exploración de los jugadores modifica qué posiciones siguen disponibles, pero no modifica la función de preferencia global.
+
+---
+
+## 13. Expansión del mapa
+
+El mapa es infinito hacia números positivos.
+
+Si el mapa pasa, por ejemplo, de:
+
+```text
+[A-Z] × [1-50]
+```
+
+a:
+
+```text
+[A-Z] × [1-80]
+```
+
+las nuevas celdas se crean como `UNGENERATED`.
+
+Para las nuevas celdas que además formen parte de una región actualmente o futuramente permitida para spawn:
+
+```text
+1. calcular priorityWeight una sola vez;
+2. comprobar si ya están invalidadas por bunkers existentes;
+3. comprobar si ya fueron pobladas durante la expansión/exploración;
+4. si siguen siendo válidas, añadirlas al pool.
+```
+
+### 13.1 Importante en los límites entre ventanas
+
+Supongamos que existe un bunker en:
+
+```text
+M40
+```
+
+y posteriormente se crean candidatos de `[41,80]`.
+
+Celdas nuevas como:
+
+```text
+M41
+M42
+N41
+L41
+```
+
+pueden caer dentro del radio prohibido de `M40`.
+
+Por tanto, al añadir nuevas celdas al pool no basta con calcular su prioridad: también deben excluirse aquellas que ya sean incompatibles con bunkers existentes.
+
+Este chequeo solo se realiza una vez cuando las nuevas celdas se incorporan.
+
+---
+
+## 14. Ventanas de spawn y saturación
+
+La primera ventana propuesta es:
+
+```text
+[D-W] × [10-40]
+```
+
+Mientras exista al menos una entrada válida de esa ventana en el pool, los nuevos jugadores se seleccionan de ella.
+
+Cuando no queda ninguna:
+
+```text
+activeSpawnPool == empty
+```
+
+la ventana está saturada.
+
+Entonces se activa la siguiente región numérica, por ejemplo:
+
+```text
+[41-80]
+```
+
+Si todavía no está materializada:
+
+```text
+expandir mapa hasta 80
+→ calcular prioridades de las nuevas candidatas
+→ excluir las ya incompatibles
+→ persistir nuevas entradas
+```
+
+Después la selección continúa exactamente con el mismo mecanismo.
+
+El origen de prioridad sigue siendo siempre:
+
+```text
+M25
+```
+
+Por tanto, dentro de `[41,80]` las posiciones próximas a `41` tienen naturalmente mayor peso que las próximas a `80`. Esto hace que el crecimiento longitudinal tienda a continuar desde la población anterior.
+
+---
+
+## 15. Por qué no recalcular la prioridad al aparecer jugadores
+
+El objetivo del peso no es medir dónde está actualmente la población, sino definir una preferencia global y estable de expansión desde el núcleo inicial.
+
+Por tanto:
+
+```text
+nuevo bunker
+=> elimina candidatos incompatibles
+=> NO modifica pesos del resto
+```
+
+Esto tiene varias ventajas:
+
+- el coste de cálculo de prioridades ocurre una sola vez;
+- el estado es fácil de depurar;
+- la aparición de un jugador no obliga a reordenar cientos de sectores;
+- la exploración no provoca cascadas de recálculos;
+- la aleatoriedad ponderada ya produce irregularidad suficiente;
+- el comportamiento global sigue favoreciendo el centro.
+
+---
+
+## 16. Pseudocódigo conceptual
+
+### Inicialización
+
+```text
+function initializeSpawnPool():
+    for coordinate in D..W × 10..40:
+        if coordinate can be candidate:
+            weight = proximityWeight(coordinate, M25)
+            persistCandidate(coordinate, weight)
+```
+
+### Proximidad
+
+```text
+function proximityWeight(coordinate, origin):
+    d = sectorDistance(coordinate, origin)
+    return 1 / (1 + d)^alpha
+```
+
+### Reconocimiento
+
+```text
+function onSectorPopulated(coordinate):
+    removeCandidateIfPresent(coordinate)
+```
+
+### Alta de jugador
+
+```text
+function allocatePlayerSector(playerId):
+    loop:
+        candidates = loadActiveSpawnCandidates()
+
+        if candidates is empty:
+            advanceSpawnWindowAndExpandMap()
+            continue
+
+        chosen = weightedRandom(
+            candidates,
+            weight = candidate.priorityWeight
+        )
+
+        success = atomically:
+            verify chosen is still candidate
+            reserve chosen
+            remove chosen from pool
+            remove every candidate within distance <= 2 of chosen
+            create PLAYER_BUNKER for playerId
+            resolve all zones of chosen sector
+
+        if success:
+            return chosen
+
+        // otro proceso modificó el estado; repetir
+```
+
+### Expansión
+
+```text
+function addNewSpawnCoordinates(newCoordinates):
+    for coordinate in newCoordinates:
+        if coordinate already populated:
+            continue
+
+        if exists PLAYER_BUNKER at distance <= 2:
+            continue
+
+        weight = proximityWeight(coordinate, M25)
+        persistCandidate(coordinate, weight)
+```
+
+---
+
+## 17. Persistencia recomendada
+
+Conceptualmente el sistema habla de una lista persistente, pero no se recomienda asumir desde el diseño que todo deba guardarse en un único array de Firestore.
+
+Una forma lógica sería:
+
+```text
+SPAWN_STATE
 - activeNumberMin
 - activeNumberMax
-- revision
-- worldSeed
+- origin = M25
+- alpha
+- minimumPlayerDistance = 2.0
+
+SPAWN_CANDIDATES
+- coordinate
+- priorityWeight
+- windowId / numberRange
 ```
 
-Cada alta debe participar en una transacción que lea y actualice ese estado/revisión.
+Cuando una celda deja de ser candidata puede:
 
-Esto fuerza a que dos asignaciones concurrentes entren en conflicto y una de ellas se reevalúe antes de confirmar.
+- eliminarse físicamente de `SPAWN_CANDIDATES`; o
+- marcarse como no disponible si posteriormente interesa conservar auditoría.
 
-La operación lógica debe garantizar conjuntamente:
+Para la primera implementación, eliminarla físicamente simplifica la lectura del pool.
 
-```text
-el candidato sigue libre
-AND
-no apareció entretanto un bunker a d <= 2
-AND
-la ventana activa sigue siendo la esperada
-```
-
-antes de persistir el nuevo `PLAYER_BUNKER`.
-
-Nunca debe confiarse en una comprobación realizada únicamente antes de la transacción.
+La estructura concreta deberá diseñarse teniendo en cuenta consultas, transacciones y límites de Firestore, pero no cambia el algoritmo.
 
 ---
 
-## 16. Coste y optimización
+## 18. Propiedades del algoritmo
 
-La ventana inicial contiene:
+### Cálculo único
 
-```text
-20 letras (D-W)
-× 31 números (10-40)
-= 620 sectores
-```
+La prioridad de una celda se calcula una sola vez al incorporarse al pool.
 
-Por tanto, incluso una primera implementación simple puede permitirse razonar sobre todas las coordenadas de la ventana al producir un spawn. La creación de cuentas no es una operación de alta frecuencia.
+### Crecimiento central
 
-Aun así, no conviene traducir automáticamente esos 620 candidatos en cientos de lecturas innecesarias de Firestore.
+Las celdas próximas a `M25` tienen más peso.
 
-Optimizaciones posibles:
+### Aleatoriedad natural
 
-- derivar las coordenadas en memoria;
-- comprobar primero candidatos por orden aproximado de prioridad;
-- validar distancia mínima mediante el pequeño vecindario `d <= 2`;
-- mantener índices de sectores `POPULATED`/`PLAYER_BUNKER`;
-- cachear o persistir una frontera de candidatos si el volumen de altas lo justificase;
-- mantener un radio/frente aproximado de crecimiento para no volver a inspeccionar continuamente regiones interiores agotadas.
+No se elige siempre el sector de mayor prioridad; se sortea proporcionalmente a los pesos.
 
-Estas optimizaciones no deben cambiar el comportamiento conceptual del algoritmo.
+### Separación garantizada
 
-La primera implementación debe priorizar simplicidad y corrección; la optimización puede hacerse cuando exista evidencia de que es necesaria.
+Cada bunker elimina todas las posiciones a `d <= 2`.
 
----
+### Respeto del mundo descubierto
 
-## 17. Razones para elegir este algoritmo
+Cada sector poblado por exploración se elimina del pool.
 
-### Crecimiento compacto
+### Escalabilidad
 
-La frontera `2 < d <= 4` hace que los nuevos jugadores aparezcan cerca de la población existente.
+Las altas no necesitan recalcular la cuadrícula completa.
 
-### Expansión desde el centro
+### Expansión infinita
 
-La prioridad respecto a `M25` impide que el sistema salte arbitrariamente a extremos todavía vacíos.
-
-### Aspecto orgánico
-
-El jitter rompe empates y pequeñas simetrías sin dispersar la población.
-
-### Reproducibilidad
-
-El jitter derivado de `worldSeed + coordinate` permite reproducir decisiones y depurar el sistema.
-
-### Robustez ante obstáculos
-
-Si sectores explorados o predefinidos bloquean la frontera, el modo de recuperación evita declarar una falsa saturación.
-
-### Crecimiento longitudinal natural
-
-Mantener `M25` como origen al avanzar a `[41,80]`, `[81,120]`, etc. hace que las nuevas ventanas se llenen empezando por su extremo más cercano al mundo ya poblado.
-
-### Escalabilidad suficiente
-
-La distancia mínima puede validarse localmente y las ventanas tienen un número limitado de candidatos.
+Las nuevas celdas reciben su peso cuando se materializan y después funcionan igual que las iniciales.
 
 ---
 
-## 18. Parámetros que deben ser configurables
+## 19. Decisiones configurables pendientes
 
-La implementación no debe acoplar el algoritmo a los valores iniciales.
+El algoritmo queda definido, pero todavía podremos ajustar mediante simulación:
 
-Como mínimo:
+- valor exacto de `alpha`;
+- si el primer jugador se fuerza a `M25` o también se sortea;
+- tamaño exacto de las ventanas posteriores;
+- si las ventanas tienen o no solapamiento;
+- estructura concreta de persistencia en Firestore;
+- estrategia eficiente para hacer la selección ponderada cuando el pool sea grande;
+- si conviene eliminar físicamente candidatos o conservarlos con estado;
+- cómo auditar/reconstruir el pool si alguna vez fuese necesario.
 
-```text
-spawnLetterMin = D
-spawnLetterMax = W
-spawnOriginLetter = M
-spawnOriginNumber = 25
-minimumPlayerDistance = 2.0
-preferredLinkDistance = 4.0
-spawnJitterMax = 0.75
-initialSpawnNumberMin = 10
-initialSpawnNumberMax = 40
-subsequentWindowSize = 40
-worldSeed
-```
+Estas decisiones no alteran la regla principal:
 
-Cambiar estos valores debe alterar la distribución sin reescribir la lógica del algoritmo.
-
----
-
-## 19. Invariantes
-
-La implementación debe preservar siempre:
-
-1. ningún nuevo bunker se asigna fuera de `D-W`;
-2. ningún nuevo bunker se asigna fuera de la ventana numérica activa;
-3. ningún sector ya `POPULATED` se sobrescribe para crear un jugador;
-4. dos bunkers distintos mantienen siempre `distance > 2.0`;
-5. la frontera `<= 4.0` es una preferencia, no una condición que pueda bloquear indefinidamente altas;
-6. la ventana solo se considera saturada si no queda ningún candidato legal;
-7. el jitter nunca sustituye las reglas duras de validez;
-8. el jitter es determinista para una misma semilla y coordenada;
-9. la asignación final es atómica;
-10. el sector de jugador queda completamente resuelto al confirmarse la asignación;
-11. el jugador no recibe automáticamente conocimiento de las demás zonas de su sector;
-12. la expansión de ventanas avanza únicamente hacia números superiores;
-13. el origen `M25` sigue siendo la referencia radial global aunque cambie la ventana activa.
-
----
-
-## 20. Resumen operativo
-
-```text
-Primer jugador -> intentar M25
-
-Siguientes jugadores:
-    generar candidatos D-W dentro de la ventana activa
-    quitar sectores ya resueltos/reservados
-    quitar candidatos con otro jugador a d <= 2
-
-    si no queda ninguno:
-        avanzar ventana
-        ampliar mapa si hace falta
-        repetir
-
-    preferir candidatos con algún jugador a 2 < d <= 4
-
-    prioridad = distancia a M25 + jitter determinista pequeño
-
-    elegir menor prioridad
-
-    validar y reservar atómicamente
-    generar todo el sector PLAYER_BUNKER
-```
-
-El resultado buscado es una población **compacta, irregular, reproducible y progresiva**, con separación justa entre jugadores y capacidad de crecimiento indefinido por el eje numérico.
+**cada celda recibe una prioridad estática basada en su proximidad a M25, el pool persiste únicamente las posiciones todavía disponibles y cada nuevo jugador se elige mediante probabilidad proporcional a esa prioridad.**
