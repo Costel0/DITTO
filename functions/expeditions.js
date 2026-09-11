@@ -14,13 +14,9 @@ function normalizedCoordinates(value, label = "coordinates") {
   const result = {};
   for (const axis of ["x", "y", "z"]) {
     const coordinate = value[axis];
-    if (
-      !Number.isInteger(coordinate) ||
-      coordinate < 0 ||
-      coordinate > 999
-    ) {
+    if (!Number.isSafeInteger(coordinate) || coordinate < 0) {
       throw new Error(
-        `${label}.${axis} must be an integer from 0 to 999.`,
+        `${label}.${axis} must be a non-negative safe integer.`,
       );
     }
     result[axis] = coordinate;
