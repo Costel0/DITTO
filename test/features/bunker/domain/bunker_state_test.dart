@@ -33,6 +33,12 @@ void main() {
         'y': 34,
         'z': 56,
       },
+      'knownZones': <dynamic>[
+        <String, dynamic>{
+          'coordinates': <String, int>{'x': 12, 'y': 34, 'z': 56},
+          'zoneType': 'PLAYER_BUNKER',
+        },
+      ],
     });
 
     expect(
@@ -101,6 +107,12 @@ void main() {
       'completedTaskIds': <String>[],
       'inventory': <String, int>{},
       'bunkerCoordinates': <String, int>{'x': 1, 'y': 2, 'z': 3},
+      'knownZones': <dynamic>[
+        <String, dynamic>{
+          'coordinates': <String, int>{'x': 1, 'y': 2, 'z': 3},
+          'zoneType': 'PLAYER_BUNKER',
+        },
+      ],
     });
 
     expect(state.busySurvivors.single.expeditionType, 'test_type');
@@ -108,7 +120,7 @@ void main() {
 
   test('schema v9 allows a passive task starter to remain idle', () {
     final state = BunkerState.fromJson(<String, dynamic>{
-      'schemaVersion': BunkerState.supportedSchemaVersion,
+      'schemaVersion': 9,
       'revision': 12,
       'serverUpdatedAt': '2026-09-09T10:00:00Z',
       'survivors': <dynamic>[
