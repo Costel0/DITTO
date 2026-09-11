@@ -6,8 +6,8 @@ require("./map");
 
 const deployedFunctions = require("./index");
 const {initializeBunker} = require("./onboarding");
+const {getExpeditionLauncherInfo} = require("./expedition_launcher");
 const {
-  getExpeditionLauncherInfo,
   resolveCompletedOccupations,
   startExpedition,
 } = require("./expedition_callables");
