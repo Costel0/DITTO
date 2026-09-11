@@ -42,20 +42,10 @@ Los chunks forman parte de la validación autoritativa. Dos asignaciones incompa
 
 La expansión marca temporalmente `expansionStatus = EXPANDING` para impedir que una alta concurrente cree un bunker justo mientras nacen nuevas celdas en el borde del mapa.
 
-## Índices
-
-`firestore.indexes.json` excluye `worldMapSpawnChunks.candidates` de los índices automáticos, porque nunca se consulta por los campos internos de ese mapa. Esto reduce escritura y almacenamiento de índices.
-
 Después de bajar esta versión hay que reconstruir una vez el mapa de pruebas porque cambia el esquema del índice de spawn:
 
 ```powershell
 .\map.cmd init --force
-```
-
-Y desplegar una vez la configuración de índices:
-
-```powershell
-firebase deploy --only firestore:indexes
 ```
 
 ## Comandos
