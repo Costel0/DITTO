@@ -24,32 +24,44 @@ class FirebaseFunctionsExpeditionService implements ExpeditionService {
   String get _userId {
     final uid = _auth.currentUser?.uid;
     if (uid == null || uid.isEmpty) {
-      throw StateError('Authentication is required for expedition reviews.');
+      throw StateError('Authentication is required for expeditions.');
     }
     return uid;
   }
 
+  DocumentReference<Map<String, dynamic>> get _bunkerReference => _firestore
+      .collection('users')
+      .doc(_userId)
+      .collection('state')
+      .doc('bunker');
+
   @override
   Future<ExpeditionLauncherInfo> fetchLauncherInfo() async {
     final callable = _functions.httpsCallable('getExpeditionLauncherInfo');
-    final result = await callable.call();
-    final data = result.data;
-    if (data is! Map) {
+    final results = await Future.wait<dynamic>(<Future<dynamic>>[
+      callable.call(),
+      _bunkerReference.get(),
+    ]);
+
+    final callableResult = results[0] as HttpsCallableResult<dynamic>;
+    final snapshot = results[1]
+        as DocumentSnapshot<Map<String, dynamic>>;
+    final data = callableResult.data;
+    final bunkerData = snapshot.data();
+    if (data is! Map || !snapshot.exists || bunkerData == null) {
       throw const FormatException('Invalid expedition launcher response.');
     }
-    return ExpeditionLauncherInfo.fromMap(
-      Map<String, dynamic>.from(data),
+
+    final launcherData = _normalizeMap(Map<String, dynamic>.from(data));
+    launcherData['knownZones'] = _normalizeValue(
+      bunkerData['knownZones'] ?? const <dynamic>[],
     );
+    return ExpeditionLauncherInfo.fromMap(launcherData);
   }
 
   @override
   Future<List<ExpeditionReviewSummary>> fetchPendingReviews() async {
-    final snapshot = await _firestore
-        .collection('users')
-        .doc(_userId)
-        .collection('state')
-        .doc('bunker')
-        .get();
+    final snapshot = await _bunkerReference.get();
     final data = snapshot.data();
     if (!snapshot.exists || data == null) {
       throw StateError('Bunker is not initialized.');
