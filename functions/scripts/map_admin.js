@@ -56,10 +56,45 @@ function usage() {
   console.log(`DITTO map administration\n\nUsage:\n  node scripts/map_admin.js init [--force] [--project=ID] [--max=50] [--alpha=2]\n  node scripts/map_admin.js expand --max=80 [--project=ID]\n  node scripts/map_admin.js add-players --count=100 [--project=ID]\n  node scripts/map_admin.js download [--project=ID] [--out=PATH] [--format=json|csv|both]\n\nRoot wrappers:\n  .\\map.cmd init --force\n  .\\map.cmd expand --max=80\n  .\\map.cmd add-players --count=100\n  .\\map.cmd download\n`);
 }
 
+function projectIdFromFirebaseRc() {
+  const firebaseRcPath = path.resolve(__dirname, "../../.firebaserc");
+  if (!fs.existsSync(firebaseRcPath)) return null;
+
+  try {
+    const firebaseRc = JSON.parse(fs.readFileSync(firebaseRcPath, "utf8"));
+    const projectId = firebaseRc?.projects?.default;
+    return typeof projectId === "string" && projectId.trim()
+      ? projectId.trim()
+      : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function resolveProjectId(explicitProjectId) {
+  return explicitProjectId ||
+    process.env.GOOGLE_CLOUD_PROJECT ||
+    process.env.GCLOUD_PROJECT ||
+    projectIdFromFirebaseRc() ||
+    null;
+}
+
 function initializeFirebase(projectId) {
-  const options = {credential: applicationDefault()};
-  if (projectId) options.projectId = projectId;
-  initializeApp(options);
+  if (process.env.FIRESTORE_EMULATOR_HOST) {
+    initializeApp({projectId: projectId || "ditto-local"});
+    return getFirestore();
+  }
+
+  if (!projectId) {
+    throw new Error(
+      "Firebase project ID was not found. Use --project=PROJECT_ID, an environment variable, or .firebaserc.",
+    );
+  }
+
+  initializeApp({
+    credential: applicationDefault(),
+    projectId,
+  });
   return getFirestore();
 }
 
@@ -169,9 +204,10 @@ async function main() {
     return;
   }
 
-  const projectId = typeof options.project === "string" && options.project.trim()
+  const explicitProjectId = typeof options.project === "string" && options.project.trim()
     ? options.project.trim()
     : null;
+  const projectId = resolveProjectId(explicitProjectId);
   const db = initializeFirebase(projectId);
 
   if (command === "init") return runInit(db, options);
