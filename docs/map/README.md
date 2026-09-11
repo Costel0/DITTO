@@ -75,7 +75,7 @@ El eje numérico comienza en `1` y no tiene límite superior conceptual:
 1, 2, 3, ... 50, 51, 52, ...
 ```
 
-No existen coordenadas numéricas negativas ni `0` como sector jugable si se mantiene esta convención.
+No existen coordenadas numéricas negativas.
 
 El servidor puede comenzar con una plantilla materializada de:
 
@@ -183,14 +183,15 @@ Una vez poblado, un sector no se vuelve a sortear por explorarlo otra vez.
 
 ## 7. Sectores de jugador
 
-Cuando se crea una cuenta, el backend busca un sector válido dentro de la ventana activa de spawn.
+Cuando se crea una cuenta, el backend obtiene un sector del pool persistente de candidatos de spawn.
 
-El flujo es:
+El flujo conceptual es:
 
 ```text
-buscar candidato
-→ comprobar separación
-→ reservar atómicamente
+leer candidatos disponibles
+→ seleccionar uno por probabilidad ponderada
+→ revalidar/reservar atómicamente
+→ eliminar candidato y vecinos incompatibles del pool
 → convertir en PLAYER_BUNKER
 → asignar zona del bunker
 → resolver TODAS las zonas del sector
@@ -230,7 +231,7 @@ Su composición puede variar, pero el valor inicial debe ser equivalente.
 
 La zona en la que pueden aparecer jugadores es independiente de la parte del mapa que exista o haya sido explorada.
 
-La banda alfabética inicial queda fijada en:
+La banda alfabética queda fijada inicialmente en:
 
 ```text
 [D-W]
@@ -250,7 +251,7 @@ Por tanto, la primera región de spawn es:
 [D-W] × [10-40]
 ```
 
-El origen inicial del crecimiento es:
+El origen global de prioridad es:
 
 ```text
 M25
@@ -272,7 +273,7 @@ distance(playerA, playerB) > 2.0
 
 La desigualdad es estricta.
 
-Por ejemplo:
+Ejemplos:
 
 ```text
 M25 -> M27 = 2.0        NO permitido
@@ -282,89 +283,163 @@ M25 -> O26 = sqrt(5)    SÍ permitido
 M25 -> P25 = 3.0        SÍ permitido
 ```
 
-Como las coordenadas de sector son enteras, validar `d > 2` puede hacerse comprobando únicamente el pequeño vecindario del candidato cuya distancia sea `<= 2`, sin recorrer todos los jugadores del servidor.
+Como las coordenadas de sector son enteras, un bunker nuevo invalida únicamente su propio sector y las posiciones enteras situadas a distancia `<= 2`.
+
+Eso equivale como máximo a 13 posiciones:
+
+```text
+             (0,+2)
+
+      (-1,+1) (0,+1) (+1,+1)
+
+(-2,0) (-1,0) (0,0) (+1,0) (+2,0)
+
+      (-1,-1) (0,-1) (+1,-1)
+
+             (0,-2)
+```
+
+Estas entradas se eliminan directamente del pool de candidatos cuando se crea el bunker.
 
 ---
 
-## 10. Algoritmo de colocación propuesto
+## 10. Pool persistente de candidatos
 
-La estrategia elegida para la primera implementación es un **crecimiento radial con frontera preferente y jitter determinista**.
+La estrategia elegida sustituye el cálculo dinámico de candidatos en cada alta por un **pool persistente**.
 
-### 10.1 Primer jugador
+Cada sector que todavía puede utilizarse como bunker de un nuevo jugador tiene una entrada lógica con, como mínimo:
 
-Se intenta colocar en:
+```text
+coordinate
+priorityWeight
+```
+
+La prioridad se calcula una única vez cuando la celda entra en el pool.
+
+Inicialmente el pool se construye sobre:
+
+```text
+[D-W] × [10-40]
+```
+
+No es necesario almacenar el pool como un único array de Firestore. El término “lista” describe el conjunto lógico; la implementación puede utilizar una colección o una estructura equivalente.
+
+---
+
+## 11. Prioridad por proximidad a M25
+
+La prioridad depende exclusivamente de la proximidad de cada sector al origen global:
 
 ```text
 M25
 ```
 
-Si no está disponible se utiliza el candidato válido de mayor prioridad alrededor de ese origen.
+Cuanto más cerca del origen, mayor peso.
 
-### 10.2 Candidatos válidos
-
-Un sector solo puede recibir un jugador si:
-
-- está en `D-W`;
-- está en la ventana numérica activa;
-- no está reservado;
-- no está ya `POPULATED`;
-- puede convertirse legalmente en `PLAYER_BUNKER`;
-- mantiene `d > 2` respecto a todos los bunkers existentes.
-
-Un sector que ya fue resuelto por reconocimiento no se sobrescribe para acomodar un jugador nuevo.
-
-### 10.3 Frontera preferente
-
-Entre los candidatos válidos se prefieren aquellos que tengan algún jugador existente a:
+Una función adecuada es:
 
 ```text
-2.0 < d <= 4.0
+priorityWeight(C) = 1 / (1 + distance(C, M25))^alpha
 ```
 
-El `4.0` es una preferencia, no una regla dura.
-
-Esto hace que la población vaya creciendo desde los jugadores ya existentes en vez de saltar a posiciones aisladas.
-
-Si no hay candidatos en esa frontera pero siguen existiendo posiciones legales en la ventana, se usa el mejor candidato global. De esta forma obstáculos o sectores ya explorados no bloquean artificialmente el sistema.
-
-### 10.4 Prioridad radial
-
-Los candidatos preferentes se ordenan principalmente por distancia al origen global:
+Con `alpha = 1`:
 
 ```text
-M25
+M25   distancia = 0        peso = 1.0000
+M26   distancia = 1        peso = 0.5000
+N26   distancia = sqrt(2)  peso ≈ 0.4142
+M27   distancia = 2        peso ≈ 0.3333
+M30   distancia = 5        peso ≈ 0.1667
 ```
 
-Cuanto más cerca de `M25`, mayor prioridad.
+Se utiliza `1 + distancia` en el denominador para evitar la división por cero en `M25`.
 
-El origen no cambia cuando se avanza a ventanas posteriores. Esto es importante para que `[41-80]` empiece a poblarse cerca de `41` y continúe físicamente el crecimiento anterior, en vez de iniciar otra colonia aislada cerca de `60`.
+`alpha` será configurable: valores mayores concentran más la población alrededor del centro; valores menores producen una expansión más dispersa.
 
-### 10.5 Jitter determinista
-
-Para evitar un patrón geométrico demasiado perfecto se añade una pequeña perturbación estable:
-
-```text
-jitter(C) = hash01(worldSeed, coordinate) * 0.75
-priority(C) = distance(C, M25) + jitter(C)
-```
-
-Se elige la prioridad más baja.
-
-El jitter es pequeño: altera el orden entre sectores parecidos, pero no permite que sectores mucho más lejanos adelanten al frente de crecimiento.
-
-Al derivarse de `worldSeed + coordinate`, el resultado es reproducible y seguro frente a reintentos de transacciones.
-
-La especificación completa, pseudocódigo, concurrencia y optimizaciones se encuentra en [`SPAWN_PLACEMENT.md`](./SPAWN_PLACEMENT.md).
+La prioridad es **estática**. No se recalcula cuando aparecen jugadores ni cuando se descubren otros sectores.
 
 ---
 
-## 11. Saturación y siguientes ventanas
+## 12. Selección aleatoria ponderada
 
-Una ventana solo está saturada cuando **no queda ningún sector legal** para un nuevo jugador.
+Para crear un nuevo jugador se toma el pool actual y se escoge una coordenada aleatoriamente con probabilidad proporcional a su peso.
 
-La ausencia de candidatos cercanos a la frontera `<= 4` no significa saturación: primero se comprueba si existen otros candidatos válidos.
+Si los candidatos tienen pesos:
 
-Cuando `[10-40]` se satura, se avanza conceptualmente a:
+```text
+C1 -> w1
+C2 -> w2
+...
+Cn -> wn
+```
+
+entonces:
+
+```text
+P(Ci) = wi / (w1 + w2 + ... + wn)
+```
+
+Ejemplo:
+
+```text
+A -> peso 10
+B -> peso 5
+C -> peso 1
+
+P(A) = 10/16 = 62.5%
+P(B) = 5/16  = 31.25%
+P(C) = 1/16  = 6.25%
+```
+
+Así, los sectores cercanos a `M25` tienen muchas más probabilidades de ser elegidos, pero no se selecciona siempre el más cercano.
+
+Esto produce una expansión compacta e irregular de manera natural, sin necesidad de jitter ni de recalcular una frontera dinámica.
+
+---
+
+## 13. Cuándo se elimina una celda del pool
+
+Una celda deja de ser candidata en cuanto ya no pueda convertirse legalmente en sector de jugador.
+
+### 13.1 Sector descubierto/poblado
+
+Si un reconocimiento u otra mecánica transforma un sector del pool de:
+
+```text
+UNGENERATED -> POPULATED
+```
+
+se elimina inmediatamente del pool.
+
+Ejemplo:
+
+```text
+H28 estaba disponible para spawn
+→ un jugador reconoce H28
+→ H28 se resuelve como HUNTING
+→ H28 se elimina del pool
+```
+
+El spawn nunca sobrescribe un sector ya resuelto.
+
+### 13.2 Nuevo bunker
+
+Si se asigna un bunker en `M25`, se elimina del pool:
+
+- `M25`;
+- todas las celdas del pool cuya distancia a `M25` sea `<= 2`.
+
+Así la propia estructura del pool mantiene la separación mínima.
+
+Los pesos de todas las demás entradas permanecen intactos.
+
+---
+
+## 14. Saturación y siguientes ventanas
+
+Una ventana se considera saturada cuando ya no queda ninguna entrada válida en su pool activo.
+
+Cuando `[10-40]` se agota, se avanza conceptualmente a:
 
 ```text
 [41-80]
@@ -378,17 +453,48 @@ Después:
 ...
 ```
 
-El tamaño de las ventanas posteriores debe ser configurable.
+El tamaño exacto de las ventanas posteriores será configurable.
 
-Si una nueva ventana supera el máximo actualmente materializado, el backend amplía el mapa con sectores `UNGENERATED` antes de utilizarlos.
+Si la nueva ventana supera el máximo materializado, el backend amplía primero el mapa con sectores `UNGENERATED`.
+
+Para cada nueva celda apta para spawn:
+
+```text
+calcular priorityWeight una sola vez
+→ comprobar que no esté ya poblada
+→ comprobar que no esté a distancia <= 2 de un bunker existente
+→ añadirla al pool si sigue siendo válida
+```
+
+El origen continúa siendo siempre `M25`. Por eso, al abrir `[41-80]`, las posiciones próximas a `41` tienen naturalmente más probabilidad que las próximas a `80`, manteniendo la continuidad de la expansión.
 
 ---
 
-## 12. Sistema de distancias
+## 15. Expansión por exploración
+
+La exploración puede ampliar el mapa aunque la ventana de spawn actual todavía no esté saturada.
+
+Ejemplo:
+
+```text
+máximo materializado = 50
+jugador explora H53
+→ ampliar mapa
+→ H53 nace UNGENERATED
+→ al completar reconocimiento, resolver H53
+```
+
+Si durante una expansión aparecen celdas que podrían formar parte de una ventana de spawn presente o futura, su prioridad puede calcularse cuando se incorporen al correspondiente pool.
+
+La expansión del mundo y el avance de ventanas de spawn son mecanismos relacionados pero independientes.
+
+---
+
+## 16. Sistema de distancias
 
 Las distancias se expresan en unidades decimales.
 
-### 12.1 Sectores distintos
+### 16.1 Sectores distintos
 
 Se usa distancia euclídea:
 
@@ -413,7 +519,7 @@ B11 -> B12 = 1.0
 B11 -> C12 = sqrt(2) ≈ 1.4142
 ```
 
-### 12.2 Zonas de sectores distintos
+### 16.2 Zonas de sectores distintos
 
 El índice de zona no afecta a la distancia externa:
 
@@ -425,7 +531,7 @@ B11-4 -> C12-2 = sqrt(2)
 
 Todas las zonas de `H27` están a la misma distancia de todas las zonas de `J3`.
 
-### 12.3 Zonas del mismo sector
+### 16.3 Zonas del mismo sector
 
 Dos zonas diferentes del mismo sector están siempre a:
 
@@ -452,13 +558,14 @@ Debe existir una única implementación autoritativa de esta función.
 
 ---
 
-## 13. Reconocimiento
+## 17. Reconocimiento
 
 Cuando termina un reconocimiento sobre un sector `UNGENERATED`:
 
 ```text
 resolver TODAS sus zonas
 → persistir la composición completa
+→ eliminarlo del pool de spawn si estaba presente
 → revelar SOLO una zona permitida al jugador
 ```
 
@@ -474,7 +581,7 @@ Todos los jugadores comparten el mismo mundo real.
 
 ---
 
-## 14. Estado real vs. conocimiento
+## 18. Estado real vs. conocimiento
 
 El backend mantiene la verdad completa:
 
@@ -495,29 +602,31 @@ La revelación debe controlarse desde backend.
 
 ---
 
-## 15. Persistencia y concurrencia
+## 19. Persistencia y concurrencia
 
 Un sector ya resuelto no se vuelve a generar salvo que una futura mecánica modifique explícitamente su estado.
 
-El alta de una cuenta debe tratar como una única operación lógica:
+En el alta de una cuenta, la selección aleatoria puede calcularse sobre una lectura del pool, pero la confirmación final debe ser segura frente a concurrencia.
+
+La operación lógica debe garantizar:
 
 ```text
-leer estado de spawn
-→ elegir candidato
-→ revalidar separación
-→ reservar
+candidato sigue disponible
+→ reservarlo
+→ eliminarlo del pool
+→ eliminar vecinos a d <= 2
 → asignar jugador
 → generar sector completo
 → persistir
 ```
 
-Dos altas simultáneas no pueden obtener el mismo sector ni dos sectores que incumplan `d > 2`.
+Si otra alta o un reconocimiento modifica el candidato antes de confirmar, el intento se aborta y se realiza una nueva selección sobre el pool actualizado.
 
-La especificación de spawn propone un estado autoritativo con revisión/transacción para serializar de forma segura esta operación, que tiene una frecuencia muy baja comparada con las acciones normales de juego.
+Dos altas simultáneas no pueden obtener el mismo sector ni dos sectores que incumplan `d > 2`.
 
 ---
 
-## 16. Configuración conceptual
+## 20. Configuración conceptual
 
 Como mínimo, el sistema debería permitir configurar:
 
@@ -536,17 +645,15 @@ PLAYER_SPAWN
 - initialNumberMin = 10
 - initialNumberMax = 40
 - minimumPlayerDistance = 2.0
-- preferredLinkDistance = 4.0
-- jitterMax = 0.75
+- proximityAlpha = 1.0
 - subsequentWindowSize = 40
-- worldSeed
 ```
 
 El máximo materializado del mapa y la ventana activa de spawn son conceptos distintos y deben almacenarse por separado.
 
 ---
 
-## 17. Invariantes principales
+## 21. Invariantes principales
 
 1. Una coordenada `sector-zona` identifica una única localización.
 2. El eje alfabético está limitado a `A-Z`.
@@ -558,23 +665,26 @@ El máximo materializado del mapa y la ventana activa de spawn son conceptos dis
 8. Un sector `PLAYER_BUNKER` se resuelve completamente al asignarse.
 9. Dos jugadores nunca comparten sector de bunker.
 10. Los sectores iniciales no introducen grandes diferencias de calidad por azar.
-11. Los nuevos jugadores aparecen únicamente en la banda `D-W` y en la ventana numérica activa.
+11. Los nuevos jugadores aparecen únicamente en `D-W` y dentro de la ventana numérica activa.
 12. La zona de spawn no limita movimiento ni exploración.
 13. Dos bunkers distintos mantienen siempre `d > 2.0`.
-14. Se prefiere crecimiento próximo a jugadores existentes, sin convertirlo en una restricción que pueda bloquear altas.
-15. La población crece desde `M25` hacia fuera.
-16. El jitter solo rompe simetrías; nunca invalida las reglas duras.
-17. Una ventana solo se declara saturada cuando no queda ningún candidato legal.
-18. Las siguientes ventanas avanzan hacia números superiores.
-19. La exploración también puede ampliar el mapa independientemente del spawn.
-20. Entre sectores distintos, la distancia ignora el índice de zona.
-21. Dos zonas distintas del mismo sector están siempre a `0.1`.
-22. La asignación final de un sector de jugador debe ser atómica.
+14. Cada celda candidata recibe una prioridad estática basada en su proximidad a `M25`.
+15. La prioridad se calcula una sola vez cuando la celda entra en el pool.
+16. La selección de spawn es aleatoria con probabilidad proporcional al peso de prioridad.
+17. Un sector que pasa a `POPULATED` se elimina del pool de spawn.
+18. Un bunker elimina del pool su sector y todos los candidatos a `d <= 2`.
+19. El resto de pesos no se recalcula al aparecer un bunker.
+20. Una ventana se considera saturada cuando su pool queda sin candidatos.
+21. Las ventanas siguientes avanzan hacia números superiores.
+22. La exploración también puede ampliar el mapa independientemente del spawn.
+23. Entre sectores distintos, la distancia ignora el índice de zona.
+24. Dos zonas distintas del mismo sector están siempre a `0.1`.
+25. La asignación final de un sector de jugador debe ser atómica.
 
 ---
 
-## 18. Documentos relacionados
+## 22. Documentos relacionados
 
-- [`SPAWN_PLACEMENT.md`](./SPAWN_PLACEMENT.md): algoritmo detallado de colocación de jugadores, frontera de crecimiento, jitter, pseudocódigo, concurrencia y optimización.
+- [`SPAWN_PLACEMENT.md`](./SPAWN_PLACEMENT.md): especificación detallada del pool persistente de candidatos, función de proximidad, selección ponderada, invalidación por descubrimiento/bunker, expansión y concurrencia.
 
-La arquitectura resultante es: **mundo persistente de anchura fija `A-Z`, longitud numérica ampliable, jugadores restringidos inicialmente a `D-W`, crecimiento compacto desde `M25`, separación estricta `> 2`, sectores resueltos bajo demanda y conocimiento parcial por jugador**.
+La arquitectura resultante es: **mundo persistente de anchura fija `A-Z`, longitud numérica ampliable, jugadores restringidos inicialmente a `D-W`, pool persistente de candidatos ponderado por proximidad a `M25`, separación estricta `> 2`, sectores resueltos bajo demanda y conocimiento parcial por jugador**.
