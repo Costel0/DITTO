@@ -446,6 +446,7 @@ async function initializeMap(db, options = {}) {
   await ref.set({
     schemaVersion: MAP_SCHEMA_VERSION,
     initializationStatus: "INITIALIZING",
+    expansionStatus: "READY",
     ...config,
     currentMapNumberMax: config.initialNumberMax,
     activeSpawnNumberMin: config.initialSpawnNumberMin,
@@ -571,9 +572,9 @@ async function expandMap(db, newMaximum) {
     throw new Error("newMaximum must be a positive integer.");
   }
 
-  const {data: meta} = await requiredMeta(db);
-  const config = configFromMeta(meta);
-  const currentMaximum = Number(meta.currentMapNumberMax);
+  const {data: initialMeta} = await requiredMeta(db);
+  const config = configFromMeta(initialMeta);
+  const currentMaximum = Number(initialMeta.currentMapNumberMax);
 
   if (newMaximum <= currentMaximum) {
     return {
@@ -585,32 +586,56 @@ async function expandMap(db, newMaximum) {
     };
   }
 
-  const blockedCandidateIds = await expansionBlockedCandidateIds(
-    db,
-    currentMaximum,
-    newMaximum,
-    config,
-  );
-  const created = await createMapRange(
-    db,
-    currentMaximum + 1,
-    newMaximum,
-    config,
-    blockedCandidateIds,
-  );
-
-  await metaRef(db).update({
-    currentMapNumberMax: newMaximum,
-    updatedAt: FieldValue.serverTimestamp(),
+  await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(metaRef(db));
+    const meta = snapshot.data() || {};
+    if (meta.expansionStatus === "EXPANDING") {
+      throw new Error("World map expansion is already in progress.");
+    }
+    if (Number(meta.currentMapNumberMax) !== currentMaximum) {
+      throw new Error("World map changed while preparing expansion. Retry.");
+    }
+    transaction.update(metaRef(db), {
+      expansionStatus: "EXPANDING",
+      updatedAt: FieldValue.serverTimestamp(),
+    });
   });
 
-  return {
-    expanded: true,
-    previousMapNumberMax: currentMaximum,
-    currentMapNumberMax: newMaximum,
-    blockedCandidatesSkipped: blockedCandidateIds.size,
-    ...created,
-  };
+  try {
+    const blockedCandidateIds = await expansionBlockedCandidateIds(
+      db,
+      currentMaximum,
+      newMaximum,
+      config,
+    );
+    const created = await createMapRange(
+      db,
+      currentMaximum + 1,
+      newMaximum,
+      config,
+      blockedCandidateIds,
+    );
+
+    await metaRef(db).update({
+      currentMapNumberMax: newMaximum,
+      expansionStatus: "READY",
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    return {
+      expanded: true,
+      previousMapNumberMax: currentMaximum,
+      currentMapNumberMax: newMaximum,
+      blockedCandidatesSkipped: blockedCandidateIds.size,
+      ...created,
+    };
+  } catch (error) {
+    await metaRef(db).update({
+      expansionStatus: "READY",
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    throw error;
+  }
 }
 
 function activeWindowKey(meta) {
@@ -798,6 +823,11 @@ async function allocatePlayerSector(db, options = {}) {
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const meta = await metaForAllocation(db, candidateCache);
+    if (meta.expansionStatus === "EXPANDING") {
+      clearCandidateCache(candidateCache);
+      throw new Error("World map expansion is in progress. Retry allocation.");
+    }
+
     const config = configFromMeta(meta);
     const chunks = await chunkRecordsForActiveWindow(
       db,
@@ -848,6 +878,7 @@ async function allocatePlayerSector(db, options = {}) {
 
       if (
         Number(currentMeta.schemaVersion) !== MAP_SCHEMA_VERSION ||
+        currentMeta.expansionStatus === "EXPANDING" ||
         selectedCoordinate.number < Number(currentMeta.activeSpawnNumberMin) ||
         selectedCoordinate.number > Number(currentMeta.activeSpawnNumberMax)
       ) {
@@ -891,12 +922,12 @@ async function allocatePlayerSector(db, options = {}) {
           snapshot,
           invalidatedCandidateIds,
         );
-        transaction.set(snapshot.ref, {
+        transaction.update(snapshot.ref, {
           candidates: updated.candidates,
           totalWeight: updated.totalWeight,
           candidateCount: updated.candidateCount,
           updatedAt: FieldValue.serverTimestamp(),
-        }, {merge: true});
+        });
         updatedChunks.push({
           id: updated.id,
           ref: snapshot.ref,
@@ -997,12 +1028,12 @@ async function markSectorResolved(db, id, resolution) {
         chunkSnapshot,
         new Set([id]),
       );
-      transaction.set(chunkSnapshot.ref, {
+      transaction.update(chunkSnapshot.ref, {
         candidates: updated.candidates,
         totalWeight: updated.totalWeight,
         candidateCount: updated.candidateCount,
         updatedAt: FieldValue.serverTimestamp(),
-      }, {merge: true});
+      });
     }
     changed = true;
   });
