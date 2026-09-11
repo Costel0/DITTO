@@ -6,11 +6,18 @@ require("./map");
 
 const deployedFunctions = require("./index");
 const {initializeBunker} = require("./onboarding");
+const {
+  getExpeditionLauncherInfo,
+  resolveCompletedOccupations,
+  startExpedition,
+} = require("./expedition_callables");
 
 module.exports = {
   ...deployedFunctions,
-  // Override the legacy initializer exported by index.js. The callable name
-  // remains exactly the same for Flutter, but first profile setup now reserves
-  // the player's real map sector in the same logical onboarding operation.
+  // Override legacy implementations while keeping the public callable names
+  // stable for Flutter.
   initializeBunker,
+  getExpeditionLauncherInfo,
+  startExpedition,
+  resolveCompletedOccupations,
 };
