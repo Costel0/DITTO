@@ -53,6 +53,7 @@ En Windows:
 .\map.cmd expand --max=80
 .\map.cmd add-players --count=100
 .\map.cmd download
+.\map.cmd render
 ```
 
 También existe `map.ps1`. En Linux/macOS puede utilizarse:
@@ -62,6 +63,7 @@ bash ./map.sh init
 bash ./map.sh expand --max=80
 bash ./map.sh add-players --count=100
 bash ./map.sh download
+bash ./map.sh render
 ```
 
 Desde `functions/` se puede ejecutar directamente:
@@ -71,15 +73,28 @@ npm run map -- init
 npm run map -- expand --max=80
 npm run map -- add-players --count=100
 npm run map -- download
+npm run map -- render
 ```
 
-Todos los comandos aceptan opcionalmente:
+O mediante los aliases:
+
+```bash
+npm run map:init
+npm run map:expand -- --max=80
+npm run map:add-players -- --count=100
+npm run map:download
+npm run map:render
+```
+
+Los comandos que acceden a Firebase aceptan opcionalmente:
 
 ```text
 --project=FIREBASE_PROJECT_ID
 ```
 
 La autenticación sigue el mismo patrón que los scripts administrativos existentes del proyecto: Firebase Admin `applicationDefault()`. Por tanto hay que tener disponibles Application Default Credentials o `GOOGLE_APPLICATION_CREDENTIALS`.
+
+`render` es una excepción: es una operación **100 % local**. Lee el último JSON descargado y no inicializa Firebase ni necesita credenciales.
 
 ## 1. Inicializar mapa
 
@@ -148,11 +163,13 @@ Por defecto:
 .\map.cmd download
 ```
 
-crea un JSON en:
+sobrescribe siempre el mismo archivo:
 
 ```text
-functions/map_exports/
+functions/map_exports/latest_map.json
 ```
+
+Esto evita acumular automáticamente una exportación distinta cada vez que se descarga el mapa.
 
 También se puede pedir CSV o ambos:
 
@@ -161,13 +178,83 @@ También se puede pedir CSV o ambos:
 .\map.cmd download --format=both
 ```
 
-Y elegir ruta:
+En ese caso se utilizan, según corresponda:
+
+```text
+functions/map_exports/latest_map.json
+functions/map_exports/latest_map.csv
+```
+
+Cada ejecución sustituye la versión local anterior.
+
+Si se quiere conservar manualmente una exportación histórica se puede especificar una ruta distinta:
 
 ```powershell
 .\map.cmd download --format=both --out=../map_test_100_players
 ```
 
 El JSON incluye metadatos, contadores y todos los sectores. Cada sector indica también si continúa presente en el pool de spawn.
+
+## 5. Renderizar y abrir el último mapa descargado
+
+Después de descargar:
+
+```powershell
+.\map.cmd download
+.\map.cmd render
+```
+
+`render` lee por defecto:
+
+```text
+functions/map_exports/latest_map.json
+```
+
+y genera/sobrescribe:
+
+```text
+functions/map_exports/latest_map.svg
+```
+
+Después abre automáticamente la imagen con el visor/navegador predeterminado del sistema operativo.
+
+La imagen representa la cuadrícula completa del mapa materializado:
+
+- una celda por sector;
+- `UNGENERATED` en gris muy claro;
+- sectores `POPULATED` normales en gris;
+- sectores `PLAYER_BUNKER` en rojo;
+- letras y números de coordenadas;
+- leyenda y contadores básicos.
+
+El SVG contiene además un `<title>` por celda, de modo que en navegadores compatibles se puede ver información básica del sector al pasar el cursor.
+
+Para generar la imagen sin abrirla:
+
+```powershell
+.\map.cmd render --open=false
+```
+
+Para usar un JSON concreto o guardar la imagen en otra ruta:
+
+```powershell
+.\map.cmd render --in=../map_test_100_players.json --out=../map_test_100_players.svg
+```
+
+`latest_map.svg` es deliberadamente temporal y se sustituye cada vez que se ejecuta `render`.
+
+## Flujo recomendado para probar distribución
+
+Por ejemplo:
+
+```powershell
+.\map.cmd init --force --alpha=2
+.\map.cmd add-players --count=100
+.\map.cmd download
+.\map.cmd render
+```
+
+Esto permite regenerar el experimento, descargar el estado real de Firestore y abrir inmediatamente una representación visual de la distribución de bunkers.
 
 ## Integración futura
 
