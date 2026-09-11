@@ -67,9 +67,12 @@ function candidateWeightSum(candidates) {
     .reduce((sum, weight) => sum + Number(weight), 0);
 }
 
-function chunkRecord(snapshot) {
+function chunkRecord(snapshot, currentMapNumberMax = Number.MAX_SAFE_INTEGER) {
   const data = snapshot.data() || {};
-  const candidates = normalizeCandidates(data.candidates);
+  const candidates = Object.fromEntries(
+    Object.entries(normalizeCandidates(data.candidates))
+      .filter(([id]) => parseSectorId(id).number <= currentMapNumberMax),
+  );
   return {
     id: snapshot.id,
     ref: snapshot.ref,
@@ -182,6 +185,7 @@ async function allocatePlayerSectorWithTransaction(
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const meta = await requiredMeta(db);
     const config = configFromMeta(meta);
+    const currentMapNumberMax = Number(meta.currentMapNumberMax);
     const chunkDefinitions = chunksForWindow(
       Number(meta.activeSpawnNumberMin),
       Number(meta.activeSpawnNumberMax),
@@ -192,7 +196,7 @@ async function allocatePlayerSectorWithTransaction(
     );
     const chunks = chunkSnapshots
       .filter((snapshot) => snapshot.exists)
-      .map(chunkRecord)
+      .map((snapshot) => chunkRecord(snapshot, currentMapNumberMax))
       .filter((chunk) => chunk.totalWeight > 0);
 
     if (chunks.length === 0) {
@@ -214,7 +218,7 @@ async function allocatePlayerSectorWithTransaction(
     const affectedIds = affectedChunkIds(
       forbiddenCoordinates,
       config,
-      Number(meta.currentMapNumberMax),
+      currentMapNumberMax,
     );
     const selectedSectorRef = sectorRef(db, selectedCandidate.id);
     const affectedRefs = affectedIds.map((id) => chunkRef(db, id));
@@ -232,6 +236,7 @@ async function allocatePlayerSectorWithTransaction(
         Number(currentMeta.schemaVersion) !== MAP_SCHEMA_VERSION ||
         currentMeta.initializationStatus !== "READY" ||
         currentMeta.expansionStatus === "EXPANDING" ||
+        coordinate.number > Number(currentMeta.currentMapNumberMax) ||
         coordinate.number < Number(currentMeta.activeSpawnNumberMin) ||
         coordinate.number > Number(currentMeta.activeSpawnNumberMax)
       ) {
