@@ -1,90 +1,92 @@
 {
-  "schemaVersion": 3,
-  "dataVersion": 7,
+  "schemaVersion": 4,
+  "dataVersion": 8,
   "actions": {
+    "explore": {
+      "expeditionType": "exploration",
+      "availability": {
+        "unknownZone": true
+      },
+      "completion": "discover_zone",
+      "durationSeconds": 60,
+      "energyDelta": 0
+    },
     "scout_surroundings": {
       "expeditionType": "scavenge",
-      "availability": "bunker",
+      "availability": {
+        "zoneTypes": [
+          "PLAYER_BUNKER"
+        ]
+      },
+      "completion": "interactive_outcome",
       "durationSeconds": 60,
       "energyDelta": -20,
       "outcomes": {
         "nothing": {
-          "probability": 0.2,
+          "probability": 0.3,
           "narrativeId": "scavenge_nothing",
+          "imageKey": "scavenge_nothing",
           "resolutionOptions": {
-            "accept": {
-              "labelId": "accept",
+            "continue": {
+              "labelId": "continue",
               "inventoryDelta": {}
-            }
-          },
-          "imageKey": "nothing_found"
-        },
-        "scrap_and_trash": {
-          "probability": 0.3,
-          "narrativeId": "scavenge_scrap_and_trash",
-          "resolutionOptions": {
-            "accept": {
-              "labelId": "accept",
-              "inventoryDelta": {
-                "scrap_metal": 1,
-                "trash": 5
-              }
-            }
-          },
-          "imageKey": "scrap_and_trash"
-        },
-        "scrap_metal_2": {
-          "probability": 0.3,
-          "narrativeId": "scavenge_scrap_metal_2",
-          "resolutionOptions": {
-            "accept": {
-              "labelId": "accept",
-              "inventoryDelta": {
-                "scrap_metal": 2
-              }
-            }
-          },
-          "imageKey": "scrap_metal"
-        },
-        "wood_plank": {
-          "probability": 0.1,
-          "narrativeId": "scavenge_wood_plank",
-          "resolutionOptions": {
-            "accept": {
-              "labelId": "accept",
-              "inventoryDelta": {
-                "wood_plank": 1
-              }
-            }
-          },
-          "imageKey": "wood_plank"
-        },
-        "small_dead_animal": {
-          "probability": 0.09,
-          "narrativeId": "scavenge_small_dead_animal",
-          "imageKey": "small_dead_animal",
-          "resolutionOptions": {
-            "accept": {
-              "labelId": "accept",
-              "inventoryDelta": {
-                "food": 1
-              }
             }
           }
         },
-        "common_event": {
-          "probability": 0.01,
-          "narrativeId": "scavenge_common_event",
+        "wrecked_car": {
+          "probability": 0.1,
+          "narrativeId": "scavenge_wrecked_car",
+          "imageKey": "scavenge_wrecked_car",
           "resolutionOptions": {
-            "accept": {
-              "labelId": "accept",
-              "inventoryDelta": {},
-              "eventTrigger": {
-                "poolId": "evento_comun"
-              }
+            "continue": {
+              "labelId": "continue",
+              "inventoryDelta": {}
             }
-          },
-          "imageKey": "common_event"
+          }
+        },
+        "abandoned_metal": {
+          "probability": 0.15,
+          "narrativeId": "scavenge_abandoned_metal",
+          "imageKey": "scavenge_abandoned_metal",
+          "resolutionOptions": {
+            "continue": {
+              "labelId": "continue",
+              "inventoryDelta": {}
+            }
+          }
+        },
+        "rubble": {
+          "probability": 0.15,
+          "narrativeId": "scavenge_rubble",
+          "imageKey": "scavenge_rubble",
+          "resolutionOptions": {
+            "continue": {
+              "labelId": "continue",
+              "inventoryDelta": {}
+            }
+          }
+        },
+        "dead_rodent": {
+          "probability": 0.15,
+          "narrativeId": "scavenge_dead_rodent",
+          "imageKey": "scavenge_dead_rodent",
+          "resolutionOptions": {
+            "continue": {
+              "labelId": "continue",
+              "inventoryDelta": {}
+            }
+          }
+        },
+        "abandoned_machinery": {
+          "probability": 0.15,
+          "narrativeId": "scavenge_abandoned_machinery",
+          "imageKey": "scavenge_abandoned_machinery",
+          "resolutionOptions": {
+            "continue": {
+              "labelId": "continue",
+              "inventoryDelta": {}
+            }
+          }
         }
       }
     }
