@@ -14,7 +14,12 @@
     "sync:items:exact": "node scripts/sync_items_catalog.js --prune",
     "sync:server-data": "node scripts/sync_server_data.js",
     "sync:server-data:check": "node scripts/sync_server_data.js --dry-run",
-    "sync:server-data:exact": "node scripts/sync_server_data.js --prune"
+    "sync:server-data:exact": "node scripts/sync_server_data.js --prune",
+    "map": "node scripts/map_admin.js",
+    "map:init": "node scripts/map_admin.js init",
+    "map:expand": "node scripts/map_admin.js expand",
+    "map:add-players": "node scripts/map_admin.js add-players",
+    "map:download": "node scripts/map_admin.js download"
   },
   "dependencies": {
     "firebase-admin": "^14.2.0",
