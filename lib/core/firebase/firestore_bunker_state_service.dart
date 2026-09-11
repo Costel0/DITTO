@@ -53,18 +53,7 @@ class FirestoreBunkerStateService implements BunkerStateService {
       throw StateError('No bunker state exists for user $userId.');
     }
 
-    final normalized = _normalizeFirestoreMap(data);
-
-    // Schema v10 adds the additive knownZones field. Expedition UI consumes
-    // that field through FirebaseFunctionsExpeditionService, while the generic
-    // BunkerState model otherwise remains byte-for-byte compatible with v9.
-    // Keep the existing parser usable until known-zone presentation becomes a
-    // cross-feature concern rather than an expedition-only concern.
-    if (normalized['schemaVersion'] == 10) {
-      normalized['schemaVersion'] = BunkerState.supportedSchemaVersion;
-    }
-
-    return BunkerState.fromJson(normalized);
+    return BunkerState.fromJson(_normalizeFirestoreMap(data));
   }
 
   bool _hasLocallyExpiredExecution(BunkerState state) {
