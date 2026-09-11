@@ -621,8 +621,15 @@ function expeditionTravelSeconds(
   ) {
     throw new Error("Expedition travel multiplier must be non-negative.");
   }
+
+  // The configured multiplier is per distance unit and per leg. Expeditions
+  // always return to the bunker, so travel consists of an outbound and return
+  // leg. Round only after both legs are included to avoid accumulating two
+  // independent rounding errors on diagonal distances.
   return Math.ceil(
-    mapDistance(originCoordinates, targetCoordinates) * secondsPerDistanceUnit,
+    mapDistance(originCoordinates, targetCoordinates) *
+      secondsPerDistanceUnit *
+      2,
   );
 }
 
