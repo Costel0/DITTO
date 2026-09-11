@@ -42,12 +42,6 @@ Los chunks forman parte de la validación autoritativa. Dos asignaciones incompa
 
 La expansión marca temporalmente `expansionStatus = EXPANDING` para impedir que una alta concurrente cree un bunker justo mientras nacen nuevas celdas en el borde del mapa.
 
-Después de bajar esta versión hay que reconstruir una vez el mapa de pruebas porque cambia el esquema del índice de spawn:
-
-```powershell
-.\map.cmd init --force
-```
-
 ## Comandos
 
 ```powershell
@@ -56,6 +50,8 @@ Después de bajar esta versión hay que reconstruir una vez el mapa de pruebas p
 .\map.cmd add-players --count=100
 .\map.cmd download
 .\map.cmd render
+.\map.cmd set-sector --sector=H28 --type=HUNTING
+.\map.cmd set-zone --sector=H28 --zone=3 --type=LAKE
 ```
 
 `add-players` sigue asignando estrictamente uno a uno. Durante una misma ejecución reutiliza en memoria los chunks ya leídos.
@@ -64,15 +60,22 @@ Después de bajar esta versión hay que reconstruir una vez el mapa de pruebas p
 
 `render` es completamente local y no consume Firebase.
 
+La referencia consolidada de comandos del proyecto está en `COMMANDS.md`.
+
 ## Integración con altas reales
 
-La función reutilizable para el alta real sigue siendo:
+La integración ya está activa. La callable desplegada `initializeBunker` se ejecuta cuando el jugador confirma por primera vez nombre de usuario + personaje inicial.
+
+La reserva del sector, creación de `PLAYER_BUNKER`, survivor inicial, perfil y `BunkerState` se realizan en la misma transacción lógica mediante:
 
 ```js
-allocatePlayerSector(db, {playerId: uid})
+allocatePlayerSectorWithTransaction(db, {
+  playerId: uid,
+  transactionHandler,
+})
 ```
 
-Con `playerId` real no se actualiza `simulatedPlayerSequence`, evitando una escritura y un punto de contención innecesarios en `worldMap/meta`.
+El `BunkerState.bunkerCoordinates` queda asignado a las coordenadas reales del sector y la zona de bunker.
 
 Cuando un reconocimiento resuelva un sector debe utilizar:
 
